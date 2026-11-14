@@ -53,7 +53,7 @@ const capital = (s: string) => s.toLowerCase().replace(/(^|\s)\p{L}/gu, m => m.t
 const palabras = (s: string) => s.trim().split(/\s+/).filter(Boolean);
 const esNumero = (s: string) => /^\+?[\d\s-]{8,}$/.test(s.trim());
 /** Número de prueba escrito a mano → 549 + área + número (mismo criterio que celularDe del back). */
-function celularPrueba(s: string) {
+export function celularPrueba(s: string) {
   const d = s.replace(/\D/g, '');
   if (d.startsWith('549') && d.length === 13) return d;
   let nac = d.startsWith('54') && d.length === 12 ? d.slice(2) : d.replace(/^0+/, '');

@@ -41,7 +41,9 @@ module.exports = {
     // Clave de la cuenta de servicio de Google. El archivo y la pestaña se eligen desde la pagina.
     keyFile: process.env.OC_GOOGLE_KEY_FILE || '',
     backupDir: process.env.OC_BACKUP_DIR || path.join(process.env.ORDENES_COMPRA_DIR || 'D:\\FARMACIA\\ORDENES COMPRA', 'backup'),
-    intervalMs: Math.max(30000, Number(process.env.OC_GOOGLE_SYNC_INTERVAL_MS || 60000))
+    intervalMs: Math.max(30000, Number(process.env.OC_GOOGLE_SYNC_INTERVAL_MS || 60000)),
+    // si una persona guardo el .xlsx hace menos que esto, el robot no lo reescribe (solo trae los cambios)
+    esperaEdicionMs: Math.max(0, Number(process.env.OC_ESPERA_EDICION_MIN ?? 15)) * 60000
   },
   trimestreSourceDir: process.env.TRIMESTRE_SOURCE_DIR || process.env.SEMESTRE_SOURCE_DIR || 'D:\\FARMACIA\\TRIMESTRE',
   trimestreWatch: {
@@ -64,6 +66,13 @@ module.exports = {
     dir: process.env.STOCK_ACTUAL_DIR || 'D:\\FARMACIA\\STOCK ACTUAL',
     sectores: (process.env.STOCK_ACTUAL_SECTORES || 'FARMACIA UNIFICADA,PSICOFARMACOS Y ESTUPEFACIENTES')
       .split(',').map((s) => s.trim()).filter(Boolean)
+  },
+  stockActualAuto: {
+    // Descarga automatica diaria del stock actual. STOCK_ACTUAL_AUTO=off la apaga; STOCK_ACTUAL_AUTO_HORA=HH:MM.
+    enabled: String(process.env.STOCK_ACTUAL_AUTO || 'on').toLowerCase() !== 'off',
+    hora: Number(String(process.env.STOCK_ACTUAL_AUTO_HORA || '07:00').split(':')[0]) || 0,
+    minuto: Number(String(process.env.STOCK_ACTUAL_AUTO_HORA || '07:00').split(':')[1]) || 0,
+    reintentos: Math.max(1, Number(process.env.STOCK_ACTUAL_AUTO_REINTENTOS || 3))
   },
   requerimientoSourceDir: process.env.REQUERIMIENTO_SOURCE_DIR || 'D:\\FARMACIA\\REQUERIMIENTO',
   requerimientoWatch: {

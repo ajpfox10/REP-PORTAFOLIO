@@ -27,7 +27,16 @@ const DIAS_HISTORIAL = 400;          // fotos mensuales que se importan hacia at
 const MIN_FILAS_FOTO = 500;          // menos que esto = exportación incompleta, no se usa
 const THROTTLE_MS = 5 * 60 * 1000;
 
-export type EstadoControl = 'ACTIVO_SIAPE' | 'BAJA_SIAPE' | 'ALTA_PENDIENTE';
+// NO_CORRESPONDE (12/11): nunca figuró en SIAPE pero no hay que darlo de alta
+// (no está ACTIVO en la base —INACTIVO/TRAMITE/COMISION— o es de Reemplazos).
+export type EstadoControl = 'ACTIVO_SIAPE' | 'BAJA_SIAPE' | 'ALTA_PENDIENTE' | 'NO_CORRESPONDE';
+
+function motivoSinAlta(estadoBase: string, ley: string | null): string | null {
+  const est = String(estadoBase || '').toUpperCase();
+  if (est !== 'ACTIVO') return `está ${est || 'sin estado'} en la base`;
+  if (/REEMPLAZ/i.test(String(ley || ''))) return 'es de Reemplazos (no se da de alta)';
+  return null;
+}
 
 export type ControlRow = {
   dni: number;
@@ -43,6 +52,7 @@ export type ControlRow = {
   estado: EstadoControl;
   ultima_vez_en_siape: string | null;
   ausente_desde: string | null;       // primera foto en que ya no figuraba
+  motivo: string | null;              // NO_CORRESPONDE: por qué no va el alta
   presencia: (0 | 1 | null)[];        // alineado con `columnas`
 };
 
@@ -127,7 +137,7 @@ async function universo(sequelize: Sequelize) {
     porDni.get(k)!.push(t);
   }
 
-  const out: Omit<ControlRow, 'estado' | 'ultima_vez_en_siape' | 'ausente_desde' | 'presencia' | 'servicio'>[] = [];
+  const out: Omit<ControlRow, 'estado' | 'ultima_vez_en_siape' | 'ausente_desde' | 'presencia' | 'servicio' | 'motivo'>[] = [];
   for (const [dni, ts] of porDni) {
     const vivos = ts.filter((t) => VIVOS.includes(String(t.estado_empleo || '').toUpperCase()));
     if (!vivos.length) continue;                       // de BAJA en la base → no se controla
@@ -303,22 +313,27 @@ export async function controlResidentesSiape(sequelize: Sequelize, opts: { force
     const ultimaVez = fechas.filter((f) => mp.get(f) === 1).pop() || null;
     let estado: EstadoControl;
     let ausenteDesde: string | null = null;
+    let motivo: string | null = null;
     if (enUltima) estado = 'ACTIVO_SIAPE';
     else if (ultimaVez) {
       estado = 'BAJA_SIAPE';
       ausenteDesde = fechas.find((f) => f > ultimaVez && mp.get(f) === 0) || ultima?.fecha || null;
-    } else estado = 'ALTA_PENDIENTE';
+    } else {
+      motivo = motivoSinAlta(r.estado_base, r.ley);
+      estado = motivo ? 'NO_CORRESPONDE' : 'ALTA_PENDIENTE';
+    }
     return {
       ...r,
       servicio: srv.get(r.dni) || null,
       estado,
+      motivo,
       ultima_vez_en_siape: ultimaVez,
       ausente_desde: ausenteDesde,
       presencia: columnas.map((c) => (mp.has(c) ? (mp.get(c) === 1 ? 1 : 0) : null)),
     };
   });
 
-  const orden: Record<EstadoControl, number> = { BAJA_SIAPE: 0, ALTA_PENDIENTE: 1, ACTIVO_SIAPE: 2 };
+  const orden: Record<EstadoControl, number> = { BAJA_SIAPE: 0, ALTA_PENDIENTE: 1, ACTIVO_SIAPE: 2, NO_CORRESPONDE: 3 };
   rows.sort((a, b) => orden[a.estado] - orden[b.estado]
     || a.apellido.localeCompare(b.apellido, 'es') || a.nombre.localeCompare(b.nombre, 'es'));
 
@@ -333,6 +348,7 @@ export async function controlResidentesSiape(sequelize: Sequelize, opts: { force
       activos: rows.filter((r) => r.estado === 'ACTIVO_SIAPE').length,
       bajaSiape: rows.filter((r) => r.estado === 'BAJA_SIAPE').length,
       altaPendiente: rows.filter((r) => r.estado === 'ALTA_PENDIENTE').length,
+      noCorresponde: rows.filter((r) => r.estado === 'NO_CORRESPONDE').length,
     },
     rows,
   };

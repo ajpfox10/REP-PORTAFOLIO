@@ -62,6 +62,9 @@ if errorlevel 8 exit /b 1
 echo [5/7] Aplicando configuracion de produccion...
 copy /Y "%SRC%\.env.production" "%DST%\.env" >>"%LOG%" 2>&1
 if errorlevel 1 exit /b 1
+REM Clave JWT de prod (igual a la de apipersonal-prod): vive en secretos-prod.env, no en dev
+"C:\Program Files\nodejs\node.exe" "%SRC%\aplicar-jwt-prod.cjs" "%DST%\.env" "C:\apps\personalprod\secretos-prod.env"
+if errorlevel 1 ( echo ERROR: no se pudo aplicar PERSONAL_JWT_SECRET de prod - abortando & exit /b 1 )
 copy /Y "%SRC%\agent\.env.production" "%DST%\agent\.env" >>"%LOG%" 2>&1
 if errorlevel 1 exit /b 1
 copy /Y "%SRC%\ecosystem.config.js" "%DST%\ecosystem.config.js" >>"%LOG%" 2>&1

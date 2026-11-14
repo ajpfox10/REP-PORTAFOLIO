@@ -3330,7 +3330,7 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
       res.setHeader('Content-Type', 'application/octet-stream');
       res.setHeader('Content-Disposition', `attachment; filename="${sn}_${tipo}_${ts}.dat"`);
       if (upstream.headers['content-length']) {
-        res.setHeader('Content-Length', upstream.headers['content-length']);
+        res.setHeader('Content-Length', String(upstream.headers['content-length']));
       }
 
       upstream.data.pipe(res);

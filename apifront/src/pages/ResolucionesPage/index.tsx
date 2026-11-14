@@ -12,6 +12,7 @@ import { fetchScanMusicBlobUrl } from '../GestionUsuarioPage/GestionUsuarioPage'
 import '../EscaneoPage/styles/EscaneoPage.css';
 import { ScanPagesOrganizer, scanPageId, applyScanPageOrder } from '../EscaneoPage/ScanPagesOrganizer';
 import { anioDeExpediente } from '../Gesytionpage/components/modals/ExpedientesModal';
+import { ResolucionesSinArchivoBanner, ResolucionSinArchivo, EVENTO_RES_VINCULO } from '../../components/ResolucionesSinArchivoBanner';
 
 // ─── Scanner API client ───────────────────────────────────────────────────────
 function getScannerBase() {
@@ -171,41 +172,85 @@ const normNum = (s: any) => String(s ?? '').toUpperCase().replace(/\s+/g, '');
 const esArchivoResolucion = (a: any) =>
   /RESO/i.test(String(a.tipo || '')) || /resoluci/i.test(String(a.descripcion_archivo || '')) || /RESO/i.test(String(a.nombre || ''));
 
-// Resoluciones generales (carpeta RESOLUCIONES Y VARIOS, filas de tblarchivos con
-// dni=1): tipo=11112, numero=1839, anio=6 ↔ resolución "11112-1839-06".
-function buscarResolucionGeneral(r: any, generales: any[]): any | null {
-  const m = String(r.numero || '').match(/^\s*(\d+)\s*-+\s*(\d+)\s*-\s*(\d{2,4})/);
-  if (!m) return null;
-  const [, tipo, num, anio] = m;
-  return generales.find(a =>
-    Number(a.tipo) === Number(tipo) &&
-    Number(a.numero) === Number(num) &&
-    a.anio != null && Number(a.anio) % 100 === Number(anio) % 100
-  ) || null;
+// Resoluciones generales (carpeta RESOLUCIONES Y VARIOS, filas de tblarchivos con dni=1).
+// Se compara por NÚMEROS, sin importar el formato del nombre: RESOC-2026-997-GDEBA-SGG ↔
+// RESOC-2026-997.pdf, 1839/2006 ↔ 11112-1839-06.pdf, "RESO 752-2021", etc.
+// Misma lógica que apipersonal/scripts/resoluciones_registrar_y_vincular.cjs (backfill).
+const sinExt = (s: any) => String(s ?? '').replace(/\.+[a-z0-9]{2,5}$/i, '');
+const principalNum = (s: any) => sinExt(s).trim().replace(/\s*-\s*/g, '-')
+  .replace(/^([A-Za-zÁÉÍÓÚÑáéíóúñ]+)\s+(?=\d)/, '$1-').split(/\s+/)[0] || '';
+const ANIO_MAX = new Date().getFullYear() + 1;
+const gruposNum = (s: any): number[] => {
+  const gs: string[] = String(s).match(/\d+/g) || [];
+  let iAnio = -1;
+  gs.forEach((g, i) => { const n = +g; if (g.length === 4 && n >= 1960 && n <= ANIO_MAX && (iAnio < 0 || n > +gs[iAnio])) iAnio = i; });
+  return gs.map((g, i) => (i === iAnio ? +g % 100 : +g));
+};
+const prefijoNum = (s: any) => (principalNum(s).match(/^[A-Za-zÁÉÍÓÚÑáéíóúñ]+/) || [''])[0].toUpperCase();
+const familiaNum = (p: string) => (!p ? '' : /^RES/.test(p) ? 'RESO' : /^DEC/.test(p) ? 'DECRETO' : /^DI/.test(p) ? 'DISPO' : p);
+const ordNum = (a: number[]) => [...a].sort((x, y) => x - y).join(',');
+const contieneNum = (grande: number[], chico: number[]) => {
+  const resto = [...grande];
+  for (const n of chico) { const i = resto.indexOf(n); if (i < 0) return false; resto.splice(i, 1); }
+  return true;
+};
+const normTxt = (s: any) => sinExt(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+function puntajeResArchivo(numeroRes: any, fechaRes: any, nombreArchivo: string, apellido = ''): number {
+  let R = gruposNum(principalNum(numeroRes));
+  if (!R.length) return 0;
+  if (R.length === 1 && fechaRes) R = [...R, Number(String(fechaRes).slice(0, 4)) % 100];
+  const F = gruposNum(principalNum(nombreArchivo));
+  if (!F.length) return 0;
+  const preR = prefijoNum(numeroRes); const preF = prefijoNum(nombreArchivo);
+  const famR = familiaNum(preR); const famF = familiaNum(preF);
+  if (famR && famF && famR !== famF) return 0;
+  let p = 0;
+  if (R.length === F.length && ordNum(R) === ordNum(F)) p = 100;
+  else if (!preR && R.length >= 2 && F.length > R.length && contieneNum(F, R)) p = 50;
+  else return 0;
+  if (normTxt(numeroRes) && normTxt(numeroRes) === normTxt(nombreArchivo)) p += 20;
+  if (preR && preR === preF) p += 10; else if (famR && famR === famF) p += 5;
+  const restoArchivo = normTxt(sinExt(nombreArchivo).trim().split(/\s+/).slice(1).join(' '));
+  const ape = normTxt(String(apellido).split(/[\s,]+/)[0] || '');
+  if (ape.length >= 3 && restoArchivo.includes(ape)) p += 15; else if (!restoArchivo) p += 3;
+  const lit = (s: any) => (principalNum(s).match(/\d+/g) || []).join('-');
+  if (lit(numeroRes) === lit(nombreArchivo)) p += 2;
+  if (/no usar|blanco/i.test(nombreArchivo)) p -= 30;
+  return p;
 }
 
-function buscarArchivoDeResolucion(r: any, archivos: any[], generales: any[] = []): any | null {
+/** Mejor archivo de la carpeta general; si hay empate no elige (devuelve candidatos). */
+function matchResolucionGeneral(r: any, generales: any[], apellido = ''): { archivo: any | null; candidatos: any[] } {
+  const scored = generales
+    .map(a => ({ a, p: puntajeResArchivo(r.numero, r.fecha, a.nombre_archivo_original || a.nombre || '', apellido) }))
+    .filter(x => x.p > 0)
+    .sort((x, y) => y.p - x.p);
+  if (!scored.length) return { archivo: null, candidatos: [] };
+  const top = scored.filter(x => x.p === scored[0].p);
+  return { archivo: top.length === 1 ? top[0].a : null, candidatos: scored.slice(0, 10).map(x => x.a) };
+}
+
+function buscarArchivoDeResolucion(r: any, archivos: any[], generales: any[] = [], apellido = ''): { archivo: any | null; candidatos: any[] } {
   const num = normNum(r.numero);
-  if (num) {
-    const exacto = archivos.find(a => a.numero && normNum(a.numero) === num);
-    if (exacto) return exacto;
-    const porRef = archivos.find(a => String(a.descripcion_archivo || '').includes(`|${String(r.numero).trim()}|`));
-    if (porRef) return porRef;
-    const general = buscarResolucionGeneral(r, generales);
-    if (general) return general;
-    const grupos = String(r.numero).match(/\d+/g) || [];
-    const fechaRes = r.fecha ? String(r.fecha).slice(0, 10) : '';
-    const porNumero = archivos.filter(esArchivoResolucion).find(a => {
-      const m = String(a.numero || a.nombre || '').match(/(\d+)\s*\/\s*(\d{2,4})/);
-      if (!m) return false;
-      const [, n, anio] = m;
-      if (!grupos.some(g => Number(g) === Number(n))) return false;
-      const fechaArch = a.fecha ? String(a.fecha).slice(0, 10) : '';
-      return grupos.some(g => g === anio || g === anio.slice(-2)) || (!!fechaRes && fechaRes === fechaArch);
-    });
-    if (porNumero) return porNumero;
-  }
-  return null;
+  if (!num) return { archivo: null, candidatos: [] };
+  const exacto = archivos.find(a => a.numero && normNum(a.numero) === num);
+  if (exacto) return { archivo: exacto, candidatos: [] };
+  const porRef = archivos.find(a => String(a.descripcion_archivo || '').includes(`|${String(r.numero).trim()}|`));
+  if (porRef) return { archivo: porRef, candidatos: [] };
+  const general = matchResolucionGeneral(r, generales, apellido);
+  if (general.archivo) return general;
+  const grupos = String(r.numero).match(/\d+/g) || [];
+  const fechaRes = r.fecha ? String(r.fecha).slice(0, 10) : '';
+  const porNumero = archivos.filter(esArchivoResolucion).find(a => {
+    const m = String(a.numero || a.nombre || '').match(/(\d+)\s*\/\s*(\d{2,4})/);
+    if (!m) return false;
+    const [, n, anio] = m;
+    if (!grupos.some(g => Number(g) === Number(n))) return false;
+    const fechaArch = a.fecha ? String(a.fecha).slice(0, 10) : '';
+    return grupos.some(g => g === anio || g === anio.slice(-2)) || (!!fechaRes && fechaRes === fechaArch);
+  });
+  return { archivo: porNumero || null, candidatos: general.candidatos };
 }
 
 function nombreDescarga(agente: string, r: any, archivo: any, mime: string): string {
@@ -243,6 +288,7 @@ async function guardarEnPc(blob: Blob, filename: string): Promise<'picker' | 'de
 type ResViewer = {
   res: any;
   archivo: any | null;
+  candidatos?: any[];
   url: string | null;
   blob: Blob | null;
   mime: string;
@@ -320,10 +366,12 @@ export function ResolucionesPage() {
       .catch(() => {});
   }, []);
 
-  const cargarArchivoEnVisor = useCallback(async (res: any, archivo: any | null) => {
+  const cargarArchivoEnVisor = useCallback(async (res: any, archivo: any | null, candidatos?: any[]) => {
     setResViewer(prev => {
       if (prev?.url) URL.revokeObjectURL(prev.url);
-      return { res, archivo, url: null, blob: null, mime: '', loading: !!archivo, error: null };
+      // Si no vienen candidatos (elección manual), se conservan los de la búsqueda anterior.
+      const cands = candidatos ?? (prev && prev.res?.id === res.id ? prev.candidatos : []);
+      return { res, archivo, candidatos: cands, url: null, blob: null, mime: '', loading: !!archivo, error: null };
     });
     if (!archivo) return;
     try {
@@ -345,8 +393,9 @@ export function ResolucionesPage() {
     const vinculado = r.archivo_id
       ? ([...archivos, ...resGenerales].find(a => a.id === r.archivo_id) || { id: r.archivo_id })
       : null;
-    cargarArchivoEnVisor(r, vinculado || buscarArchivoDeResolucion(r, archivos, resGenerales));
-  }, [archivos, resGenerales, cargarArchivoEnVisor]);
+    const busqueda = buscarArchivoDeResolucion(r, archivos, resGenerales, agente?.apellido || '');
+    cargarArchivoEnVisor(r, vinculado || busqueda.archivo, busqueda.candidatos);
+  }, [archivos, resGenerales, agente, cargarArchivoEnVisor]);
 
   // Elección manual en el visor → queda guardada en la resolución.
   const vincularArchivoManual = useCallback(async (r: any, a: any | null) => {
@@ -355,6 +404,7 @@ export function ResolucionesPage() {
       await apiFetch(`/resoluciones/${r.id}`, { method: 'PATCH', body: JSON.stringify({ archivo_id: a?.id ?? null }) });
       setResoluciones(prev => prev.map(x => (x.id === r.id ? { ...x, archivo_id: a?.id ?? null } : x)));
       setResViewer(prev => (prev && prev.res.id === r.id ? { ...prev, res: { ...prev.res, archivo_id: a?.id ?? null } } : prev));
+      window.dispatchEvent(new Event(EVENTO_RES_VINCULO));
     } catch (e: any) { toast.error('No se pudo guardar el vínculo', e?.message); }
   }, [cargarArchivoEnVisor, toast]);
 
@@ -813,6 +863,27 @@ export function ResolucionesPage() {
     finally { setLoadingData(false); }
   }, [resetScan]);
 
+  // ── Desde el aviso "sin archivo": carga el agente y abre esa resolución en el visor ──
+  const [abrirPendiente, setAbrirPendiente] = useState<{ dni: number; resId: number } | null>(null);
+  const abrirDesdeBanner = useCallback(async (r: ResolucionSinArchivo) => {
+    try {
+      if (Number(agente?.dni) !== Number(r.dni)) {
+        const res = await apiFetch<any>(`/personal/${r.dni}`);
+        if (!res?.ok || !res?.data) { toast.error('No encontrado', `DNI ${r.dni} no existe`); return; }
+        await seleccionarAgente(res.data);
+      }
+      setAbrirPendiente({ dni: Number(r.dni), resId: r.id });
+    } catch (e: any) { toast.error('Error', e?.message); }
+  }, [agente, seleccionarAgente, toast]);
+
+  useEffect(() => {
+    if (!abrirPendiente || loadingData || Number(agente?.dni) !== abrirPendiente.dni) return;
+    const r = resoluciones.find(x => x.id === abrirPendiente.resId);
+    setAbrirPendiente(null);
+    if (r) abrirResolucion(r);
+    else toast.error('No se encontró la resolución', 'Puede haber sido borrada');
+  }, [abrirPendiente, loadingData, agente, resoluciones, abrirResolucion, toast]);
+
   // ── Guardar resolución ─────────────────────────────────────────────────────
   const guardarRes = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -835,11 +906,25 @@ export function ResolucionesPage() {
         fecha: formRes.fecha || null,
         created_by: session?.user?.id || null,
       };
+      // Sin escaneo (código de omisión) o al editar: buscar el PDF en RESOLUCIONES Y VARIOS
+      // y vincularlo si hay uno solo; si no, queda en el aviso de resoluciones sin archivo.
+      const vincularDesdeCarpeta = async (id: number | null | undefined) => {
+        if (!id) return;
+        try {
+          const r = await apiFetch<any>('/resoluciones-sin-archivo/buscar', { method: 'POST', body: JSON.stringify({ ids: [id] }) });
+          const v = (r?.vinculados || []).find((x: any) => x.id === id);
+          if (v) toast.ok('📁 Archivo vinculado', `${v.archivo} (RESOLUCIONES Y VARIOS)`);
+          else toast.error('Sin archivo escaneado', 'No se encontró el PDF en RESOLUCIONES Y VARIOS: queda en el aviso de resoluciones sin archivo');
+          window.dispatchEvent(new Event(EVENTO_RES_VINCULO));
+        } catch { /* no bloquea el guardado */ }
+      };
       if (editRes) {
         await apiFetch(`/resoluciones/${editRes.id}`, { method: 'PATCH', body: JSON.stringify(body) });
         toast.ok('Actualizado', 'Resolución actualizada');
+        if (!editRes.archivo_id) await vincularDesdeCarpeta(editRes.id);
       } else {
-        await apiFetch('/resoluciones', { method: 'POST', body: JSON.stringify(body) });
+        const creada = await apiFetch<any>('/resoluciones', { method: 'POST', body: JSON.stringify(body) });
+        if (scanSession.length === 0) await vincularDesdeCarpeta(creada?.data?.id);
         // Sincronizar escáner → G:\docu\{dni}\
         if (scanSession.length > 0) {
           const personalRef = buildResolucionPersonalRef(formRes.motivo, formRes.numero, formRes.fecha);
@@ -971,6 +1056,9 @@ export function ResolucionesPage() {
             Gestioná resoluciones, expedientes y archivos por agente
           </div>
         </div>
+
+        {/* ── Aviso: resoluciones sin archivo escaneado ── */}
+        <ResolucionesSinArchivoBanner modo="completo" onAbrir={abrirDesdeBanner} />
 
         {/* ── Buscador de agente ── */}
         <div className="card" style={{ marginBottom: 16, padding: '14px 16px' }}>
@@ -1813,10 +1901,18 @@ export function ResolucionesPage() {
                     vincularArchivoManual(resViewer.res, a);
                   }}>
                   <option value="">— Sin archivo vinculado —</option>
-                  {resViewer.archivo && !archivos.some(x => x.id === resViewer.archivo.id) && (
+                  {resViewer.archivo && !archivos.some(x => x.id === resViewer.archivo.id)
+                    && !(resViewer.candidatos || []).some(x => x.id === resViewer.archivo.id) && (
                     <option value={resViewer.archivo.id}>
                       📁 {resViewer.archivo.nombre_archivo_original || resViewer.archivo.nombre || `#${resViewer.archivo.id}`} (Resoluciones y Varios)
                     </option>
+                  )}
+                  {(resViewer.candidatos || []).length > 0 && (
+                    <optgroup label="Posibles en Resoluciones y Varios">
+                      {(resViewer.candidatos || []).filter(x => !archivos.some(y => y.id === x.id)).map(x => (
+                        <option key={`g${x.id}`} value={x.id}>📁 {x.nombre_archivo_original || x.nombre || `#${x.id}`}</option>
+                      ))}
+                    </optgroup>
                   )}
                   {archivosOrdenados.map(a => (
                     <option key={a.id} value={a.id}>{a.nombre || a.nombre_archivo_original || `#${a.id}`}</option>
@@ -1839,7 +1935,9 @@ export function ResolucionesPage() {
               {!resViewer.archivo ? (
                 <div className="muted" style={{ margin: 'auto', textAlign: 'center', fontSize: '0.85rem' }}>
                   No se encontró el archivo escaneado de esta resolución.<br />
-                  Si está entre los archivos del agente, elegilo en el selector de arriba.
+                  {(resViewer.candidatos || []).length > 0
+                    ? `Hay ${(resViewer.candidatos || []).length} posible(s) en Resoluciones y Varios: elegí el correcto en el selector de arriba.`
+                    : 'Si está entre los archivos del agente, elegilo en el selector de arriba.'}
                 </div>
               ) : resViewer.loading ? (
                 <div className="muted" style={{ margin: 'auto' }}>Cargando archivo…</div>

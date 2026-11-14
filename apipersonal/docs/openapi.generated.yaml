@@ -705,6 +705,798 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/agenda_bloqueos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agenda_bloqueos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agenda_bloqueos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agenda_bloqueos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agenda_bloqueos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agenda_bloqueos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agenda_bloqueos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agenda_bloqueos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agenda_bloqueos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agenda_bloqueos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agenda_bloqueos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agenda_bloqueos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agenda_franjas:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agenda_franjas
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agenda_franjas"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agenda_franjas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agenda_franjas_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agenda_franjas/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agenda_franjas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agenda_franjas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agenda_franjas"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agenda_franjas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agenda_franjas_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agenda_franjas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agenda_habilitaciones:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agenda_habilitaciones
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agenda_habilitaciones"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agenda_habilitaciones
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agenda_habilitaciones_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agenda_habilitaciones/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agenda_habilitaciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agenda_habilitaciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agenda_habilitaciones"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agenda_habilitaciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agenda_habilitaciones_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agenda_habilitaciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agenda_turnos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agenda_turnos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agenda_turnos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agenda_turnos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agenda_turnos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agenda_turnos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agenda_turnos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agenda_turnos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agenda_turnos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agenda_turnos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agenda_turnos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agenda_turnos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agendas:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agendas
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agendas"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agendas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agendas_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agendas/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agendas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agendas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agendas"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agendas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agendas_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agendas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agentehistorial:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agentehistorial
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agentehistorial"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentehistorial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentehistorial_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agentehistorial/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agentehistorial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentehistorial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentehistorial"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentehistorial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentehistorial_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentehistorial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/agentes:
     get:
       tags:
@@ -2806,6 +3598,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete agentes_servicios_sector_bkp by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agentexdni1:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agentexdni1
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agentexdni1"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentexdni1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentexdni1_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agentexdni1/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agentexdni1 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentexdni1 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentexdni1"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentexdni1 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentexdni1_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentexdni1 by id
       parameters:
         - name: id
           in: path
@@ -9021,6 +9945,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/consultaspordni:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List consultaspordni
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_consultaspordni"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create consultaspordni
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_consultaspordni_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/consultaspordni/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get consultaspordni by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update consultaspordni by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_consultaspordni"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch consultaspordni by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_consultaspordni_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete consultaspordni by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/control_cruces:
     get:
       tags:
@@ -13579,6 +14635,666 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete funciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/gcal_eventos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List gcal_eventos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_gcal_eventos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create gcal_eventos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gcal_eventos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/gcal_eventos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get gcal_eventos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update gcal_eventos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gcal_eventos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch gcal_eventos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gcal_eventos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete gcal_eventos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/gcal_sync:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List gcal_sync
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_gcal_sync"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create gcal_sync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gcal_sync_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/gcal_sync/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get gcal_sync by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update gcal_sync by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gcal_sync"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch gcal_sync by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gcal_sync_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete gcal_sync by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/gp_avisos_config:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List gp_avisos_config
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_gp_avisos_config"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create gp_avisos_config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gp_avisos_config_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/gp_avisos_config/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get gp_avisos_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update gp_avisos_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gp_avisos_config"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch gp_avisos_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gp_avisos_config_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete gp_avisos_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/gp_avisos_historial:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List gp_avisos_historial
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_gp_avisos_historial"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create gp_avisos_historial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gp_avisos_historial_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/gp_avisos_historial/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get gp_avisos_historial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update gp_avisos_historial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gp_avisos_historial"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch gp_avisos_historial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gp_avisos_historial_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete gp_avisos_historial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/gp_avisos_whatsapp:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List gp_avisos_whatsapp
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_gp_avisos_whatsapp"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create gp_avisos_whatsapp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gp_avisos_whatsapp_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/gp_avisos_whatsapp/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get gp_avisos_whatsapp by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update gp_avisos_whatsapp by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gp_avisos_whatsapp"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch gp_avisos_whatsapp by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gp_avisos_whatsapp_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete gp_avisos_whatsapp by id
       parameters:
         - name: id
           in: path
@@ -25074,6 +26790,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/resoluciones_alertas_ocultas:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List resoluciones_alertas_ocultas
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_resoluciones_alertas_ocultas"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create resoluciones_alertas_ocultas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_resoluciones_alertas_ocultas_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/resoluciones_alertas_ocultas/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get resoluciones_alertas_ocultas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update resoluciones_alertas_ocultas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_resoluciones_alertas_ocultas"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch resoluciones_alertas_ocultas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_resoluciones_alertas_ocultas_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete resoluciones_alertas_ocultas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/resoluciones_bak_20260713:
     get:
       tags:
@@ -30090,6 +31938,270 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/tramites_nota_designacion:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List tramites_nota_designacion
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_tramites_nota_designacion"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create tramites_nota_designacion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_nota_designacion_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/tramites_nota_designacion/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get tramites_nota_designacion by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update tramites_nota_designacion by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_nota_designacion"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch tramites_nota_designacion by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_nota_designacion_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete tramites_nota_designacion by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/tramites_nota_designacion_plantilla:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List tramites_nota_designacion_plantilla
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_tramites_nota_designacion_plantilla"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create tramites_nota_designacion_plantilla
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_nota_designacion_plantilla_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/tramites_nota_designacion_plantilla/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get tramites_nota_designacion_plantilla by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update tramites_nota_designacion_plantilla by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_nota_designacion_plantilla"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch tramites_nota_designacion_plantilla by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_nota_designacion_plantilla_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete tramites_nota_designacion_plantilla by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/tramites_tanda_interinos:
     get:
       tags:
@@ -32032,6 +34144,877 @@ components:
           type: string
           format: date-time
           nullable: true
+    Table_agenda_bloqueos:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agenda_id:
+          type: number
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+        hora_desde:
+          type: string
+          format: date-time
+          nullable: true
+        hora_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - fecha_desde
+        - fecha_hasta
+    Table_agenda_bloqueos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        agenda_id:
+          type: number
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+        hora_desde:
+          type: string
+          format: date-time
+          nullable: true
+        hora_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - fecha_desde
+        - fecha_hasta
+    Table_agenda_bloqueos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agenda_id:
+          type: number
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+        hora_desde:
+          type: string
+          format: date-time
+          nullable: true
+        hora_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+    Table_agenda_franjas:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agenda_id:
+          type: number
+        dia_semana:
+          type: number
+        hora_desde:
+          type: string
+          format: date-time
+        hora_hasta:
+          type: string
+          format: date-time
+        duracion_min:
+          type: number
+        cupo:
+          type: number
+      required:
+        - id
+        - agenda_id
+        - dia_semana
+        - hora_desde
+        - hora_hasta
+    Table_agenda_franjas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        agenda_id:
+          type: number
+        dia_semana:
+          type: number
+        hora_desde:
+          type: string
+          format: date-time
+        hora_hasta:
+          type: string
+          format: date-time
+        duracion_min:
+          type: number
+        cupo:
+          type: number
+      required:
+        - agenda_id
+        - dia_semana
+        - hora_desde
+        - hora_hasta
+    Table_agenda_franjas_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agenda_id:
+          type: number
+        dia_semana:
+          type: number
+        hora_desde:
+          type: string
+          format: date-time
+        hora_hasta:
+          type: string
+          format: date-time
+        duracion_min:
+          type: number
+        cupo:
+          type: number
+    Table_agenda_habilitaciones:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agenda_id:
+          type: number
+        dni:
+          type: number
+        token:
+          type: string
+        estado:
+          type: string
+        vence_el:
+          type: string
+          format: date-time
+        turno_id:
+          type: number
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+        hab_activa:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        usado_at:
+          type: string
+          format: date-time
+          nullable: true
+        anulado_at:
+          type: string
+          format: date-time
+          nullable: true
+        anulado_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - agenda_id
+        - dni
+        - token
+        - vence_el
+    Table_agenda_habilitaciones_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        agenda_id:
+          type: number
+        dni:
+          type: number
+        token:
+          type: string
+        estado:
+          type: string
+        vence_el:
+          type: string
+          format: date-time
+        turno_id:
+          type: number
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+        hab_activa:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        usado_at:
+          type: string
+          format: date-time
+          nullable: true
+        anulado_at:
+          type: string
+          format: date-time
+          nullable: true
+        anulado_by:
+          type: number
+          nullable: true
+      required:
+        - agenda_id
+        - dni
+        - token
+        - vence_el
+    Table_agenda_habilitaciones_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agenda_id:
+          type: number
+        dni:
+          type: number
+        token:
+          type: string
+        estado:
+          type: string
+        vence_el:
+          type: string
+          format: date-time
+        turno_id:
+          type: number
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+        hab_activa:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        usado_at:
+          type: string
+          format: date-time
+          nullable: true
+        anulado_at:
+          type: string
+          format: date-time
+          nullable: true
+        anulado_by:
+          type: number
+          nullable: true
+    Table_agenda_turnos:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agenda_id:
+          type: number
+        habilitacion_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        hora:
+          type: string
+          format: date-time
+        lugar:
+          type: number
+        estado:
+          type: string
+        origen:
+          type: string
+        telefono_contacto:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jubilacion_cita_id:
+          type: number
+          nullable: true
+        slot_activo:
+          type: string
+          nullable: true
+        dni_activo:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        cancelado_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancelado_por:
+          type: string
+          nullable: true
+        gcal_event_id:
+          type: string
+          nullable: true
+        gcal_pendiente:
+          type: number
+        gcal_error:
+          type: string
+          nullable: true
+      required:
+        - id
+        - agenda_id
+        - dni
+        - fecha
+        - hora
+    Table_agenda_turnos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        agenda_id:
+          type: number
+        habilitacion_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        hora:
+          type: string
+          format: date-time
+        lugar:
+          type: number
+        estado:
+          type: string
+        origen:
+          type: string
+        telefono_contacto:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jubilacion_cita_id:
+          type: number
+          nullable: true
+        slot_activo:
+          type: string
+          nullable: true
+        dni_activo:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        cancelado_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancelado_por:
+          type: string
+          nullable: true
+        gcal_event_id:
+          type: string
+          nullable: true
+        gcal_pendiente:
+          type: number
+        gcal_error:
+          type: string
+          nullable: true
+      required:
+        - agenda_id
+        - dni
+        - fecha
+        - hora
+    Table_agenda_turnos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agenda_id:
+          type: number
+        habilitacion_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        hora:
+          type: string
+          format: date-time
+        lugar:
+          type: number
+        estado:
+          type: string
+        origen:
+          type: string
+        telefono_contacto:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jubilacion_cita_id:
+          type: number
+          nullable: true
+        slot_activo:
+          type: string
+          nullable: true
+        dni_activo:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        cancelado_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancelado_por:
+          type: string
+          nullable: true
+        gcal_event_id:
+          type: string
+          nullable: true
+        gcal_pendiente:
+          type: number
+        gcal_error:
+          type: string
+          nullable: true
+    Table_agendas:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        lugar:
+          type: string
+          nullable: true
+        anticipacion_dias:
+          type: number
+        ventana_dias:
+          type: number
+        vence_dias:
+          type: number
+        cancelar_horas:
+          type: number
+        carga_jubilacion:
+          type: number
+        mensaje_whatsapp:
+          type: string
+          nullable: true
+        activa:
+          type: number
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        gcal_calendar_id:
+          type: string
+          nullable: true
+      required:
+        - id
+        - nombre
+    Table_agendas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        nombre:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        lugar:
+          type: string
+          nullable: true
+        anticipacion_dias:
+          type: number
+        ventana_dias:
+          type: number
+        vence_dias:
+          type: number
+        cancelar_horas:
+          type: number
+        carga_jubilacion:
+          type: number
+        mensaje_whatsapp:
+          type: string
+          nullable: true
+        activa:
+          type: number
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        gcal_calendar_id:
+          type: string
+          nullable: true
+      required:
+        - nombre
+    Table_agendas_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        lugar:
+          type: string
+          nullable: true
+        anticipacion_dias:
+          type: number
+        ventana_dias:
+          type: number
+        vence_dias:
+          type: number
+        cancelar_horas:
+          type: number
+        carga_jubilacion:
+          type: number
+        mensaje_whatsapp:
+          type: string
+          nullable: true
+        activa:
+          type: number
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        gcal_calendar_id:
+          type: string
+          nullable: true
+    Table_agentehistorial:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          nullable: true
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        agente_id:
+          type: number
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        dependencia_nombre:
+          type: string
+          nullable: true
+        servicio_nombre:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        servicio_observaciones:
+          type: string
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_agentehistorial_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          nullable: true
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        agente_id:
+          type: number
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        dependencia_nombre:
+          type: string
+          nullable: true
+        servicio_nombre:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        servicio_observaciones:
+          type: string
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_agentehistorial_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          nullable: true
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        agente_id:
+          type: number
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        dependencia_nombre:
+          type: string
+          nullable: true
+        servicio_nombre:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        servicio_observaciones:
+          type: string
+          nullable: true
     Table_agentes:
       type: object
       additionalProperties: false
@@ -33483,6 +36466,245 @@ components:
         respaldado_at:
           type: string
           format: date-time
+    Table_agentexdni1:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        cuil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        personal_observaciones:
+          type: string
+          nullable: true
+        sexo_id:
+          type: number
+          nullable: true
+        sexo_nombre:
+          type: string
+          nullable: true
+        localidad_id:
+          type: number
+          nullable: true
+        localidad_nombre:
+          type: string
+          nullable: true
+        agente_id:
+          type: number
+        ley_id:
+          type: number
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        reparticion_nombre:
+          type: string
+          nullable: true
+        servicio_nombre:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_agentexdni1_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        cuil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        personal_observaciones:
+          type: string
+          nullable: true
+        sexo_id:
+          type: number
+          nullable: true
+        sexo_nombre:
+          type: string
+          nullable: true
+        localidad_id:
+          type: number
+          nullable: true
+        localidad_nombre:
+          type: string
+          nullable: true
+        agente_id:
+          type: number
+        ley_id:
+          type: number
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        reparticion_nombre:
+          type: string
+          nullable: true
+        servicio_nombre:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_agentexdni1_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        cuil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        personal_observaciones:
+          type: string
+          nullable: true
+        sexo_id:
+          type: number
+          nullable: true
+        sexo_nombre:
+          type: string
+          nullable: true
+        localidad_id:
+          type: number
+          nullable: true
+        localidad_nombre:
+          type: string
+          nullable: true
+        agente_id:
+          type: number
+        ley_id:
+          type: number
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        reparticion_nombre:
+          type: string
+          nullable: true
+        servicio_nombre:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
     Table_alerta_vistas:
       type: object
       additionalProperties: false
@@ -38483,6 +41705,146 @@ components:
         updated_at:
           type: string
           format: date-time
+    Table_consultaspordni:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        agente_id:
+          type: number
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        consulta_id:
+          type: number
+        hora_atencion:
+          type: string
+          format: date-time
+          nullable: true
+        atendido_por:
+          type: string
+          nullable: true
+        motivo_consulta:
+          type: string
+          nullable: true
+        explicacion:
+          type: string
+          nullable: true
+        impreso:
+          type: string
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_consultaspordni_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        agente_id:
+          type: number
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        consulta_id:
+          type: number
+        hora_atencion:
+          type: string
+          format: date-time
+          nullable: true
+        atendido_por:
+          type: string
+          nullable: true
+        motivo_consulta:
+          type: string
+          nullable: true
+        explicacion:
+          type: string
+          nullable: true
+        impreso:
+          type: string
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_consultaspordni_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        agente_id:
+          type: number
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        consulta_id:
+          type: number
+        hora_atencion:
+          type: string
+          format: date-time
+          nullable: true
+        atendido_por:
+          type: string
+          nullable: true
+        motivo_consulta:
+          type: string
+          nullable: true
+        explicacion:
+          type: string
+          nullable: true
+        impreso:
+          type: string
+          nullable: true
     Table_control_cruces:
       type: object
       additionalProperties: false
@@ -43466,6 +46828,482 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+    Table_gcal_eventos:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        calendar_id:
+          type: string
+        event_id:
+          type: string
+        agenda_id:
+          type: number
+          nullable: true
+        origen:
+          type: string
+        turno_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+          nullable: true
+        titulo:
+          type: string
+          nullable: true
+        descripcion:
+          type: string
+          nullable: true
+        ubicacion:
+          type: string
+          nullable: true
+        inicio:
+          type: string
+          format: date-time
+          nullable: true
+        fin:
+          type: string
+          format: date-time
+          nullable: true
+        todo_el_dia:
+          type: number
+        estado:
+          type: string
+        creador:
+          type: string
+          nullable: true
+        actualizado_google:
+          type: string
+          format: date-time
+          nullable: true
+        synced_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - calendar_id
+        - event_id
+    Table_gcal_eventos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        calendar_id:
+          type: string
+        event_id:
+          type: string
+        agenda_id:
+          type: number
+          nullable: true
+        origen:
+          type: string
+        turno_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+          nullable: true
+        titulo:
+          type: string
+          nullable: true
+        descripcion:
+          type: string
+          nullable: true
+        ubicacion:
+          type: string
+          nullable: true
+        inicio:
+          type: string
+          format: date-time
+          nullable: true
+        fin:
+          type: string
+          format: date-time
+          nullable: true
+        todo_el_dia:
+          type: number
+        estado:
+          type: string
+        creador:
+          type: string
+          nullable: true
+        actualizado_google:
+          type: string
+          format: date-time
+          nullable: true
+        synced_at:
+          type: string
+          format: date-time
+      required:
+        - calendar_id
+        - event_id
+    Table_gcal_eventos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        calendar_id:
+          type: string
+        event_id:
+          type: string
+        agenda_id:
+          type: number
+          nullable: true
+        origen:
+          type: string
+        turno_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+          nullable: true
+        titulo:
+          type: string
+          nullable: true
+        descripcion:
+          type: string
+          nullable: true
+        ubicacion:
+          type: string
+          nullable: true
+        inicio:
+          type: string
+          format: date-time
+          nullable: true
+        fin:
+          type: string
+          format: date-time
+          nullable: true
+        todo_el_dia:
+          type: number
+        estado:
+          type: string
+        creador:
+          type: string
+          nullable: true
+        actualizado_google:
+          type: string
+          format: date-time
+          nullable: true
+        synced_at:
+          type: string
+          format: date-time
+    Table_gcal_sync:
+      type: object
+      additionalProperties: false
+      properties:
+        calendar_id:
+          type: string
+        sync_token:
+          type: string
+          nullable: true
+        ultimo_ok:
+          type: string
+          format: date-time
+          nullable: true
+        ultimo_error:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - calendar_id
+    Table_gcal_sync_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        calendar_id:
+          type: string
+        sync_token:
+          type: string
+          nullable: true
+        ultimo_ok:
+          type: string
+          format: date-time
+          nullable: true
+        ultimo_error:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - calendar_id
+    Table_gcal_sync_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        calendar_id:
+          type: string
+        sync_token:
+          type: string
+          nullable: true
+        ultimo_ok:
+          type: string
+          format: date-time
+          nullable: true
+        ultimo_error:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+    Table_gp_avisos_config:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        mensaje:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - mensaje
+    Table_gp_avisos_config_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        mensaje:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - mensaje
+    Table_gp_avisos_config_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        mensaje:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+    Table_gp_avisos_historial:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        aviso_id:
+          type: number
+        dni:
+          type: number
+        agente:
+          type: string
+          nullable: true
+        estado_anterior:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        telefono:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - aviso_id
+        - dni
+        - estado
+    Table_gp_avisos_historial_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        aviso_id:
+          type: number
+        dni:
+          type: number
+        agente:
+          type: string
+          nullable: true
+        estado_anterior:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        telefono:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        at:
+          type: string
+          format: date-time
+      required:
+        - aviso_id
+        - dni
+        - estado
+    Table_gp_avisos_historial_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        aviso_id:
+          type: number
+        dni:
+          type: number
+        agente:
+          type: string
+          nullable: true
+        estado_anterior:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        telefono:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        at:
+          type: string
+          format: date-time
+    Table_gp_avisos_whatsapp:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        cuil:
+          type: string
+        legajo:
+          type: string
+          nullable: true
+        agente:
+          type: string
+          nullable: true
+        confirmado_el:
+          type: string
+          format: date-time
+        confirmado_at:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        estado_at:
+          type: string
+          format: date-time
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+      required:
+        - id
+        - dni
+        - cuil
+        - confirmado_el
+    Table_gp_avisos_whatsapp_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        cuil:
+          type: string
+        legajo:
+          type: string
+          nullable: true
+        agente:
+          type: string
+          nullable: true
+        confirmado_el:
+          type: string
+          format: date-time
+        confirmado_at:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        estado_at:
+          type: string
+          format: date-time
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+      required:
+        - dni
+        - cuil
+        - confirmado_el
+    Table_gp_avisos_whatsapp_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        cuil:
+          type: string
+        legajo:
+          type: string
+          nullable: true
+        agente:
+          type: string
+          nullable: true
+        confirmado_el:
+          type: string
+          format: date-time
+        confirmado_at:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        estado_at:
+          type: string
+          format: date-time
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        detalle:
+          type: string
           nullable: true
     Table_guarderia:
       type: object
@@ -54961,6 +58799,46 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_resoluciones_alertas_ocultas:
+      type: object
+      additionalProperties: false
+      properties:
+        resolucion_id:
+          type: number
+        ocultado_por:
+          type: number
+          nullable: true
+        ocultado_at:
+          type: string
+          format: date-time
+      required:
+        - resolucion_id
+    Table_resoluciones_alertas_ocultas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        resolucion_id:
+          type: number
+        ocultado_por:
+          type: number
+          nullable: true
+        ocultado_at:
+          type: string
+          format: date-time
+      required:
+        - resolucion_id
+    Table_resoluciones_alertas_ocultas_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        resolucion_id:
+          type: number
+        ocultado_por:
+          type: number
+          nullable: true
+        ocultado_at:
+          type: string
+          format: date-time
     Table_resoluciones_bak_20260713:
       type: object
       additionalProperties: false
@@ -58736,6 +62614,273 @@ components:
           type: string
           format: date-time
           nullable: true
+    Table_tramites_nota_designacion:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tanda:
+          type: string
+        dni:
+          type: number
+        tratamiento:
+          type: string
+        apellido_nombre:
+          type: string
+        establecimiento:
+          type: string
+        ley:
+          type: string
+        horas:
+          type: string
+        cargo:
+          type: string
+        agrupamiento:
+          type: string
+        categoria:
+          type: string
+        texto:
+          type: string
+        texto_editado:
+          type: number
+        archivo:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        gdeba_numero:
+          type: string
+          nullable: true
+        gdeba_error:
+          type: string
+          nullable: true
+        enviada_at:
+          type: string
+          format: date-time
+          nullable: true
+        firmada_at:
+          type: string
+          format: date-time
+          nullable: true
+        estado_at:
+          type: string
+          format: date-time
+          nullable: true
+        estado_por:
+          type: number
+          nullable: true
+        generada_at:
+          type: string
+          format: date-time
+        generada_por:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - tanda
+        - dni
+        - tratamiento
+        - apellido_nombre
+        - establecimiento
+        - horas
+        - cargo
+        - agrupamiento
+        - categoria
+        - texto
+    Table_tramites_nota_designacion_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        tanda:
+          type: string
+        dni:
+          type: number
+        tratamiento:
+          type: string
+        apellido_nombre:
+          type: string
+        establecimiento:
+          type: string
+        ley:
+          type: string
+        horas:
+          type: string
+        cargo:
+          type: string
+        agrupamiento:
+          type: string
+        categoria:
+          type: string
+        texto:
+          type: string
+        texto_editado:
+          type: number
+        archivo:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        gdeba_numero:
+          type: string
+          nullable: true
+        gdeba_error:
+          type: string
+          nullable: true
+        enviada_at:
+          type: string
+          format: date-time
+          nullable: true
+        firmada_at:
+          type: string
+          format: date-time
+          nullable: true
+        estado_at:
+          type: string
+          format: date-time
+          nullable: true
+        estado_por:
+          type: number
+          nullable: true
+        generada_at:
+          type: string
+          format: date-time
+        generada_por:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - tanda
+        - dni
+        - tratamiento
+        - apellido_nombre
+        - establecimiento
+        - horas
+        - cargo
+        - agrupamiento
+        - categoria
+        - texto
+    Table_tramites_nota_designacion_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tanda:
+          type: string
+        dni:
+          type: number
+        tratamiento:
+          type: string
+        apellido_nombre:
+          type: string
+        establecimiento:
+          type: string
+        ley:
+          type: string
+        horas:
+          type: string
+        cargo:
+          type: string
+        agrupamiento:
+          type: string
+        categoria:
+          type: string
+        texto:
+          type: string
+        texto_editado:
+          type: number
+        archivo:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        gdeba_numero:
+          type: string
+          nullable: true
+        gdeba_error:
+          type: string
+          nullable: true
+        enviada_at:
+          type: string
+          format: date-time
+          nullable: true
+        firmada_at:
+          type: string
+          format: date-time
+          nullable: true
+        estado_at:
+          type: string
+          format: date-time
+          nullable: true
+        estado_por:
+          type: number
+          nullable: true
+        generada_at:
+          type: string
+          format: date-time
+        generada_por:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_tramites_nota_designacion_plantilla:
+      type: object
+      additionalProperties: false
+      properties:
+        tanda:
+          type: string
+        plantilla:
+          type: string
+        updated_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - tanda
+        - plantilla
+    Table_tramites_nota_designacion_plantilla_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        tanda:
+          type: string
+        plantilla:
+          type: string
+        updated_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - tanda
+        - plantilla
+    Table_tramites_nota_designacion_plantilla_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        tanda:
+          type: string
+        plantilla:
+          type: string
+        updated_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
     Table_tramites_tanda_interinos:
       type: object
       additionalProperties: false
@@ -58756,6 +62901,8 @@ components:
         anio:
           type: number
           nullable: true
+        ley_14783:
+          type: number
       required:
         - id
         - tanda
@@ -58778,6 +62925,8 @@ components:
         anio:
           type: number
           nullable: true
+        ley_14783:
+          type: number
       required:
         - tanda
         - dni
@@ -58801,6 +62950,8 @@ components:
         anio:
           type: number
           nullable: true
+        ley_14783:
+          type: number
     Table_turnos_salud_laboral:
       type: object
       additionalProperties: false

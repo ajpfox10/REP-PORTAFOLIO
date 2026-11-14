@@ -1,8 +1,8 @@
-version: 0.2.18
+version: 0.2.20
 files:
-  - url: Cobertura Salud Setup 0.2.18.exe
-    sha512: IvTJuD+U0yZaj+NtKQrfI/rrsAoBbseajQ89mrotRKBcsJEYb2vMw/unKvGOC2aRUhF/WVjppz/p5+aUWv8QEQ==
-    size: 80554573
-path: Cobertura Salud Setup 0.2.18.exe
-sha512: IvTJuD+U0yZaj+NtKQrfI/rrsAoBbseajQ89mrotRKBcsJEYb2vMw/unKvGOC2aRUhF/WVjppz/p5+aUWv8QEQ==
-releaseDate: '2026-10-15T12:53:36.982Z'
+  - url: Cobertura Salud Setup 0.2.20.exe
+    sha512: nOeJfP9yoYNNWiEh9gGAKWIYxV4F00BR7T63rPhWMFIgmINJqFfijJ0lHEgyZ/QxF/CSZUUzelclCjyi8Wfn5A==
+    size: 80559245
+path: Cobertura Salud Setup 0.2.20.exe
+sha512: nOeJfP9yoYNNWiEh9gGAKWIYxV4F00BR7T63rPhWMFIgmINJqFfijJ0lHEgyZ/QxF/CSZUUzelclCjyi8Wfn5A==
+releaseDate: '2026-11-12T19:58:11.180Z'

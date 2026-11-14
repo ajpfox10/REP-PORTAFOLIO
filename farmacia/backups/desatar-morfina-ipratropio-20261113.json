@@ -1,0 +1,97 @@
+{
+ "equiv": [
+  {
+   "id": 73,
+   "codigo_a": "M0125031",
+   "codigo_b": "M0216197",
+   "estado": "igual",
+   "nota": null,
+   "detalle": {
+    "anio": 2026,
+    "queda": "M0125031",
+    "sacado": {
+     "id": 21,
+     "anio": 2026,
+     "droga": "MORFINA CLORHIDRATO",
+     "codigo": "M0216197",
+     "cantidad": 0,
+     "semestre": 1,
+     "controlado": 0,
+     "creado_por": 1,
+     "descripcion": "MORFINA CLORHIDRATO - SOLUCIÓN INYECTABLE - 1%"
+    },
+    "renglon": {
+     "id": 182,
+     "drogaAntes": "MORFINA X GR",
+     "codigoAntes": "M0125031",
+     "controladoAntes": 1,
+     "descripcionAntes": "MORFINA X GR"
+    },
+    "semestre": 1
+   },
+   "usuario_id": 1,
+   "created_at": "2026-11-08T02:11:03.000Z"
+  },
+  {
+   "id": 136,
+   "codigo_a": "M2401034",
+   "codigo_b": "M2434195",
+   "estado": "igual",
+   "nota": "Confirmado por el usuario: aerosol y nebulizacion se toman como el mismo producto",
+   "detalle": {
+    "anio": 2026,
+    "queda": "M2434195",
+    "sacado": {
+     "id": 643,
+     "anio": 2026,
+     "droga": "BROMURO DE IPRATROPIO",
+     "codigo": "M2434195",
+     "cantidad": 0,
+     "semestre": 1,
+     "controlado": 0,
+     "creado_por": 1,
+     "descripcion": "BROMURO DE IPRATROPIO - SOLUCIÓN PARA NEBULIZACIÓN - 250 MCG/ML"
+    },
+    "forzado": true,
+    "renglon": {
+     "id": 489,
+     "drogaAntes": "BROMURO DE IPRATROPIO 250 DOSIS",
+     "codigoAntes": "M2401034",
+     "controladoAntes": 1,
+     "descripcionAntes": "BROMURO DE IPRATROPIO 250 DOSIS AEROSOL"
+    },
+    "semestre": 1
+   },
+   "usuario_id": 1,
+   "created_at": "2026-11-12T01:11:43.000Z"
+  }
+ ],
+ "manual": [
+  {
+   "id": 182,
+   "anio": 2026,
+   "semestre": 1,
+   "codigo": "M0125031",
+   "droga": "MORFINA X GR",
+   "descripcion": "MORFINA X GR",
+   "cantidad": 50,
+   "controlado": 1,
+   "creado_por": 1,
+   "created_at": "2026-11-04T10:16:43.000Z",
+   "updated_at": "2026-11-07T21:06:12.000Z"
+  },
+  {
+   "id": 489,
+   "anio": 2026,
+   "semestre": 1,
+   "codigo": "M2434195",
+   "droga": "BROMURO DE IPRATROPIO",
+   "descripcion": "BROMURO DE IPRATROPIO - SOLUCIÓN PARA NEBULIZACIÓN - 250 MCG/ML",
+   "cantidad": 500,
+   "controlado": 1,
+   "creado_por": 1,
+   "created_at": "2026-11-05T01:40:53.000Z",
+   "updated_at": "2026-11-12T01:11:43.000Z"
+  }
+ ]
+}

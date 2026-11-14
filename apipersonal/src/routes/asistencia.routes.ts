@@ -1862,7 +1862,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       // ── Archivos ────────────────────────────────────────────────────────────
       const auto = findAutoFiles(files);
       const ministerioFile = req.query.ministerioFile
-        ? path.join(dir, String(req.query.ministerioFile))
+        ? resolveExcelPath(dir, String(req.query.ministerioFile))
         : auto.ministerio;
       if (!ministerioFile || !fs.existsSync(ministerioFile)) {
         return res.status(400).json({ ok: false, error: 'No se encontró archivo MINISTERIO' });
@@ -1870,7 +1870,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
 
       const autoHorarios = files.find(f => f.name.toLowerCase().includes('horario'));
       const horariosFile = req.query.horariosFile
-        ? path.join(dir, String(req.query.horariosFile))
+        ? resolveExcelPath(dir, String(req.query.horariosFile))
         : autoHorarios?.fullPath ?? null;
 
       // ── Periodo ─────────────────────────────────────────────────────────────
@@ -1951,7 +1951,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       // ── 3b. Leer SIAP (opcional) → mapa DNI → rangos con novedad ───────────────
       const autoSiap = files.find(f => f.name.toLowerCase().includes('siap'));
       const siapFile = req.query.siapFile
-        ? path.join(dir, String(req.query.siapFile))
+        ? resolveExcelPath(dir, String(req.query.siapFile))
         : autoSiap?.fullPath ?? null;
 
       // siapByDni: dni → [{ novedad, desde, hasta, justificado }]
@@ -2153,19 +2153,19 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
 
       // ── Archivos ──────────────────────────────────────────────────────────────
       const siapFilePath = req.query.siapFile
-        ? path.join(dir, String(req.query.siapFile))
+        ? resolveExcelPath(dir, String(req.query.siapFile))
         : auto.siap ?? null;
       if (!siapFilePath || !fs.existsSync(siapFilePath)) {
         return res.status(400).json({ ok: false, error: 'No se encontró archivo SIAP' });
       }
 
       const ministerioFilePath = req.query.ministerioFile
-        ? path.join(dir, String(req.query.ministerioFile))
+        ? resolveExcelPath(dir, String(req.query.ministerioFile))
         : auto.ministerio ?? null;
 
       const autoHorarios2 = files.find(f => f.name.toLowerCase().includes('horario'));
       const horariosFilePath = req.query.horariosFile
-        ? path.join(dir, String(req.query.horariosFile))
+        ? resolveExcelPath(dir, String(req.query.horariosFile))
         : autoHorarios2?.fullPath ?? null;
 
       const period = periodoDeQuery(req.query);
@@ -2530,9 +2530,9 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       if (!period) return res.status(400).json({ ok: false, error: 'Falta periodo' });
 
       const siapFilePath = req.query.siapFile
-        ? path.join(dir, String(req.query.siapFile)) : auto.siap ?? null;
+        ? resolveExcelPath(dir, String(req.query.siapFile)) : auto.siap ?? null;
       const ministerioFilePath = req.query.ministerioFile
-        ? path.join(dir, String(req.query.ministerioFile)) : auto.ministerio ?? null;
+        ? resolveExcelPath(dir, String(req.query.ministerioFile)) : auto.ministerio ?? null;
 
       const DOW_LABELS3 = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
@@ -2637,7 +2637,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const horarioPorDow: (string | null)[] = [null, null, null, null, null, null, null];
       const horarioSemanal: { dow: number; entrada: string | null; salida: string | null; controlable: boolean }[] = [];
       const horariosFilePath2 = req.query.horariosFile
-        ? path.join(dir, String(req.query.horariosFile))
+        ? resolveExcelPath(dir, String(req.query.horariosFile))
         : files.find(f => f.name.toLowerCase().includes('horario'))?.fullPath ?? null;
       if (horariosFilePath2 && fs.existsSync(horariosFilePath2)) {
         const wbH = await loadWorkbook(horariosFilePath2);
@@ -3013,7 +3013,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const horariosFile = fs.existsSync(path.join(dir, HORARIOS_ARCHIVO)) ? path.join(dir, HORARIOS_ARCHIVO) : null;
 
       const siapFile = req.query.siapFile
-        ? path.join(dir, String(req.query.siapFile))
+        ? resolveExcelPath(dir, String(req.query.siapFile))
         : auto.siap ?? null;
 
       // ── 1. Nombre del servicio ─────────────────────────────────────────────
@@ -3119,7 +3119,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
 
       // ── 5b. Ministerio del mes ─────────────────────────────────────────────
       const minFile = req.query.ministerioFile
-        ? path.join(dir, String(req.query.ministerioFile))
+        ? resolveExcelPath(dir, String(req.query.ministerioFile))
         : files.find(f => f.name.toLowerCase().includes('ministerio'))?.fullPath ?? null;
       const minMap: Record<string, NovedadEntry[]> = {};
       if (minFile && fs.existsSync(minFile)) {
@@ -3329,7 +3329,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const dir = getDir();
       const files = listExcelFiles(dir);
       const horariosFile = req.query.horariosFile
-        ? path.join(dir, String(req.query.horariosFile))
+        ? resolveExcelPath(dir, String(req.query.horariosFile))
         : files.find(f => f.name.toLowerCase().includes('horario'))?.fullPath ?? null;
       if (!horariosFile || !fs.existsSync(horariosFile)) {
         return res.status(400).json({ ok: false, error: 'No se encontró el archivo de horarios' });

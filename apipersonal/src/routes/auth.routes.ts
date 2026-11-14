@@ -1,3 +1,4 @@
+import { escapeHtml } from "../utils/escapeHtml";
 // src/routes/auth.routes.ts
 import { Router, Request, Response } from "express";
 import { Sequelize, QueryTypes } from "sequelize";
@@ -25,6 +26,7 @@ import {
 import { authLimiter } from "../middlewares/rateLimiters";
 import { authContext } from "../middlewares/authContext";
 import { logger } from "../logging/logger";
+import { randomInt } from 'crypto';
 
 // ─── Schemas Zod ─────────────────────────────────────────────────────────────
 
@@ -247,7 +249,7 @@ export const buildAuthRouter = (sequelize: Sequelize) => {
       let userId: number;
       try {
         const jwt = await import("jsonwebtoken");
-        const claims = jwt.verify(pending2faToken, env.JWT_ACCESS_SECRET) as any;
+        const claims = jwt.verify(pending2faToken, env.JWT_ACCESS_SECRET, { algorithms: ["HS256"] }) as any;
         if (claims?.typ !== "pending_2fa") throw new Error("Token tipo incorrecto");
         userId = Number(claims.sub);
         if (!Number.isFinite(userId) || userId <= 0) throw new Error("UserId inválido");
@@ -484,7 +486,7 @@ export const buildAuthRouter = (sequelize: Sequelize) => {
   // ─── POST /api/v1/auth/request-access ────────────────────────────────────────
   // Endpoint PÚBLICO: solicitud de acceso.
   // Genera un código de confirmación, lo envía al mail del solicitante Y al admin.
-  router.post('/request-access', async (req: Request, res: Response) => {
+  router.post('/request-access', authLimiter, async (req: Request, res: Response) => {
     try {
       const { nombre, email, motivo } = req.body || {};
       if (!nombre?.trim() || !email?.trim()) {
@@ -496,7 +498,7 @@ export const buildAuthRouter = (sequelize: Sequelize) => {
       }
 
       // ── Generar código de confirmación (6 dígitos) ──
-      const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+      const codigo = randomInt(100000, 1000000).toString();
       const expira = new Date(Date.now() + 24 * 3600 * 1000); // 24 hs
 
       // ── Guardar solicitud en audit_log ──
@@ -531,7 +533,7 @@ export const buildAuthRouter = (sequelize: Sequelize) => {
           subject: 'Código de confirmación — Solicitud de acceso PersonalV5',
           html: `
             <h2>Solicitud de acceso al sistema PersonalV5</h2>
-            <p>Hola <strong>${nombre}</strong>,</p>
+            <p>Hola <strong>${escapeHtml(nombre)}</strong>,</p>
             <p>Recibimos tu solicitud de acceso. Tu código de confirmación es:</p>
             <h1 style="font-size:2.5rem;letter-spacing:0.3rem;color:#2563eb;">${codigo}</h1>
             <p>Este código vence en <strong>24 horas</strong>.</p>
@@ -554,9 +556,9 @@ export const buildAuthRouter = (sequelize: Sequelize) => {
             html: `
               <h2>Nueva solicitud de acceso — PersonalV5</h2>
               <table>
-                <tr><td><strong>Nombre:</strong></td><td>${nombre}</td></tr>
-                <tr><td><strong>Email:</strong></td><td>${emailLower}</td></tr>
-                <tr><td><strong>Motivo:</strong></td><td>${motivo || 'No especificado'}</td></tr>
+                <tr><td><strong>Nombre:</strong></td><td>${escapeHtml(nombre)}</td></tr>
+                <tr><td><strong>Email:</strong></td><td>${escapeHtml(emailLower)}</td></tr>
+                <tr><td><strong>Motivo:</strong></td><td>${escapeHtml(motivo || 'No especificado')}</td></tr>
                 <tr><td><strong>Código verificación:</strong></td><td>${codigo}</td></tr>
                 <tr><td><strong>Expira:</strong></td><td>${expira.toLocaleString('es-AR')}</td></tr>
               </table>
@@ -585,7 +587,7 @@ export const buildAuthRouter = (sequelize: Sequelize) => {
   // ─── POST /api/v1/auth/confirm-access-code ───────────────────────────────────
   // Verifica el código de 6 dígitos que el solicitante recibió por email.
   // El código se guarda en audit_log.request_json al crear la solicitud.
-  router.post('/confirm-access-code', async (req: Request, res: Response) => {
+  router.post('/confirm-access-code', authLimiter, async (req: Request, res: Response) => {
     try {
       const { email, codigo } = req.body || {};
       if (!email || !codigo) {
@@ -790,11 +792,11 @@ export const buildAuthRouter = (sequelize: Sequelize) => {
           subject: 'Tu acceso a PersonalV5 fue aprobado',
           html: `
             <h2>¡Tu solicitud fue aprobada!</h2>
-            <p>Hola <strong>${nombre}</strong>,</p>
+            <p>Hola <strong>${escapeHtml(nombre)}</strong>,</p>
             <p>El administrador aprobó tu acceso al sistema <strong>PersonalV5</strong>.</p>
             <p>Tus credenciales de acceso son:</p>
             <ul>
-              <li><strong>Email:</strong> ${emailLower}</li>
+              <li><strong>Email:</strong> ${escapeHtml(emailLower)}</li>
               <li><strong>Contraseña:</strong> ${password}</li>
             </ul>
             <p>Ingresá en: <a href="${env.APP_URL || 'http://localhost:5173'}">${env.APP_URL || 'http://localhost:5173'}</a></p>

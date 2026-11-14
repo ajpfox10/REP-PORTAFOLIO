@@ -7,6 +7,7 @@ import { metricsHttp } from "./middlewares/metricsHttp";
 import { env } from "./config/env";
 import { logger } from "./logging/logger";
 import { requestId } from "./middlewares/requestId";
+import { ocultarErrores500 } from "./middlewares/ocultarErrores500";
 import { sanitize } from "./middlewares/sanitize";
 import { ipGuard } from "./middlewares/ipGuard";
 import { rateLimiter } from "./middlewares/rateLimiters";
@@ -27,6 +28,9 @@ export function createApp(openapiPathOverride?: string, mount?: MountFn) {
 
   // request id
   app.use(requestId);
+
+  // errores 5xx: el navegador recibe un mensaje genérico con referencia; el detalle va al log
+  app.use(ocultarErrores500);
 
   // Metricas HTTP (Prometheus)
   if (env.METRICS_ENABLE) {

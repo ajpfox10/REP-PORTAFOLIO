@@ -18,15 +18,12 @@ function cleanSn(value: unknown): string {
   return one(value).slice(0, 20);
 }
 
+// IP del socket: X-Forwarded-For lo puede inventar cualquiera (no hay proxy delante de la API).
 function remoteIp(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  return (
-    (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0].trim()
-    || req.socket.remoteAddress
-    || req.ip
-    || ''
-  ).replace(/^::ffff:/, '');
+  return (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
 }
+
+const envSi = (v: string | undefined) => /^(1|true|si|sí|yes)$/i.test(String(v || '').trim());
 
 function isLoopbackIp(ip: string): boolean {
   return ip === '::1' || ip === '127.0.0.1' || ip === 'localhost';
@@ -74,7 +71,9 @@ function uploadRoot(): string {
 }
 
 function safeSegment(value: unknown): string {
-  return one(value).replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80) || 'unknown';
+  // sin '..' ni punto inicial: un segmento no puede subir de carpeta
+  const s = one(value).replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.{2,}/g, '_').replace(/^\.+/, '_').slice(0, 80);
+  return s || 'unknown';
 }
 
 function saveUpload(parts: string[], filename: string, data: Buffer): string {
@@ -306,6 +305,24 @@ async function ensureDevice(req: Request, res: Response) {
     return { conn: null, cfg, device: null as RowDataPacket | null, sn };
   }
 
+  // Seguridad (08/11): solo relojes ya registrados en iclock y desde SU IP. Antes un SN
+  // desconocido se daba de alta solo y cualquiera en la red podía inventar fichadas.
+  // Alta de un reloj nuevo: ADMS_ALTA_AUTOMATICA=true. Reloj que cambió de IP: ADMS_IP_LIBRE=true
+  // (o corregir iclock.IPAddress).
+  if (!rows.length && !envSi(process.env.ADMS_ALTA_AUTOMATICA)) {
+    await conn.end();
+    recordEvent(req, sn, 'security', false, `sn no registrado ip=${ip}`);
+    text(res, `UNKNOWN Device: ${sn}`, 403);
+    return { conn: null, cfg, device: null as RowDataPacket | null, sn };
+  }
+  const ipRegistrada = rows.length ? one(rows[0].IPAddress) : '';
+  if (ipRegistrada && ip !== ipRegistrada && !isLoopbackIp(ip) && !envSi(process.env.ADMS_IP_LIBRE)) {
+    await conn.end();
+    recordEvent(req, sn, 'security', false, `ip=${ip} distinta de la registrada ${ipRegistrada}`);
+    text(res, `UNKNOWN Device: ${sn}`, 403);
+    return { conn: null, cfg, device: null as RowDataPacket | null, sn };
+  }
+
   if (!rows.length) {
     await conn.query(
       `INSERT INTO iclock
@@ -500,14 +517,6 @@ async function handleCdataPost(req: Request, res: Response): Promise<Response> {
       ok = 1;
       await ctx.conn.query('INSERT INTO devlog (SN_id, OP, Object, Cnt, ECnt, OpTime) VALUES (?, ?, ?, ?, ?, ?)', [ctx.sn, 'FPIMAGE', pin, ok, errors, mysqlNow()]);
     } else {
-      // DEBUG TEMPORAL: captura raw del ZMM720 (salida arriba) para diagnóstico
-      if (ctx.sn === 'CK7Z211060032' && raw.trim()) {
-        try {
-          const debugPath = path.resolve(process.cwd(), 'fichadas', `debug_attlog_${ctx.sn}_${Date.now()}.txt`);
-          fs.mkdirSync(path.dirname(debugPath), { recursive: true });
-          fs.writeFileSync(debugPath, `SN=${ctx.sn}\nSTAMP=${stamp}\nTABLE=${table}\n---RAW---\n${raw.slice(0, 4096)}`);
-        } catch { /* noop */ }
-      }
       for (const line of raw.split(/\r?\n/).filter(Boolean)) {
         const parsed = parseAttLogLine(line);
         if (!parsed) { errors++; continue; }

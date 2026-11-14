@@ -34,6 +34,7 @@ import { JubilablesEstadisticaPage } from '../pages/JubilablesEstadisticaPage';
 import { NormativaPage } from '../pages/NormativaPage';
 import { LicenciasPlusPage } from '../pages/LicenciasPlusPage';
 import { FeriadosPage } from '../pages/FeriadosPage';
+import { AgendaTurnosPage } from '../pages/AgendaTurnosPage';
 import { ComisionesPage } from '../pages/ComisionesPage';
 import { VacacionesAdelantadasPage } from '../pages/VacacionesAdelantadasPage';
 import { CargaHorariaLeyPage } from '../pages/CargaHorariaLeyPage';
@@ -85,6 +86,7 @@ import { ScriptsSiapePage }     from '../pages/ScriptsSiapePage';
 import { TramitesDocumentalesPage } from '../pages/TramitesDocumentalesPage';
 import { CargaSiapePage } from '../pages/CargaSiapePage';
 import { CumpleanosFelicitacionesPage } from '../pages/CumpleanosFelicitacionesPage';
+import { GpAvisosPage } from '../pages/GpAvisosPage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -478,6 +480,16 @@ export function App() {
               }
             />
             <Route
+              path="/app/agenda-turnos"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:agentexdni1:read', 'crud:*:*']}>
+                    <AgendaTurnosPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
               path="/app/feriados"
               element={
                 <Private>
@@ -553,6 +565,16 @@ export function App() {
                 <Private>
                   <Guard perm="crud:*:*">
                     <LegajoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/gestiones-personales-avisos"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:agentexdni1:read', 'crud:*:*']}>
+                    <GpAvisosPage />
                   </Guard>
                 </Private>
               }

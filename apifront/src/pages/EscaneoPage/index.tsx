@@ -10,6 +10,14 @@ import { TIPOS_DOCUMENTO, GROUP_LABELS } from './documentTypes';
 import { SUBCARPETAS_PRESETS, presetSubdivisiones, CARPETA_POR_TIPO } from './subcarpetas';
 import { ScanPagesOrganizer, scanPageId, applyScanPageOrder } from './ScanPagesOrganizer';
 import './styles/EscaneoPage.css';
+import { useAuth } from '../../auth/AuthProvider';
+
+// Tipo "Resolución": no va al legajo (DOCU) sino a RESOLUCIONES Y VARIOS, con el nombre de la
+// resolución y vinculada a ella. Se usa el mismo ref que la página Resoluciones:
+// 'respage|motivo|numero|fecha' (el backend decide carpeta, nombre y archivo_id con eso).
+const TIPO_RESOLUCION = 'resolucion';
+const refResolucion = (motivo: string, numero: string, fecha: string) =>
+  ['respage', motivo || '', numero || '', fecha || ''].join('|');
 
 function getScannerBase() {
   const cfg = (window as any).__RUNTIME_CONFIG__ || {};
@@ -218,6 +226,16 @@ export function EscaneoPage() {
 
   // Descripción adicional (opcional)
   const [descripcion, setDescripcion] = useState('');
+
+  // Tipo Resolución: de qué resolución es (una del agente sin archivo, o una nueva)
+  const { session: authSession } = useAuth();
+  const [resPendientes, setResPendientes] = useState<any[]>([]);
+  const [tiposRes, setTiposRes]           = useState<any[]>([]);
+  const [resElegida, setResElegida]       = useState<string>(''); // id de una ya cargada | '' = form nuevo
+  const RES_VACIA = { motivo: '', numero: '', fecha: '', observaciones: '' };
+  const [resNueva, setResNueva]           = useState(RES_VACIA);
+  const [resGuardada, setResGuardada]     = useState<{ numero: string; ruta: string | null; buscando: boolean } | null>(null);
+  const esResolucion = tipoDoc === TIPO_RESOLUCION;
 
   // Subcarpeta destino dentro del legajo (…\docu\<DNI>\<categoría>\<subdivisión>\)
   // '' en ambos = raíz del legajo (comportamiento clásico)
@@ -572,10 +590,73 @@ export function EscaneoPage() {
   }
 
   // ── Escanear una página (multi-página) ─────────────────────────────────────
+  // ── Tipo Resolución: resoluciones del agente todavía sin archivo + catálogo de tipos ──
+  const cargarResPendientes = useCallback(async (dniAgente: number | string) => {
+    try {
+      const r = await apiFetch<any>(`/resoluciones?dni=${dniAgente}&limit=200`);
+      const rows: any[] = r?.data || [];
+      setResPendientes(rows.filter(x => !x.archivo_id && !x.deleted_at && String(x.numero || '').trim())
+        .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || ''))));
+    } catch { setResPendientes([]); }
+  }, []);
+
+  useEffect(() => {
+    setResElegida(''); setResNueva(RES_VACIA); setResGuardada(null);
+    if (!agente || !esResolucion) { setResPendientes([]); return; }
+    cargarResPendientes(agente.dni);
+    if (!tiposRes.length) {
+      apiFetch<any>('/tipoderesolucion?limit=500').then(r => setTiposRes(r?.data || [])).catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agente, esResolucion]);
+
+  /** Motivo/número/fecha de la resolución elegida; null si falta algo. */
+  const datosResolucion = useCallback((): { motivo: string; numero: string; fecha: string; nueva: boolean } | null => {
+    if (!resElegida) {
+      const numero = resNueva.numero.trim();
+      if (!resNueva.motivo || !numero) return null;
+      return { motivo: resNueva.motivo, numero, fecha: resNueva.fecha, nueva: true };
+    }
+    const r = resPendientes.find(x => String(x.id) === resElegida);
+    if (!r) return null;
+    return { motivo: String(r.motivo || ''), numero: String(r.numero || '').trim(), fecha: r.fecha ? String(r.fecha).slice(0, 10) : '', nueva: false };
+  }, [resElegida, resNueva, resPendientes]);
+
+  /** Busca el archivo que quedó vinculado (lo graba el backend al recibir el PDF) y lo muestra. */
+  const mostrarDondeSeGuardo = useCallback(async (dniAgente: number | string, motivo: string, numero: string) => {
+    setResGuardada({ numero, ruta: null, buscando: true });
+    for (let intento = 0; intento < 10; intento++) {
+      await new Promise(r => window.setTimeout(r, 2000));
+      try {
+        const r = await apiFetch<any>(`/resoluciones?dni=${dniAgente}&limit=200`);
+        const res = (r?.data || []).find((x: any) => String(x.motivo || '') === motivo && String(x.numero || '').trim() === numero && x.archivo_id);
+        if (res) {
+          const a = await apiFetch<any>(`/tblarchivos/${res.archivo_id}`);
+          const arch = a?.data || a;
+          // Las resoluciones escaneadas quedan con ruta = nombre del archivo, relativa a RESOLUCIONES Y VARIOS
+          // (o ruta = carpeta + nombre_archivo_original aparte, como las filas de la carpeta general).
+          let ruta = String(arch?.ruta || arch?.nombre_archivo_original || '');
+          if (!/\.[a-z0-9]{2,5}$/i.test(ruta) && arch?.nombre_archivo_original) ruta = `${ruta.replace(/\\+$/, '')}\\${arch.nombre_archivo_original}`;
+          const completa = /^[A-Za-z]:|^\\\\/.test(ruta) ? ruta : `\\\\192.168.0.21\\g\\RESOLUCIONES Y VARIOS\\${ruta}`;
+          setResGuardada({ numero, ruta: completa, buscando: false });
+          cargarResPendientes(dniAgente);
+          return;
+        }
+      } catch { /* reintenta */ }
+    }
+    setResGuardada({ numero, ruta: null, buscando: false });
+  }, [cargarResPendientes]);
+
   const validarYLanzar = useCallback(async () => {
     if (!agente) { toast.error('Agente requerido', 'Buscá y seleccioná el agente antes de escanear'); return; }
     if (!tipoDoc) { toast.error('Tipo de documento requerido', 'Seleccioná qué documento vas a escanear'); return; }
     if (!selectedDevice) { toast.error('Seleccioná un dispositivo'); return; }
+    const datosRes = tipoDoc === TIPO_RESOLUCION ? datosResolucion() : null;
+    if (tipoDoc === TIPO_RESOLUCION && !datosRes) {
+      toast.error('¿De qué resolución?', 'Elegí la resolución o completá tipo y número antes de escanear');
+      return;
+    }
+    const refInicial = datosRes ? refResolucion(datosRes.motivo, datosRes.numero, datosRes.fecha) : tipoDoc;
 
     const tipoLabel = TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.label || tipoDoc;
     setScanPhase('creating');
@@ -599,7 +680,7 @@ export function EscaneoPage() {
           blank_page_detection: true,
           compression: 'medium',
           output_format: outputFormat,
-          personal_ref: tipoDoc,
+          personal_ref: refInicial,
           doc_class: tipoDoc,
         }),
       });
@@ -646,7 +727,7 @@ export function EscaneoPage() {
       setScanError(e?.message || 'Error desconocido');
       toast.error('Error al escanear', e?.message);
     } finally { setLaunching(false); }
-  }, [agente, tipoDoc, selectedDevice, selectedProfile, source, duplex, dpi, color, paperSize, outputFormat, paperStatus, flatbedPromptDismissed, cargarPaperStatus]);
+  }, [agente, tipoDoc, datosResolucion, selectedDevice, selectedProfile, source, duplex, dpi, color, paperSize, outputFormat, paperStatus, flatbedPromptDismissed, cargarPaperStatus]);
 
   // ── Guardar sesión ──────────────────────────────────────────────────────────
   const guardarSesion = useCallback(async () => {
@@ -654,9 +735,26 @@ export function EscaneoPage() {
     setSaving(true);
     try {
       const jobIds = Array.from(new Set(session.map(p => p.jobId)));
+      // Resolución → RESOLUCIONES Y VARIOS (ref 'respage|…'), nunca al legajo.
+      // Si es una resolución nueva, primero se da de alta para que el archivo quede vinculado.
+      let refRes: string | null = null;
+      if (tipoDoc === TIPO_RESOLUCION) {
+        const d = datosResolucion();
+        if (!d) { toast.error('¿De qué resolución?', 'Elegí la resolución o completá tipo y número'); return; }
+        if (d.nueva) {
+          await apiFetch('/resoluciones', {
+            method: 'POST',
+            body: JSON.stringify({
+              dni: agente.dni, motivo: d.motivo, numero: d.numero, fecha: d.fecha || null,
+              observaciones: resNueva.observaciones.trim() || descripcion.trim() || null, created_by: authSession?.user?.id || null,
+            }),
+          });
+        }
+        refRes = refResolucion(d.motivo, d.numero, d.fecha);
+      }
       // Si hay subcarpeta elegida, se codifica en personal_ref: 'docu|<relpath>|<tipo>'.
       // doc_class queda como el tipo puro para que el backend detecte el tipo aunque falle el parse.
-      const personalRef = subRelPath ? `docu|${subRelPath}|${tipoDoc}` : tipoDoc;
+      const personalRef = refRes ?? (subRelPath ? `docu|${subRelPath}|${tipoDoc}` : tipoDoc);
       const resp = await scannerFetch<{ output_format?: string; documents?: number }>('/v1/scan-jobs/consolidate', {
         method: 'POST',
         body: JSON.stringify({
@@ -678,6 +776,11 @@ export function EscaneoPage() {
       }
       apiFetch<any>(`/scanner/documents/${agente.dni}`)
         .then(r => setDocHistory(r?.data || [])).catch(() => {});
+      if (refRes) {
+        const d = datosResolucion();
+        setResElegida(''); setResNueva(RES_VACIA);
+        if (d) void mostrarDondeSeGuardo(agente.dni, d.motivo, d.numero);
+      }
       blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
       blobUrlsRef.current = [];
       setSession([]); setScanPhase('idle'); setScanError(null);
@@ -697,7 +800,7 @@ export function EscaneoPage() {
         toast.error('No se pudo guardar', msg);
       }
     } finally { setSaving(false); }
-  }, [session, agente, tipoDoc, outputFormat, subRelPath]);
+  }, [session, agente, tipoDoc, outputFormat, subRelPath, datosResolucion, descripcion, authSession, resNueva, mostrarDondeSeGuardo]);
 
   const descartarSesion = useCallback(() => {
     blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
@@ -804,7 +907,8 @@ export function EscaneoPage() {
 
   // adfPaperEmpty ya NO bloquea el botón — solo muestra advertencia.
   // El escáner dará el error real si realmente no hay papel.
-  const puedeEscanear = !!agente && !!tipoDoc && !!selectedDevice && isOnline && !isScanning && !flatbedPaperQuestion;
+  const faltaResolucion = esResolucion && !datosResolucion();
+  const puedeEscanear = !!agente && !!tipoDoc && !faltaResolucion && !!selectedDevice && isOnline && !isScanning && !flatbedPaperQuestion;
 
   const sortedDevices = [...devices].sort((a, b) => {
     const af = favorites.includes(a.id) ? 0 : 1;
@@ -1167,6 +1271,73 @@ export function EscaneoPage() {
                 {tipoDoc && (
                   <div className="scan-tipo-selected">
                     ✅ {TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.icon} {TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.label}
+                  </div>
+                )}
+
+                {/* Resolución → RESOLUCIONES Y VARIOS: mismo formulario que la página Resoluciones */}
+                {esResolucion && agente && (
+                  <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 10, border: '1px solid rgba(148,163,184,0.25)', background: 'rgba(15,23,42,0.5)' }}>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 2 }}>+ Datos de la resolución</div>
+                    <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 10 }}>
+                      Se guarda en <b>RESOLUCIONES Y VARIOS</b> con el número de la resolución y queda vinculada al agente (no va a la carpeta del legajo).
+                    </div>
+
+                    {resPendientes.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
+                        <label className="muted" style={{ fontSize: '0.72rem' }}>¿Ya está cargada? Elegila (resoluciones del agente sin archivo)</label>
+                        <select className="input" value={resElegida} onChange={e => setResElegida(e.target.value)}>
+                          <option value="">— No, es nueva: completar abajo —</option>
+                          {resPendientes.map(r => (
+                            <option key={r.id} value={r.id}>
+                              {r.motivo || 'Sin tipo'} · {r.numero}{r.fecha ? ` · ${String(r.fecha).slice(0, 10).split('-').reverse().join('/')}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {!resElegida && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label className="muted" style={{ fontSize: '0.72rem' }}>Tipo de resolución *</label>
+                          <select className="input" value={resNueva.motivo} onChange={e => setResNueva(v => ({ ...v, motivo: e.target.value }))}>
+                            <option value="">— Seleccioná —</option>
+                            {tiposRes.map(t => <option key={t.id} value={t.resolucion_nombre}>{t.resolucion_nombre}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label className="muted" style={{ fontSize: '0.72rem' }}>Número *</label>
+                          <input className="input" placeholder="Ej: 1234/2026" value={resNueva.numero}
+                            onChange={e => setResNueva(v => ({ ...v, numero: e.target.value }))} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label className="muted" style={{ fontSize: '0.72rem' }}>Fecha</label>
+                          <input className="input" type="date" value={resNueva.fecha}
+                            onChange={e => setResNueva(v => ({ ...v, fecha: e.target.value }))} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label className="muted" style={{ fontSize: '0.72rem' }}>Observaciones</label>
+                          <input className="input" placeholder="Texto corto…" value={resNueva.observaciones}
+                            onChange={e => setResNueva(v => ({ ...v, observaciones: e.target.value }))} />
+                        </div>
+                      </div>
+                    )}
+
+                    {faltaResolucion && (
+                      <div style={{ marginTop: 10, fontSize: '0.75rem', color: '#fca5a5' }}>⚖️ Requerido: tipo y número de la resolución antes de escanear</div>
+                    )}
+
+                    {resGuardada && (
+                      <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, fontSize: '0.78rem',
+                        border: `1px solid ${resGuardada.ruta ? 'rgba(34,197,94,0.5)' : 'rgba(245,158,11,0.5)'}`,
+                        background: resGuardada.ruta ? 'rgba(20,83,45,0.3)' : 'rgba(120,53,15,0.25)' }}>
+                        {resGuardada.buscando
+                          ? <>⏳ Guardando {resGuardada.numero}…</>
+                          : resGuardada.ruta
+                            ? <>✅ <b>{resGuardada.numero}</b> guardada en:<br /><code style={{ fontSize: '0.75rem', overflowWrap: 'anywhere', userSelect: 'all' }}>{resGuardada.ruta}</code></>
+                            : <>⚠️ Se envió {resGuardada.numero}, pero todavía no aparece vinculada. Revisala en Resoluciones (aviso de resoluciones sin archivo).</>}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1558,6 +1729,7 @@ export function EscaneoPage() {
                   {isScanning ? (scanPhaseLabel[scanPhase] || '⏳ Escaneando…')
                     : !agente ? '👤 Falta el agente'
                     : !tipoDoc ? '🗂️ Falta el tipo de documento'
+                    : faltaResolucion ? '⚖️ Falta elegir la resolución'
                     : flatbedPaperQuestion ? '🪟 Confirmar fuente'
                     : !isOnline ? '🔌 Scanner sin conexión'
                     : hasPages ? '📄 Escanear otra página'

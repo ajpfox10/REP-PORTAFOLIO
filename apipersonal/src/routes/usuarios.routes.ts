@@ -1,3 +1,4 @@
+import { escapeHtml } from "../utils/escapeHtml";
 /**
  * @file routes/usuarios.routes.ts
  * @description CRUD de usuarios del sistema (solo admin).
@@ -150,10 +151,10 @@ export function buildUsuariosRouter(sequelize: Sequelize) {
                 <h1 style="color: #ffffff; margin: 0;">Cuenta Creada</h1>
               </div>
               <div style="padding: 30px; background-color: #ffffff;">
-                <p style="font-size: 16px; color: #333;">Hola <b>${nombre}</b>,</p>
+                <p style="font-size: 16px; color: #333;">Hola <b>${escapeHtml(nombre)}</b>,</p>
                 <p style="font-size: 16px; color: #333;">Tu cuenta en el sistema ha sido creada exitosamente.</p>
                 <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
-                  <tr><td style="padding: 8px; color: #666;">Usuario:</td><td style="padding: 8px;"><b>${email}</b></td></tr>
+                  <tr><td style="padding: 8px; color: #666;">Usuario:</td><td style="padding: 8px;"><b>${escapeHtml(email)}</b></td></tr>
                   <tr><td style="padding: 8px; color: #666;">Estado:</td><td style="padding: 8px;"><b>${estado}</b></td></tr>
                 </table>
                 <p style="font-size: 14px; color: #666;">Por seguridad, te recomendamos cambiar tu contraseña al ingresar por primera vez.</p>

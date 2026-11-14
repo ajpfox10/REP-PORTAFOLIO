@@ -9,7 +9,9 @@ $dst = Join-Path $src '..\apifront\public\extension-whatsapp'
 New-Item -ItemType Directory -Force $dst | Out-Null
 
 $version = (Get-Content (Join-Path $src 'manifest.json') -Raw | ConvertFrom-Json).version
-$archivos = Get-ChildItem $src -File | Where-Object { $_.Name -notin @('empaquetar.ps1', 'actualizador.log') }
+$archivos = Get-ChildItem $src -File | Where-Object { $_.Name -notin @('empaquetar.ps1', 'actualizador.log', 'Instalar-Extension-Personal.cmd') }
+# Instalador unico: se baja suelto desde la app (busca el zip en el servidor, no lleva version adentro)
+Copy-Item (Join-Path $src 'Instalar-Extension-Personal.cmd') (Join-Path $dst 'Instalar-Extension-Personal.cmd') -Force
 $zip = Join-Path $dst 'personal-whatsapp-extension.zip'
 Compress-Archive -Path $archivos.FullName -DestinationPath $zip -Force
 # copia de siempre en C:\apps\personaldev (instalaciones viejas)

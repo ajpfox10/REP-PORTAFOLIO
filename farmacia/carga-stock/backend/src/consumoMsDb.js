@@ -126,23 +126,57 @@ async function listarDescargas() {
   `);
 }
 
-// Consumo vigente: para cada sector + año, los items de la ultima descarga completa que lo trajo
+// Consumo vigente: para cada sector + año y cada MES, vale la ultima descarga completa que trae datos en ese mes.
+// Asi, volver a bajar un año desde Farmacia MS (que no tiene los meses del sistema anterior y los trae en 0)
+// actualiza los meses que si tiene sin tapar los meses cargados a mano desde EGRESOS DETALLADOS.
 async function consumoVigente() {
-  const lotes = await query(`
-    SELECT i.sector, i.anio, MAX(i.descarga_id) descarga_id
+  const keys = MONTHS.map((m) => m.key);
+  const grupos = await query(`
+    SELECT i.sector, i.anio, i.descarga_id, ${keys.map((k) => `SUM(i.${k} <> 0) ${k}`).join(', ')}
     FROM consumo_ms_items i
     JOIN consumo_ms_descargas d ON d.id = i.descarga_id AND d.estado = 'ok'
-    GROUP BY i.sector, i.anio
+    GROUP BY i.sector, i.anio, i.descarga_id
+    ORDER BY i.sector, i.anio, i.descarga_id DESC
   `);
+  const porLote = new Map(); // sector|anio -> descargas, de la mas nueva a la mas vieja
+  for (const g of grupos) {
+    const k = `${g.sector}|${g.anio}`;
+    if (!porLote.has(k)) porLote.set(k, []);
+    porLote.get(k).push(g);
+  }
+  const lotes = [];
   const items = [];
-  for (const l of lotes) {
+  for (const descargas of porLote.values()) {
+    const { sector, anio } = descargas[0];
+    // Mes -> descarga que manda (la mas nueva con algun valor en ese mes)
+    const fuente = {};
+    for (const k of keys) fuente[k] = (descargas.find((g) => Number(g[k]) > 0) || descargas[0]).descarga_id;
+    const usadas = Array.from(new Set([descargas[0].descarga_id, ...Object.values(fuente)]));
     const filas = await query(`
-      SELECT id, sector, anio, codigo, nombre_generico, concentracion, presentacion, forma,
-             ${MONTHS.map((m) => m.key).join(', ')}, total
+      SELECT id, descarga_id, sector, anio, codigo, nombre_generico, concentracion, presentacion, forma, ${keys.join(', ')}
       FROM consumo_ms_items
-      WHERE descarga_id = :descargaId AND sector = :sector AND anio = :anio
-    `, { descargaId: l.descarga_id, sector: l.sector, anio: l.anio });
-    items.push(...filas);
+      WHERE sector = :sector AND anio = :anio AND descarga_id IN (${usadas.map((_, i) => `:d${i}`).join(', ')})
+      ORDER BY descarga_id DESC
+    `, { sector, anio, ...Object.fromEntries(usadas.map((d, i) => [`d${i}`, d])) });
+    const porCodigo = new Map();
+    for (const f of filas) {
+      // Filas de la descarga mas nueva primero: sus datos de catalogo y su id quedan
+      if (!porCodigo.has(f.codigo)) {
+        porCodigo.set(f.codigo, {
+          id: f.id, sector, anio, codigo: f.codigo, nombre_generico: f.nombre_generico, concentracion: f.concentracion,
+          presentacion: f.presentacion, forma: f.forma, ...Object.fromEntries(keys.map((k) => [k, 0])), total: 0
+        });
+      }
+      const it = porCodigo.get(f.codigo);
+      if (f.descarga_id === descargas[0].descarga_id) it.enUltima = true;
+      for (const k of keys) if (fuente[k] === f.descarga_id) it[k] = Number(f[k] || 0);
+    }
+    for (const { enUltima, ...it } of porCodigo.values()) {
+      it.total = Math.round(keys.reduce((a, k) => a + it[k], 0) * 100) / 100;
+      // Lo que vino en la ultima descarga se muestra siempre (como antes); de las viejas, solo si suma algo
+      if (enUltima || it.total !== 0) items.push(it);
+    }
+    lotes.push({ sector, anio, descarga_id: descargas[0].descarga_id, descargas: usadas.sort((a, b) => a - b) });
   }
   return { lotes, items };
 }

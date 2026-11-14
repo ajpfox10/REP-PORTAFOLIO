@@ -2,8 +2,9 @@
 // (cualquiera sea su posición), busca por nombre y, si no lo encuentra, abre el chat por teléfono.
 // Al terminar devuelve el foco a la pestaña de la app.
 //
-// payload: { modo: 'NOMBRE_TELEFONO' | 'NOMBRE' | 'TELEFONO', buscar, palabras: string[], telefono, texto, imagen? (data URL) }
-// respuesta: { ok, estado: 'ENVIADO'|'NO_ENCONTRADO'|'SIN_WHATSAPP'|'ERROR', modo: 'NOMBRE'|'TELEFONO', destino, detalle }
+// payload: { modo: 'NOMBRE_TELEFONO' | 'NOMBRE' | 'TELEFONO', buscar, palabras: string[], telefono, texto, imagen? (data URL),
+//            sinEnviar? (1.8.0: abre el chat y deja el mensaje escrito; el Enviar lo toca la persona) }
+// respuesta: { ok, estado: 'ENVIADO'|'ESCRITO'|'NO_ENCONTRADO'|'SIN_WHATSAPP'|'ERROR', modo: 'NOMBRE'|'TELEFONO', destino, detalle }
 
 const WA = 'https://web.whatsapp.com/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -61,7 +62,7 @@ async function enviar(p, appTab) {
 
     let porNombre = null;
     if (p.modo !== 'TELEFONO' && p.buscar) {
-      porNombre = await aTab(tab.id, { type: 'POR_NOMBRE', buscar: p.buscar, palabras: p.palabras, texto: p.texto, imagen: p.imagen || null }, p.imagen ? 75000 : 45000);
+      porNombre = await aTab(tab.id, { type: 'POR_NOMBRE', buscar: p.buscar, palabras: p.palabras, texto: p.texto, imagen: p.imagen || null, sinEnviar: !!p.sinEnviar }, p.imagen ? 75000 : 45000);
       // Cualquier falla por nombre (no agendado, varios, chat que no abre…) pasa al teléfono.
       // Salvo que se haya cortado por tiempo: el script podría seguir y mandarlo igual → no duplicar.
       if (porNombre.ok || porNombre.timeout || p.modo === 'NOMBRE') return { ...porNombre, modo: 'NOMBRE' };
@@ -74,13 +75,14 @@ async function enviar(p, appTab) {
     await chrome.tabs.update(tab.id, { url: `${WA}send?phone=${encodeURIComponent(p.telefono)}` });
     await cargaCompleta(tab.id);
     await asegurarScript(tab.id);
-    const r = await aTab(tab.id, { type: 'POR_LINK', texto: p.texto, imagen: p.imagen || null }, 90000);
+    const r = await aTab(tab.id, { type: 'POR_LINK', texto: p.texto, imagen: p.imagen || null, sinEnviar: !!p.sinEnviar }, 90000);
     return {
       ...r, modo: 'TELEFONO', destino: `+${p.telefono}`,
       detalle: [porNombre?.detalle && `Por nombre: ${porNombre.detalle}`, r.detalle].filter(Boolean).join(' · ') || null,
     };
   } finally {
-    if (appTab?.id) {
+    // sinEnviar (Agenda de turnos): el mensaje quedó escrito → WhatsApp queda al frente para que la persona toque Enviar
+    if (appTab?.id && !p.sinEnviar) {
       try {
         await chrome.tabs.update(appTab.id, { active: true });
         await chrome.windows.update(appTab.windowId, { focused: true });
@@ -302,6 +304,26 @@ function rdamEsperarCodigo(tabId, ms) {
   });
 }
 
+// Desde nov/2026 el RDAM entrega el PDF como descarga (Content-Disposition: attachment): la pestaña
+// ya no navega al PDF y rdamEsperarCodigo no se entera. Este gancho corre en el mundo de la página
+// (Livewire v2), toma el código de effects.redirect de la respuesta y anula la redirección (así
+// tampoco se baja un PDF suelto a Descargas). Lo deja en <html data-hpw-rdam-codigo> para rdam.js.
+async function rdamGancho(tabId) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    func: () => {
+      if (window.__hpwRdamGancho || !window.Livewire?.hook) return;
+      window.__hpwRdamGancho = true;
+      window.Livewire.hook('message.received', (message) => {
+        const fx = message?.response?.effects;
+        const m = fx && /\/certificado-(?:libre-deuda|ver)-RDAM\/([^/?#]+)/.exec(fx.redirect || '');
+        if (m) { document.documentElement.dataset.hpwRdamCodigo = m[1]; fx.redirect = null; }
+      });
+    },
+  });
+}
+
 async function rdamPdf(codigo) {
   const r = await fetch(`${RDAM_BASE}/certificado-libre-deuda-RDAM/${encodeURIComponent(codigo)}`, { credentials: 'include' });
   if (!r.ok) throw new Error(`El RDAM no entregó el PDF (HTTP ${r.status})`);
@@ -329,12 +351,13 @@ async function rdam(p) {
   let aviso = null;
 
   if (!codigo) {
+    try { await rdamGancho(a.tab.id); } catch { /* sin gancho queda el respaldo del redirect */ }
     const redirect = rdamEsperarCodigo(a.tab.id, 90000);
     // Si la página navega al PDF, el script de la pestaña muere y el mensaje se corta: es lo esperado.
     const env = await rdamA(a.tab.id, { type: 'SOLICITAR', dni: p.dni, sexo: p.sexo, apellido: p.apellido, nombre: p.nombre }, 90000)
       .catch(() => ({ ok: true, estado: 'ENVIADO', detalle: null }));
     aviso = env.detalle || null;
-    codigo = await Promise.race([redirect, sleep(env.ok ? 15000 : 1000).then(() => null)]);
+    codigo = env.codigo || await Promise.race([redirect, sleep(env.ok ? 15000 : 1000).then(() => null)]);
     if (!codigo && !env.ok) return env;
     // Respaldo con sesión: la tabla no se refresca sola, se recarga y se busca la fila nueva.
     const viejos = new Set(antes.filas.map((f) => f.codigo));

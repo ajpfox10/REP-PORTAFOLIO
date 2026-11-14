@@ -1,0 +1,2950 @@
+[
+ {
+  "id": 1,
+  "codigo_a": "M0724122",
+  "codigo_b": "M0724164",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0724164",
+   "sacado": {
+    "id": 65,
+    "anio": 2026,
+    "droga": "CEFOTAXIMA",
+    "codigo": "M0724164",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "CEFOTAXIMA - POLVO PARA SOLUCIÓN INYECTABLE - 1 G"
+   },
+   "renglon": {
+    "id": 291,
+    "drogaAntes": "CEFOTAXIMA",
+    "codigoAntes": "M0724122",
+    "controladoAntes": 1,
+    "descripcionAntes": "CEFOTAXIMA 1 GR INYECTABLE FRASCO AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:25:20.000Z"
+ },
+ {
+  "id": 2,
+  "codigo_a": "M1109193",
+  "codigo_b": "M3000033",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1109193",
+   "sacado": {
+    "id": 114,
+    "anio": 2026,
+    "droga": "NITROFURANTOÍNA",
+    "codigo": "M1109193",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "NITROFURANTOÍNA - CÁPSULA - 100 MG"
+   },
+   "renglon": {
+    "id": 341,
+    "drogaAntes": "NITROFURANTOINA",
+    "codigoAntes": "M3000033",
+    "controladoAntes": 1,
+    "descripcionAntes": "NITROFURANTOINA 100 MG COMPRIMIDO"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:26:19.000Z"
+ },
+ {
+  "id": 3,
+  "codigo_a": "M0314156",
+  "codigo_b": "M4005112",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0314156",
+   "sacado": {
+    "id": 184,
+    "anio": 2026,
+    "droga": "PROPARACAÍNA CLORHIDRATO",
+    "codigo": "M0314156",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "PROPARACAÍNA CLORHIDRATO - GOTAS OFTÁLMICAS - 5 mg/ml ( 0,5 %)"
+   },
+   "renglon": {
+    "id": 337,
+    "drogaAntes": "PROPARACAINA 0,5% -",
+    "codigoAntes": "M4005112",
+    "controladoAntes": 1,
+    "descripcionAntes": "PROPARACAINA 0,5% - 10 ML COLIRIO"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:26:24.000Z"
+ },
+ {
+  "id": 4,
+  "codigo_a": "M1101074",
+  "codigo_b": "M1109189",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1109189",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:26:33.000Z"
+ },
+ {
+  "id": 5,
+  "codigo_a": "M2434112",
+  "codigo_b": "M2434188",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2434188",
+   "sacado": {
+    "id": 24,
+    "anio": 2026,
+    "droga": "AMINOFILINA",
+    "codigo": "M2434188",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "AMINOFILINA - SOLUCIÓN INYECTABLE - 24 MG/ML"
+   },
+   "renglon": {
+    "id": 344,
+    "drogaAntes": "AMINOFILINA",
+    "codigoAntes": "M2434112",
+    "controladoAntes": 1,
+    "descripcionAntes": "AMINOFILINA 240MG - 10 ML INYECTABLE"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:27:05.000Z"
+ },
+ {
+  "id": 6,
+  "codigo_a": "M2501111",
+  "codigo_b": "M2534290",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2534290",
+   "sacado": {
+    "id": 133,
+    "anio": 2026,
+    "droga": "AMIODARONA",
+    "codigo": "M2534290",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "AMIODARONA - COMPRIMIDO - 200 MG"
+   },
+   "renglon": {
+    "id": 282,
+    "drogaAntes": "AMIODARONA",
+    "codigoAntes": "M2501111",
+    "controladoAntes": 1,
+    "descripcionAntes": "AMIODARONA 200 MG COMPRIMIDO"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:27:12.000Z"
+ },
+ {
+  "id": 7,
+  "codigo_a": "M0717111",
+  "codigo_b": "M0724160",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0724160",
+   "sacado": {
+    "id": 192,
+    "anio": 2026,
+    "droga": "CEFTRIAXONA",
+    "codigo": "M0724160",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "CEFTRIAXONA - POLVO PARA SOLUCIÓN INYECTABLE - 1 G"
+   },
+   "renglon": {
+    "id": 554,
+    "drogaAntes": "CEFTRIAXONA",
+    "codigoAntes": "M0717111",
+    "controladoAntes": 1,
+    "descripcionAntes": "CEFTRIAXONA 1 GR INYECTABLE FRASCO AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:30:03.000Z"
+ },
+ {
+  "id": 8,
+  "codigo_a": "M0701157",
+  "codigo_b": "M0724160",
+  "estado": "distinto",
+  "nota": null,
+  "detalle": null,
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:32:29.000Z"
+ },
+ {
+  "id": 9,
+  "codigo_a": "M1225111",
+  "codigo_b": "M1246459",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1246459",
+   "sacado": {
+    "id": 146,
+    "anio": 2026,
+    "droga": "CLOTIAPINA",
+    "codigo": "M1246459",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "CLOTIAPINA - COMPRIMIDO - 40 MG"
+   },
+   "renglon": {
+    "id": 559,
+    "drogaAntes": "CLOTIAPINA",
+    "codigoAntes": "M1225111",
+    "controladoAntes": 1,
+    "descripcionAntes": "CLOTIAPINA 40 MG COMPRIMIDOS"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:32:34.000Z"
+ },
+ {
+  "id": 10,
+  "codigo_a": "M1805137",
+  "codigo_b": "M2901035",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1805137",
+   "sacado": {
+    "id": 198,
+    "anio": 2026,
+    "droga": "CLOTRIMAZOL",
+    "codigo": "M1805137",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "CLOTRIMAZOL - CREMA - 1 %"
+   },
+   "renglon": {
+    "id": 510,
+    "drogaAntes": "CLOTRIMAZOL 1% -",
+    "codigoAntes": "M2901035",
+    "controladoAntes": 1,
+    "descripcionAntes": "CLOTRIMAZOL 1% - CREMA ENVASE X20- 30 GRS."
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:32:37.000Z"
+ },
+ {
+  "id": 11,
+  "codigo_a": "M1246393",
+  "codigo_b": "M1246458",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1246458",
+   "sacado": {
+    "id": 132,
+    "anio": 2026,
+    "droga": "DESVENLAFAXINA",
+    "codigo": "M1246458",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "DESVENLAFAXINA - COMPRIMIDO ORAL DE LIBERACIÓN PROLONGADA - 50 MG"
+   },
+   "renglon": {
+    "id": 277,
+    "drogaAntes": "DESVENLAFAXINA 50 MG",
+    "codigoAntes": "M1246393",
+    "controladoAntes": 1,
+    "descripcionAntes": "DESVENLAFAXINA 50 MG COMPRIMIDO"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:32:59.000Z"
+ },
+ {
+  "id": 12,
+  "codigo_a": "M2701041",
+  "codigo_b": "M2709208",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709208",
+   "sacado": {
+    "id": 135,
+    "anio": 2026,
+    "droga": "DEXAMETASONA",
+    "codigo": "M2709208",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "DEXAMETASONA - COMPRIMIDO - 4 MG"
+   },
+   "renglon": {
+    "id": 319,
+    "drogaAntes": "DEXAMETASONA",
+    "codigoAntes": "M2701041",
+    "controladoAntes": 1,
+    "descripcionAntes": "DEXAMETASONA 4 MG COMPRIMIDOS"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:33:00.000Z"
+ },
+ {
+  "id": 13,
+  "codigo_a": "M2701040",
+  "codigo_b": "M2709187",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709187",
+   "sacado": {
+    "id": 52,
+    "anio": 2026,
+    "droga": "DEXAMETASONA (COMO FOSFATO SÓDICO DE DEXAMETASONA)",
+    "codigo": "M2709187",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "DEXAMETASONA (COMO FOSFATO SÓDICO DE DEXAMETASONA) - SOLUCIÓN INYECTABLE - 4 MG/ML"
+   },
+   "renglon": {
+    "id": 406,
+    "drogaAntes": "DEXAMETASONA",
+    "codigoAntes": "M2701040",
+    "controladoAntes": 1,
+    "descripcionAntes": "DEXAMETASONA 4MG/ML - 2 ML INYECTABLE AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:33:12.000Z"
+ },
+ {
+  "id": 14,
+  "codigo_a": "M0216186",
+  "codigo_b": "M1701003",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0216186",
+   "sacado": {
+    "id": 147,
+    "anio": 2026,
+    "droga": "DICLOFENAC SÓDICO",
+    "codigo": "M0216186",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "DICLOFENAC SÓDICO - COMPRIMIDO - 75 MG"
+   },
+   "renglon": {
+    "id": 520,
+    "drogaAntes": "DICLOFENAC",
+    "codigoAntes": "M1701003",
+    "controladoAntes": 1,
+    "descripcionAntes": "DICLOFENAC 75 MG COMPRIMIDOS"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:33:18.000Z"
+ },
+ {
+  "id": 15,
+  "codigo_a": "M2501027",
+  "codigo_b": "M2534287",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2534287",
+   "sacado": {
+    "id": 49,
+    "anio": 2026,
+    "droga": "DILTIAZEM",
+    "codigo": "M2534287",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "DILTIAZEM - POLVO PARA SOLUCIÓN INYECTABLE - 25 MG"
+   },
+   "renglon": {
+    "id": 561,
+    "drogaAntes": "DILTIAZEM",
+    "codigoAntes": "M2501027",
+    "controladoAntes": 1,
+    "descripcionAntes": "DILTIAZEM 25MG - 5 ML INYECTABLE"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:29:16.000Z"
+ },
+ {
+  "id": 16,
+  "codigo_a": "M0301007",
+  "codigo_b": "M0314155",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0314155",
+   "sacado": {
+    "id": 16,
+    "anio": 2026,
+    "droga": "BUPIVACAINA CLORHIDRATO",
+    "codigo": "M0314155",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "BUPIVACAINA CLORHIDRATO - SOLUCIÓN INYECTABLE - 5 MG/ML"
+   },
+   "renglon": {
+    "id": 434,
+    "drogaAntes": "BUPIVACAINA 0.5% -",
+    "codigoAntes": "M0301007",
+    "controladoAntes": 1,
+    "descripcionAntes": "BUPIVACAINA 0.5% - 20 ML INYECTABLE FRASCO AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:33:57.000Z"
+ },
+ {
+  "id": 17,
+  "codigo_a": "M3605111",
+  "codigo_b": "M3629175",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M3629175",
+   "sacado": {
+    "id": 152,
+    "anio": 2026,
+    "droga": "LEVOTIROXINA SODICA",
+    "codigo": "M3629175",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "LEVOTIROXINA SODICA - COMPRIMIDO - 100 MCG"
+   },
+   "renglon": {
+    "id": 342,
+    "drogaAntes": "LEVOTIROXINA",
+    "codigoAntes": "M3605111",
+    "controladoAntes": 1,
+    "descripcionAntes": "LEVOTIROXINA 0.1 MG COMPRIMIDOS"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:36:45.000Z"
+ },
+ {
+  "id": 18,
+  "codigo_a": "M0209111",
+  "codigo_b": "M0216197",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0216197",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:37:05.000Z"
+ },
+ {
+  "id": 19,
+  "codigo_a": "M2709124",
+  "codigo_b": "M2709215",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709215",
+   "sacado": {
+    "id": 44,
+    "anio": 2026,
+    "droga": "BETAMETASONA ACETATO + BETAMETASONA (COMO FOSFATO SÓDICO)",
+    "codigo": "M2709215",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "BETAMETASONA ACETATO + BETAMETASONA (COMO FOSFATO SÓDICO) - SUSPENSIÓN INYECTABLE DE LIBERACIÓN PROLONGADA - 3 MG/ML + 3 MG/ML,"
+   },
+   "renglon": {
+    "id": 332,
+    "drogaAntes": "BETAMETASONA FOSFATO-BETAMETASONA ACETATO -",
+    "codigoAntes": "M2709124",
+    "controladoAntes": 1,
+    "descripcionAntes": "BETAMETASONA FOSFATO-BETAMETASONA ACETATO 6MG-6MG - 2 ML INYECTABLE AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:37:13.000Z"
+ },
+ {
+  "id": 20,
+  "codigo_a": "M1201075",
+  "codigo_b": "M1246431",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1246431",
+   "sacado": {
+    "id": 134,
+    "anio": 2026,
+    "droga": "FLUOXETINA",
+    "codigo": "M1246431",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "FLUOXETINA - COMPRIMIDO - 20 MG"
+   },
+   "renglon": {
+    "id": 300,
+    "drogaAntes": "FLUOXETINA",
+    "codigoAntes": "M1201075",
+    "controladoAntes": 1,
+    "descripcionAntes": "FLUOXETINA 20 MG COMPRIMIDOS"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:37:24.000Z"
+ },
+ {
+  "id": 21,
+  "codigo_a": "M3001122",
+  "codigo_b": "M3007138",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M3007138",
+   "sacado": {
+    "id": 64,
+    "anio": 2026,
+    "droga": "FUROSEMIDA",
+    "codigo": "M3007138",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "FUROSEMIDA - SOLUCIÓN INYECTABLE - 10 MG/ML"
+   },
+   "renglon": {
+    "id": 315,
+    "drogaAntes": "FUROSEMIDA",
+    "codigoAntes": "M3001122",
+    "controladoAntes": 1,
+    "descripcionAntes": "FUROSEMIDA 20MG - 2 ML AMPOLLAS"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:37:34.000Z"
+ },
+ {
+  "id": 22,
+  "codigo_a": "M1246152",
+  "codigo_b": "M1246413",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1246413",
+   "sacado": {
+    "id": 20,
+    "anio": 2026,
+    "droga": "HALOPERIDOL",
+    "codigo": "M1246413",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "HALOPERIDOL - SOLUCIÓN INYECTABLE - 5 MG/ML"
+   },
+   "renglon": {
+    "id": 620,
+    "drogaAntes": "HALOPERIDOL -",
+    "codigoAntes": "M1246152",
+    "controladoAntes": 1,
+    "descripcionAntes": "HALOPERIDOL - 5MG INYECTABLE"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:37:43.000Z"
+ },
+ {
+  "id": 23,
+  "codigo_a": "M1222131",
+  "codigo_b": "M1246415",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1246415",
+   "sacado": {
+    "id": 165,
+    "anio": 2026,
+    "droga": "HALOPERIDOL",
+    "codigo": "M1246415",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "HALOPERIDOL - SOLUCIÓN ORAL - 2 MG/ML"
+   },
+   "renglon": {
+    "id": 618,
+    "drogaAntes": "HALOPERIDOL",
+    "codigoAntes": "M1222131",
+    "controladoAntes": 1,
+    "descripcionAntes": "HALOPERIDOL 2MG/ML - 20 ML GOTA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:37:55.000Z"
+ },
+ {
+  "id": 24,
+  "codigo_a": "M2706112",
+  "codigo_b": "M2709213",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709213",
+   "sacado": {
+    "id": 30,
+    "anio": 2026,
+    "droga": "HIDROCORTISONA",
+    "codigo": "M2709213",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "HIDROCORTISONA - POLVO PARA SOLUCIÓN INYECTABLE - 500 MG"
+   },
+   "renglon": {
+    "id": 426,
+    "drogaAntes": "HIDROCORTISONA",
+    "codigoAntes": "M2706112",
+    "controladoAntes": 1,
+    "descripcionAntes": "HIDROCORTISONA 500MG - 5 ML INYECTABLE FRASCO AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:38:09.000Z"
+ },
+ {
+  "id": 25,
+  "codigo_a": "M2534281",
+  "codigo_b": "M3101058",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2534281",
+   "sacado": {
+    "id": 136,
+    "anio": 2026,
+    "droga": "ISOXSUPRINA CLORHIDRATO",
+    "codigo": "M2534281",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "ISOXSUPRINA CLORHIDRATO - COMPRIMIDO - 10 MG"
+   },
+   "renglon": {
+    "id": 321,
+    "drogaAntes": "ISOXSUPRINA",
+    "codigoAntes": "M3101058",
+    "controladoAntes": 1,
+    "descripcionAntes": "ISOXSUPRINA 10 MG COMPRIMIDOS"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:38:15.000Z"
+ },
+ {
+  "id": 26,
+  "codigo_a": "M3315111",
+  "codigo_b": "M3318145",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M3318145",
+   "sacado": {
+    "id": 39,
+    "anio": 2026,
+    "droga": "MAGNESIO SULFATO",
+    "codigo": "M3318145",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "MAGNESIO SULFATO - SOLUCIÓN INYECTABLE - 250 MG/ML"
+   },
+   "renglon": {
+    "id": 568,
+    "drogaAntes": "MAGNESIO SULFATO 25 % -",
+    "codigoAntes": "M3315111",
+    "controladoAntes": 1,
+    "descripcionAntes": "MAGNESIO SULFATO 25 % - AMPOLLAS 5 ML"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:38:19.000Z"
+ },
+ {
+  "id": 27,
+  "codigo_a": "M2534235",
+  "codigo_b": "M2615246",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2615246",
+   "sacado": {
+    "id": 101,
+    "anio": 2026,
+    "droga": "NEBIVOLOL",
+    "codigo": "M2615246",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "NEBIVOLOL - COMPRIMIDO - 5 MG"
+   },
+   "renglon": {
+    "id": 609,
+    "drogaAntes": "NEBIVOLOL .",
+    "codigoAntes": "M2534235",
+    "controladoAntes": 1,
+    "descripcionAntes": "NEBIVOLOL 5 MG. COMPRIMIDOS"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:38:24.000Z"
+ },
+ {
+  "id": 28,
+  "codigo_a": "M2501116",
+  "codigo_b": "M2534263",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2534263",
+   "sacado": {
+    "id": 29,
+    "anio": 2026,
+    "droga": "NORADRENALINA",
+    "codigo": "M2534263",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "NORADRENALINA - SOLUCIÓN INYECTABLE - 1 MG/ML"
+   },
+   "renglon": {
+    "id": 467,
+    "drogaAntes": "NORADRENALINA",
+    "codigoAntes": "M2501116",
+    "controladoAntes": 1,
+    "descripcionAntes": "NORADRENALINA 1MG/ML - 4 ML AMPOLLAS"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:38:39.000Z"
+ },
+ {
+  "id": 29,
+  "codigo_a": "M3601015",
+  "codigo_b": "M3629171",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M3629171",
+   "sacado": {
+    "id": 75,
+    "anio": 2026,
+    "droga": "OCTREOTIDA",
+    "codigo": "M3629171",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "OCTREOTIDA - SOLUCIÓN INYECTABLE - 100 MCG/ML"
+   },
+   "renglon": {
+    "id": 347,
+    "drogaAntes": "OCTREOTIDA",
+    "codigoAntes": "M3601015",
+    "controladoAntes": 1,
+    "descripcionAntes": "OCTREOTIDA 0.1MG/ML - 1 ML AMPOLLAS"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:38:45.000Z"
+ },
+ {
+  "id": 30,
+  "codigo_a": "M0141304",
+  "codigo_b": "M1901041",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0141304",
+   "sacado": {
+    "id": 209,
+    "anio": 2026,
+    "droga": "PERMETRINA",
+    "codigo": "M0141304",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "PERMETRINA - LOCIÓN CUTÁNEA - 10 MG/ML"
+   },
+   "renglon": {
+    "id": 575,
+    "drogaAntes": "PERMETRINA 1% -",
+    "codigoAntes": "M1901041",
+    "controladoAntes": 1,
+    "descripcionAntes": "PERMETRINA 1% - 100 ML LOCION"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:38:48.000Z"
+ },
+ {
+  "id": 31,
+  "codigo_a": "M2401071",
+  "codigo_b": "M2434189",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2434189",
+   "sacado": {
+    "id": 168,
+    "anio": 2026,
+    "droga": "SALBUTAMOL",
+    "codigo": "M2434189",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "SALBUTAMOL - SUSPENSIÓN PARA INHALACIÓN - 100 MCG/DOSIS"
+   },
+   "renglon": {
+    "id": 594,
+    "drogaAntes": "SALBUTAMOL 250 DOSIS /ML",
+    "codigoAntes": "M2401071",
+    "controladoAntes": 1,
+    "descripcionAntes": "SALBUTAMOL 250 DOSIS /ML 100MCG AEROSOL"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:41:19.000Z"
+ },
+ {
+  "id": 32,
+  "codigo_a": "M2401071",
+  "codigo_b": "M2434198",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2434198",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:41:25.000Z"
+ },
+ {
+  "id": 34,
+  "codigo_a": "M0201165",
+  "codigo_b": "M0216171",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0216171",
+   "sacado": {
+    "id": 28,
+    "anio": 2026,
+    "droga": "TRAMADOL CLORHIDRATO",
+    "codigo": "M0216171",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "TRAMADOL CLORHIDRATO - SOLUCIÓN INYECTABLE - 50 MG/ML"
+   },
+   "renglon": {
+    "id": 479,
+    "drogaAntes": "TRAMADOL",
+    "codigoAntes": "M0201165",
+    "controladoAntes": 1,
+    "descripcionAntes": "TRAMADOL 100MG-2ML AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:43:07.000Z"
+ },
+ {
+  "id": 35,
+  "codigo_a": "M0604223",
+  "codigo_b": "M1109201",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0604223",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:43:12.000Z"
+ },
+ {
+  "id": 37,
+  "codigo_a": "M2615231",
+  "codigo_b": "M4402112",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2615231",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:52:43.000Z"
+ },
+ {
+  "id": 38,
+  "codigo_a": "M3409048",
+  "codigo_b": "M3409052",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M3409052",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:52:53.000Z"
+ },
+ {
+  "id": 39,
+  "codigo_a": "M0314130",
+  "codigo_b": "M0314162",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0314162",
+   "sacado": {
+    "id": 72,
+    "anio": 2026,
+    "droga": "KETAMINA",
+    "codigo": "M0314162",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "KETAMINA - SOLUCIÓN INYECTABLE - 50 MG/ML"
+   },
+   "renglon": {
+    "id": 603,
+    "drogaAntes": "KETAMINA FCO.",
+    "codigoAntes": "M0314130",
+    "controladoAntes": 1,
+    "descripcionAntes": "KETAMINA FCO. 50MG/ML - 10 ML AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:53:06.000Z"
+ },
+ {
+  "id": 40,
+  "codigo_a": "M1236111",
+  "codigo_b": "M1246411",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1246411",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:53:14.000Z"
+ },
+ {
+  "id": 41,
+  "codigo_a": "M0903120",
+  "codigo_b": "M1109205",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1109205",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T22:53:25.000Z"
+ },
+ {
+  "id": 42,
+  "codigo_a": "M3318122",
+  "codigo_b": "M7015817",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M7015817",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:39:23.000Z"
+ },
+ {
+  "id": 43,
+  "codigo_a": "M4116122",
+  "codigo_b": "M4116124",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M4116124",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:00:09.000Z"
+ },
+ {
+  "id": 44,
+  "codigo_a": "M1901004",
+  "codigo_b": "M1911141",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1911141",
+   "sacado": {
+    "id": 173,
+    "anio": 2026,
+    "droga": "BENCILO BENZOATO + PERMETRINA",
+    "codigo": "M1911141",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "BENCILO BENZOATO + PERMETRINA - LOCIÓN CUTÁNEA - 5,7% + 1%"
+   },
+   "renglon": {
+    "id": 504,
+    "drogaAntes": "PERMETRINA-BENCILO BENZOATO R/",
+    "codigoAntes": "M1901004",
+    "controladoAntes": 1,
+    "descripcionAntes": "PERMETRINA-BENCILO BENZOATO R/ 100 ML 1GR-5.7G 100ML LOCION"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:03:36.000Z"
+ },
+ {
+  "id": 45,
+  "codigo_a": "M2709170",
+  "codigo_b": "M2709194",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709194",
+   "sacado": {
+    "id": 203,
+    "anio": 2026,
+    "droga": "BUDESONIDE + AEROCAMARA",
+    "codigo": "M2709194",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "BUDESONIDE + AEROCAMARA - SUSPENSIÓN PRESURIZADA PARA INHALACIÓN - 200 MCG/DOSIS"
+   },
+   "renglon": {
+    "id": 327,
+    "drogaAntes": "BUDESONIDE C/AEROCÁMARA /DOSISX 200 DOSIS",
+    "codigoAntes": "M2709170",
+    "controladoAntes": 1,
+    "descripcionAntes": "BUDESONIDE C/AEROCÁMARA 200 MCG/DOSIS X 200 DOSIS UNIDAD"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:03:41.000Z"
+ },
+ {
+  "id": 46,
+  "codigo_a": "M0314153",
+  "codigo_b": "M0314166",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0314166",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:13:58.000Z"
+ },
+ {
+  "id": 47,
+  "codigo_a": "M2615234",
+  "codigo_b": "M2615256",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2615256",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:13:58.000Z"
+ },
+ {
+  "id": 48,
+  "codigo_a": "M0141283",
+  "codigo_b": "M3601005",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0141283",
+   "sacado": {
+    "id": 42,
+    "anio": 2026,
+    "droga": "DESMOPRESINA ACETATO",
+    "codigo": "M0141283",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "DESMOPRESINA ACETATO - SOLUCIÓN INYECTABLE - 4 MCG/ML"
+   },
+   "renglon": {
+    "id": 265,
+    "drogaAntes": "DESMOPRESINA /ML -",
+    "codigoAntes": "M3601005",
+    "controladoAntes": 1,
+    "descripcionAntes": "DESMOPRESINA 4MCG/ML - 1 ML INYECTABLE AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:13:58.000Z"
+ },
+ {
+  "id": 49,
+  "codigo_a": "M0801017",
+  "codigo_b": "M0801146",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0801146",
+   "sacado": {
+    "id": 185,
+    "anio": 2026,
+    "droga": "ERITROMICINA",
+    "codigo": "M0801146",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "ERITROMICINA - SUSPENSIÓN ORAL - 40 MG/ML"
+   },
+   "renglon": {
+    "id": 496,
+    "drogaAntes": "ERITROMICINA P/SUSPENSIÓN ORAL",
+    "codigoAntes": "M0801017",
+    "controladoAntes": 1,
+    "descripcionAntes": "ERITROMICINA P/SUSPENSIÓN ORAL 200MG/5ML POLVO"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:13:58.000Z"
+ },
+ {
+  "id": 50,
+  "codigo_a": "M2401067",
+  "codigo_b": "M2709197",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709197",
+   "sacado": {
+    "id": 199,
+    "anio": 2026,
+    "droga": "FLUTICASONA + SALMETEROL",
+    "codigo": "M2709197",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "FLUTICASONA + SALMETEROL - SUSPENSIÓN PRESURIZADA PARA INHALACIÓN - 250 MCG + 25 MCG POR DOSIS"
+   },
+   "renglon": {
+    "id": 596,
+    "drogaAntes": "SALMETEROL-FLUTICASONA MCG/120 DOSIS",
+    "codigoAntes": "M2401067",
+    "controladoAntes": 1,
+    "descripcionAntes": "SALMETEROL-FLUTICASONA MCG/120 DOSIS 25MCG-250 AEROSOL"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:13:58.000Z"
+ },
+ {
+  "id": 51,
+  "codigo_a": "M2401065",
+  "codigo_b": "M2709196",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709196",
+   "sacado": {
+    "id": 214,
+    "anio": 2026,
+    "droga": "FLUTICASONA + SALMETEROL",
+    "codigo": "M2709196",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "FLUTICASONA + SALMETEROL - SUSPENSIÓN PRESURIZADA PARA INHALACIÓN - 125 MCG + 25 MCG POR DOSIS"
+   },
+   "renglon": {
+    "id": 598,
+    "drogaAntes": "SALMETEROL-FLUTICASONA . - DOSIS",
+    "codigoAntes": "M2401065",
+    "controladoAntes": 1,
+    "descripcionAntes": "SALMETEROL-FLUTICASONA 25 MCG. -125MCG - 120 DOSIS AEROSOL"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:13:58.000Z"
+ },
+ {
+  "id": 52,
+  "codigo_a": "M0601001",
+  "codigo_b": "M0604224",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0604224",
+   "sacado": {
+    "id": 48,
+    "anio": 2026,
+    "droga": "GENTAMICINA",
+    "codigo": "M0604224",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "GENTAMICINA - SOLUCIÓN INYECTABLE - 20 MG/ML"
+   },
+   "renglon": {
+    "id": 257,
+    "drogaAntes": "GENTAMICINA SULFATO -",
+    "codigoAntes": "M0601001",
+    "controladoAntes": 1,
+    "descripcionAntes": "GENTAMICINA SULFATO 20MG - AMPOLLA INYECTABLE"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:13:58.000Z"
+ },
+ {
+  "id": 53,
+  "codigo_a": "M4402111",
+  "codigo_b": "M4402113",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M4402113",
+   "sacado": {
+    "id": 47,
+    "anio": 2026,
+    "droga": "GLUCAGON",
+    "codigo": "M4402113",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "GLUCAGON - POLVO PARA SOLUCIÓN INYECTABLE - 1 MG"
+   },
+   "renglon": {
+    "id": 564,
+    "drogaAntes": "GLUCAGON FCO.",
+    "codigoAntes": "M4402111",
+    "controladoAntes": 1,
+    "descripcionAntes": "GLUCAGON FCO. 1 MG AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:13:58.000Z"
+ },
+ {
+  "id": 54,
+  "codigo_a": "M3000019",
+  "codigo_b": "M3301955",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M3000019",
+   "sacado": {
+    "id": 153,
+    "anio": 2026,
+    "droga": "HIDROCLOROTIAZIDA",
+    "codigo": "M3000019",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "HIDROCLOROTIAZIDA - COMPRIMIDOS - 25 MG"
+   },
+   "renglon": {
+    "id": 565,
+    "drogaAntes": "HIDROCLOROTIAZIDA 25 MG COMP",
+    "codigoAntes": "M3301955",
+    "controladoAntes": 1,
+    "descripcionAntes": "HIDROCLOROTIAZIDA 25 MG COMP"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:13:58.000Z"
+ },
+ {
+  "id": 55,
+  "codigo_a": "M1601045",
+  "codigo_b": "M2709226",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709226",
+   "sacado": {
+    "id": 118,
+    "anio": 2026,
+    "droga": "LORATADINA + BETAMETASONA",
+    "codigo": "M2709226",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "LORATADINA + BETAMETASONA - COMPRIMIDO - 10 MG + 0,6 MG"
+   },
+   "renglon": {
+    "id": 477,
+    "drogaAntes": "LORATADINA-BETAMETASONA",
+    "codigoAntes": "M1601045",
+    "controladoAntes": 1,
+    "descripcionAntes": "LORATADINA-BETAMETASONA 10MG - 0,06MG COMPRIMIDO"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:13:58.000Z"
+ },
+ {
+  "id": 56,
+  "codigo_a": "M2401072",
+  "codigo_b": "M2434198",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2434198",
+   "sacado": {
+    "id": 213,
+    "anio": 2026,
+    "droga": "SALBUTAMOL",
+    "codigo": "M2434198",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "SALBUTAMOL - SUSPENSIÓN PRESURIZADA PARA INHALACIÓN - 100 MCG/DOSIS"
+   },
+   "renglon": {
+    "id": 595,
+    "drogaAntes": "SALBUTAMOL C/AEROCAMARA 250 DOSIS /ML",
+    "codigoAntes": "M2401072",
+    "controladoAntes": 1,
+    "descripcionAntes": "SALBUTAMOL C/AEROCAMARA 250 DOSIS /ML 100MCG AEROSOL"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:13:58.000Z"
+ },
+ {
+  "id": 57,
+  "codigo_a": "M0505134",
+  "codigo_b": "M0505155",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0505155",
+   "sacado": {
+    "id": 116,
+    "anio": 2026,
+    "droga": "SULFATO FERROSO (HIERRO) + ACIDO FOLICO",
+    "codigo": "M0505155",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "SULFATO FERROSO (HIERRO) + ACIDO FOLICO - COMPRIMIDO DE LIBERACIÓN PROLONGADA - 525 MG + 0.35 MG"
+   },
+   "renglon": {
+    "id": 354,
+    "drogaAntes": "SULFATO FERROSO-ACIDO FOLICO",
+    "codigoAntes": "M0505134",
+    "controladoAntes": 1,
+    "descripcionAntes": "SULFATO FERROSO-ACIDO FOLICO 525MG-0.35MG COMPRIMIDOS"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:13:58.000Z"
+ },
+ {
+  "id": 58,
+  "codigo_a": "M0301135",
+  "codigo_b": "M0314166",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0314166",
+   "sacado": {
+    "id": 31,
+    "anio": 2026,
+    "droga": "CLORHIDRATO DE LIDOCAÍNA",
+    "codigo": "M0314166",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "CLORHIDRATO DE LIDOCAÍNA - SOLUCIÓN INYECTABLE - 10 MG/ML (1%)"
+   },
+   "renglon": {
+    "id": 482,
+    "drogaAntes": "LIDOCAINA S/EPINEFRINA-S/CONSERVADORES 1 % -",
+    "codigoAntes": "M0301135",
+    "controladoAntes": 1,
+    "descripcionAntes": "LIDOCAINA S/EPINEFRINA-S/CONSERVADORES 1 % - 5 ML AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:14:11.000Z"
+ },
+ {
+  "id": 59,
+  "codigo_a": "M2601029",
+  "codigo_b": "M2615256",
+  "estado": "igual",
+  "nota": "Muy probable (pedido del usuario)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2615256",
+   "sacado": {
+    "id": 56,
+    "anio": 2026,
+    "droga": "ENOXAPARINA SÓDICA",
+    "codigo": "M2615256",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "ENOXAPARINA SÓDICA - SOLUCIÓN INYECTABLE - 40 MG/0,4 ML"
+   },
+   "renglon": {
+    "id": 309,
+    "drogaAntes": "HEPARINA BAJO PESO MOLECULAR (ENOXAPARINA) JERINGA PRELLENADA",
+    "codigoAntes": "M2601029",
+    "controladoAntes": 1,
+    "descripcionAntes": "HEPARINA BAJO PESO MOLECULAR (ENOXAPARINA) JERINGA PRELLENADA 40MG - 0.4 ML"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-07T23:14:11.000Z"
+ },
+ {
+  "id": 60,
+  "codigo_a": "M2301051",
+  "codigo_b": "M2310158",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2310158",
+   "sacado": {
+    "id": 177,
+    "anio": 2026,
+    "droga": "FOSFATO DISODICO + FOSFATO MONOSODICO",
+    "codigo": "M2310158",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "FOSFATO DISODICO + FOSFATO MONOSODICO - SOLUCIÓN ORAL - 180 MG/ML + 480 MG/ML"
+   },
+   "renglon": {
+    "id": 301,
+    "drogaAntes": "FOSFATO MONOSODICO-FOSFATO DISODICO ORAL R/",
+    "codigoAntes": "M2301051",
+    "controladoAntes": 1,
+    "descripcionAntes": "FOSFATO MONOSODICO-FOSFATO DISODICO ORAL R/ 48GR-18G 100ML-45ML SOLUCION"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:06:11.000Z"
+ },
+ {
+  "id": 61,
+  "codigo_a": "M0216204",
+  "codigo_b": "M1701082",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0216204",
+   "sacado": {
+    "id": 83,
+    "anio": 2026,
+    "droga": "DIPIRONA",
+    "codigo": "M0216204",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "DIPIRONA - SOLUCIÓN INYECTABLE - 500 MG/ML"
+   },
+   "renglon": {
+    "id": 468,
+    "drogaAntes": "DIPIRONA",
+    "codigoAntes": "M1701082",
+    "controladoAntes": 1,
+    "descripcionAntes": "DIPIRONA 1GR - 2 ML INYECTABLE AMPOLLA - 2 ML"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:06:14.000Z"
+ },
+ {
+  "id": 63,
+  "codigo_a": "M0711121",
+  "codigo_b": "M0711122",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0711122",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:36:45.000Z"
+ },
+ {
+  "id": 64,
+  "codigo_a": "M2709189",
+  "codigo_b": "M2709206",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709189",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:07:23.000Z"
+ },
+ {
+  "id": 65,
+  "codigo_a": "M1201058",
+  "codigo_b": "M1246445",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1201058",
+   "sacado": {
+    "id": 187,
+    "anio": 2026,
+    "droga": "FENITOÍNA",
+    "codigo": "M1246445",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "FENITOÍNA - SUSPENSIÓN ORAL - 25 MG/ML"
+   },
+   "renglon": {
+    "id": 498,
+    "drogaAntes": "FENITOINA (DIFENILHIDANTOINA) -",
+    "codigoAntes": "M1201058",
+    "controladoAntes": 1,
+    "descripcionAntes": "FENITOINA (DIFENILHIDANTOINA) - 2.5GR/100ML 120ML JARABE"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:07:55.000Z"
+ },
+ {
+  "id": 66,
+  "codigo_a": "M1109138",
+  "codigo_b": "M4023211",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1109138",
+   "sacado": {
+    "id": 181,
+    "anio": 2026,
+    "droga": "GATIFLOXACINA",
+    "codigo": "M4023211",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "GATIFLOXACINA - SOLUCIÓN OFTÁLMICA - 5 MG/ML"
+   },
+   "renglon": {
+    "id": 404,
+    "drogaAntes": "GATIFLOXACINA",
+    "codigoAntes": "M1109138",
+    "controladoAntes": 1,
+    "descripcionAntes": "GATIFLOXACINA 5ML COLIRIO"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:07:59.000Z"
+ },
+ {
+  "id": 67,
+  "codigo_a": "M1109189",
+  "codigo_b": "M11R6001",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M11R6001",
+   "sacado": {
+    "id": 137,
+    "anio": 2026,
+    "droga": "DAPSONA",
+    "codigo": "M1109189",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "DAPSONA - COMPRIMIDO - 100 MG"
+   },
+   "renglon": {
+    "id": 323,
+    "drogaAntes": "DAPSONA 100",
+    "codigoAntes": "M11R6001",
+    "controladoAntes": 1,
+    "descripcionAntes": "DAPSONA 100"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:08:15.000Z"
+ },
+ {
+  "id": 68,
+  "codigo_a": "M1109172",
+  "codigo_b": "M1109205",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1109172",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:08:41.000Z"
+ },
+ {
+  "id": 69,
+  "codigo_a": "M1701109",
+  "codigo_b": "M1708196",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1701109",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:08:55.000Z"
+ },
+ {
+  "id": 70,
+  "codigo_a": "M1403122",
+  "codigo_b": "M1403127",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1403122",
+   "sacado": {
+    "id": 80,
+    "anio": 2026,
+    "droga": "ONDANSETRÓN",
+    "codigo": "M1403127",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "ONDANSETRÓN - SOLUCIÓN INYECTABLE - 2 mg/ml"
+   },
+   "renglon": {
+    "id": 460,
+    "drogaAntes": "ONDANSETRON",
+    "codigoAntes": "M1403122",
+    "controladoAntes": 1,
+    "descripcionAntes": "ONDANSETRON 8 MG AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:08:58.000Z"
+ },
+ {
+  "id": 71,
+  "codigo_a": "M2709182",
+  "codigo_b": "MISON090",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "MISON090",
+   "sacado": {
+    "id": 211,
+    "anio": 2026,
+    "droga": "METILPREDNISOLONA (COMO SUCCINATO SÓDICO DE METILPREDNISOLONA )",
+    "codigo": "M2709182",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "METILPREDNISOLONA (COMO SUCCINATO SÓDICO DE METILPREDNISOLONA ) - POLVO PARA SOLUCIÓN INYECTABLE - 500 MG"
+   },
+   "renglon": {
+    "id": 409,
+    "drogaAntes": "METILPREDNISOLONA 500 FA",
+    "codigoAntes": "MISON090",
+    "controladoAntes": 1,
+    "descripcionAntes": "METILPREDNISOLONA 500 FA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:08:59.000Z"
+ },
+ {
+  "id": 72,
+  "codigo_a": "M2301034",
+  "codigo_b": "M2310159",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2301034",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:10:17.000Z"
+ },
+ {
+  "id": 73,
+  "codigo_a": "M0125031",
+  "codigo_b": "M0216197",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0125031",
+   "sacado": {
+    "id": 21,
+    "anio": 2026,
+    "droga": "MORFINA CLORHIDRATO",
+    "codigo": "M0216197",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "MORFINA CLORHIDRATO - SOLUCIÓN INYECTABLE - 1%"
+   },
+   "renglon": {
+    "id": 182,
+    "drogaAntes": "MORFINA X GR",
+    "codigoAntes": "M0125031",
+    "controladoAntes": 1,
+    "descripcionAntes": "MORFINA X GR"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:11:03.000Z"
+ },
+ {
+  "id": 74,
+  "codigo_a": "M1201016",
+  "codigo_b": "M1246437",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1201016",
+   "sacado": {
+    "id": 208,
+    "anio": 2026,
+    "droga": "CARBAMAZEPINA",
+    "codigo": "M1246437",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "CARBAMAZEPINA - SUSPENSIÓN ORAL - 20 MG/ML,"
+   },
+   "renglon": {
+    "id": 329,
+    "drogaAntes": "CARBAMAZEPINA -",
+    "codigoAntes": "M1201016",
+    "controladoAntes": 1,
+    "descripcionAntes": "CARBAMAZEPINA 2GR/100ML - JARABE 120ML"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:11:29.000Z"
+ },
+ {
+  "id": 75,
+  "codigo_a": "M1403124",
+  "codigo_b": "M2310157",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1403124",
+   "sacado": {
+    "id": 63,
+    "anio": 2026,
+    "droga": "METOCLOPRAMIDA",
+    "codigo": "M2310157",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "METOCLOPRAMIDA - SOLUCIÓN INYECTABLE - 5 MG/ML"
+   },
+   "renglon": {
+    "id": 312,
+    "drogaAntes": "METOCLOPRAMIDA",
+    "codigoAntes": "M1403124",
+    "controladoAntes": 1,
+    "descripcionAntes": "METOCLOPRAMIDA 10 MG INYECTABLE AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:13:02.000Z"
+ },
+ {
+  "id": 76,
+  "codigo_a": "M4111113",
+  "codigo_b": "M4116124",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M4111113",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:13:11.000Z"
+ },
+ {
+  "id": 77,
+  "codigo_a": "M1701110",
+  "codigo_b": "M1708197",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1708197",
+   "sacado": {
+    "id": 215,
+    "anio": 2026,
+    "droga": "IBUPROFENO",
+    "codigo": "M1708197",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "IBUPROFENO - SUSPENSIÓN ORAL - 40 MG/ML"
+   },
+   "renglon": {
+    "id": 428,
+    "drogaAntes": "IBUPROFENO",
+    "codigoAntes": "M1701110",
+    "controladoAntes": 1,
+    "descripcionAntes": "IBUPROFENO 400MG - 90 ML SUSPENSION"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:13:50.000Z"
+ },
+ {
+  "id": 78,
+  "codigo_a": "M2709183",
+  "codigo_b": "M2709214",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709214",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:14:14.000Z"
+ },
+ {
+  "id": 79,
+  "codigo_a": "M4111112",
+  "codigo_b": "M4116124",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M4116124",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:14:30.000Z"
+ },
+ {
+  "id": 80,
+  "codigo_a": "M2709169",
+  "codigo_b": "M2709206",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709206",
+   "sacado": {
+    "id": 179,
+    "anio": 2026,
+    "droga": "MEPREDNISONA",
+    "codigo": "M2709206",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "MEPREDNISONA - SOLUCIÓN ORAL - 4 MG/ML"
+   },
+   "renglon": {
+    "id": 306,
+    "drogaAntes": "MEPREDNISONA 4MG/ML",
+    "codigoAntes": "M2709169",
+    "controladoAntes": 1,
+    "descripcionAntes": "MEPREDNISONA 4MG/ML"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:15:13.000Z"
+ },
+ {
+  "id": 81,
+  "codigo_a": "M1701069",
+  "codigo_b": "M1708196",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1708196",
+   "sacado": {
+    "id": 167,
+    "anio": 2026,
+    "droga": "PARACETAMOL",
+    "codigo": "M1708196",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "PARACETAMOL - SUSPENSIÓN ORAL - 20 MG/ML"
+   },
+   "renglon": {
+    "id": 493,
+    "drogaAntes": "PARACETAMOL -",
+    "codigoAntes": "M1701069",
+    "controladoAntes": 1,
+    "descripcionAntes": "PARACETAMOL - 2GR/100ML 120ML JARABE"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:15:43.000Z"
+ },
+ {
+  "id": 82,
+  "codigo_a": "M0903121",
+  "codigo_b": "M1109205",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1109205",
+   "sacado": {
+    "id": 166,
+    "anio": 2026,
+    "droga": "RIFAMPICINA",
+    "codigo": "M1109205",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "RIFAMPICINA - SUSPENSIÓN ORAL - 20 MG/ML"
+   },
+   "renglon": {
+    "id": 582,
+    "drogaAntes": "RIFAMPICINA (2%)",
+    "codigoAntes": "M0903121",
+    "controladoAntes": 1,
+    "descripcionAntes": "RIFAMPICINA (2%) 100MG/5ML JARABE"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:15:49.000Z"
+ },
+ {
+  "id": 83,
+  "codigo_a": "M0603114",
+  "codigo_b": "M0604222",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0604222",
+   "sacado": {
+    "id": 57,
+    "anio": 2026,
+    "droga": "GENTAMICINA",
+    "codigo": "M0604222",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "GENTAMICINA - SOLUCIÓN INYECTABLE - 40 MG/ML"
+   },
+   "renglon": {
+    "id": 475,
+    "drogaAntes": "GENTAMICINA SULFATO / EN -",
+    "codigoAntes": "M0603114",
+    "controladoAntes": 1,
+    "descripcionAntes": "GENTAMICINA SULFATO 80MG/ EN 2ML - AMPOLLA INYECTABLE"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:16:37.000Z"
+ },
+ {
+  "id": 84,
+  "codigo_a": "M1101999",
+  "codigo_b": "M1109223",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1109223",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:17:02.000Z"
+ },
+ {
+  "id": 85,
+  "codigo_a": "M0601012",
+  "codigo_b": "M0604223",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0604223",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:17:11.000Z"
+ },
+ {
+  "id": 86,
+  "codigo_a": "M2301066",
+  "codigo_b": "M2310159",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2310159",
+   "sacado": {
+    "id": 212,
+    "anio": 2026,
+    "droga": "SUCRALFATO",
+    "codigo": "M2310159",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "SUCRALFATO - SUSPENSIÓN ORAL - 200 MG/ML"
+   },
+   "renglon": {
+    "id": 410,
+    "drogaAntes": "SUCRALFATO -",
+    "codigoAntes": "M2301066",
+    "controladoAntes": 1,
+    "descripcionAntes": "SUCRALFATO 1 G/ 5 ML - 200 ML SUSPENSION"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:17:16.000Z"
+ },
+ {
+  "id": 88,
+  "codigo_a": "M2534250",
+  "codigo_b": "M2601083",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2534250",
+   "sacado": {
+    "id": 113,
+    "anio": 2026,
+    "droga": "ATORVASTATINA (COMO ATORVASTATINA CÁLCICA)",
+    "codigo": "M2534250",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "ATORVASTATINA (COMO ATORVASTATINA CÁLCICA) - COMPRIMIDO ORAL - 10 MG"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 331,
+    "drogaAntes": "ATORVASTATIN",
+    "codigoAntes": "M2601083",
+    "controladoAntes": 1,
+    "descripcionAntes": "ATORVASTATIN 10 MG COMPRIMIDO"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:18:58.000Z"
+ },
+ {
+  "id": 89,
+  "codigo_a": "M2501085",
+  "codigo_b": "M2534257",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2534257",
+   "sacado": {
+    "id": 148,
+    "anio": 2026,
+    "droga": "CLORHIDRATO DE PROPRANOLOL",
+    "codigo": "M2534257",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "CLORHIDRATO DE PROPRANOLOL - COMPRIMIDO - 40 MG"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 579,
+    "drogaAntes": "PROPANOLOL",
+    "codigoAntes": "M2501085",
+    "controladoAntes": 1,
+    "descripcionAntes": "PROPANOLOL 40 MG COMPRIMIDO"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:20:18.000Z"
+ },
+ {
+  "id": 90,
+  "codigo_a": "M1608126",
+  "codigo_b": "M1608138",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1608138",
+   "sacado": {
+    "id": 180,
+    "anio": 2026,
+    "droga": "DESLORATADINA",
+    "codigo": "M1608138",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "DESLORATADINA - SOLUCIÓN ORAL - 500 MCG/ML"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 324,
+    "drogaAntes": "DESLORATADINA ORAL",
+    "codigoAntes": "M1608126",
+    "controladoAntes": 1,
+    "descripcionAntes": "DESLORATADINA ORAL 5MG/100ML SUSPENSIÓN"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:20:31.000Z"
+ },
+ {
+  "id": 91,
+  "codigo_a": "M2709214",
+  "codigo_b": "M3259196",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709214",
+   "sacado": {
+    "id": 102,
+    "anio": 2026,
+    "droga": "MEPREDNISONA",
+    "codigo": "M2709214",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "MEPREDNISONA - COMPRIMIDO - 4 MG"
+   },
+   "renglon": {
+    "id": 592,
+    "drogaAntes": "MEPREDNISONA .",
+    "codigoAntes": "M3259196",
+    "controladoAntes": 1,
+    "descripcionAntes": "MEPREDNISONA . 4 MG"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:25:32.000Z"
+ },
+ {
+  "id": 92,
+  "codigo_a": "M0601113",
+  "codigo_b": "M0604223",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0604223",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:35:56.000Z"
+ },
+ {
+  "id": 93,
+  "codigo_a": "M1109142",
+  "codigo_b": "M1109223",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1109223",
+   "sacado": {
+    "id": 66,
+    "anio": 2026,
+    "droga": "CLINDAMICINA",
+    "codigo": "M1109223",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "CLINDAMICINA - SOLUCIÓN INYECTABLE - 150 MG/ML"
+   },
+   "renglon": {
+    "id": 303,
+    "drogaAntes": "CLINDAMICINA",
+    "codigoAntes": "M1109142",
+    "controladoAntes": 1,
+    "descripcionAntes": "CLINDAMICINA 600MG INYECTABLE AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:26:06.000Z"
+ },
+ {
+  "id": 94,
+  "codigo_a": "M2401009",
+  "codigo_b": "M2434195",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2434195",
+   "forzado": true,
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:26:43.000Z"
+ },
+ {
+  "id": 97,
+  "codigo_a": "M1101034",
+  "codigo_b": "M1109203",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1109203",
+   "sacado": {
+    "id": 45,
+    "anio": 2026,
+    "droga": "CIPROFLOXACINO",
+    "codigo": "M1109203",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "CIPROFLOXACINO - SOLUCIÓN INYECTABLE - 2 MG/ML"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 292,
+    "drogaAntes": "CIPROFLOXACINA INYECTABLE",
+    "codigoAntes": "M1101034",
+    "controladoAntes": 1,
+    "descripcionAntes": "CIPROFLOXACINA INYECTABLE 200MG - 100 ML SOLUCIÓN"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:29:03.000Z"
+ },
+ {
+  "id": 101,
+  "codigo_a": "M1109194",
+  "codigo_b": "M4023187",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1109194",
+   "sacado": {
+    "id": 186,
+    "anio": 2026,
+    "droga": "ERITROMICINA",
+    "codigo": "M1109194",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "ERITROMICINA - UNGÜENTO OFTÁLMICO - 0,5 %"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 518,
+    "drogaAntes": "ERITROMICINA UNGUENTO OFTALMICO",
+    "codigoAntes": "M4023187",
+    "controladoAntes": 1,
+    "descripcionAntes": "ERITROMICINA UNGUENTO OFTALMICO"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:31:51.000Z"
+ },
+ {
+  "id": 102,
+  "codigo_a": "M4023155",
+  "codigo_b": "M4023209",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M4023209",
+   "sacado": {
+    "id": 188,
+    "anio": 2026,
+    "droga": "FLUORESCEÍNA SÓDICA",
+    "codigo": "M4023209",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "FLUORESCEÍNA SÓDICA - GOTAS OFTÁLMICAS - 25 MG/ML"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 517,
+    "drogaAntes": "FLUORESCEINA 0.25%",
+    "codigoAntes": "M4023155",
+    "controladoAntes": 1,
+    "descripcionAntes": "FLUORESCEINA 0.25% COLIRIO"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:32:54.000Z"
+ },
+ {
+  "id": 103,
+  "codigo_a": "M2615231",
+  "codigo_b": "M4401009",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2615231",
+   "forzado": true,
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:33:30.000Z"
+ },
+ {
+  "id": 104,
+  "codigo_a": "M0201159",
+  "codigo_b": "M0201160",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M0201159",
+   "forzado": true,
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:38:33.000Z"
+ },
+ {
+  "id": 107,
+  "codigo_a": "M2401034",
+  "codigo_b": "M2434195",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2434195",
+   "sacado": {
+    "id": 207,
+    "anio": 2026,
+    "droga": "BROMURO DE IPRATROPIO",
+    "codigo": "M2434195",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "BROMURO DE IPRATROPIO - SOLUCIÓN PARA NEBULIZACIÓN - 250 MCG/ML"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 489,
+    "drogaAntes": "BROMURO DE IPRATROPIO 250 DOSIS",
+    "codigoAntes": "M2401034",
+    "controladoAntes": 1,
+    "descripcionAntes": "BROMURO DE IPRATROPIO 250 DOSIS AEROSOL"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:36:17.000Z"
+ },
+ {
+  "id": 108,
+  "codigo_a": "M0701138",
+  "codigo_b": "M0711122",
+  "estado": "distinto",
+  "nota": null,
+  "detalle": null,
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:36:34.000Z"
+ },
+ {
+  "id": 113,
+  "codigo_a": "M2709130",
+  "codigo_b": "M2709200",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709200",
+   "forzado": true,
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:39:40.000Z"
+ },
+ {
+  "id": 114,
+  "codigo_a": "M3705112",
+  "codigo_b": "M3706209",
+  "estado": "igual",
+  "nota": null,
+  "detalle": {
+   "anio": 2026,
+   "queda": "M3706209",
+   "sacado": {
+    "id": 46,
+    "anio": 2026,
+    "droga": "INMUNOGLOBULINA ANTI RH (D) HUMANA",
+    "codigo": "M3706209",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "INMUNOGLOBULINA ANTI RH (D) HUMANA - SOLUCIÓN INYECTABLE - 300 MCG/2 ML"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 395,
+    "drogaAntes": "GAMMAGLOBULINA ANTI RH (D)",
+    "codigoAntes": "M3705112",
+    "controladoAntes": 1,
+    "descripcionAntes": "GAMMAGLOBULINA ANTI RH (D) 330 MCG INYECTABLE AMPOLLAS"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:45:32.000Z"
+ },
+ {
+  "id": 115,
+  "codigo_a": "M1109185",
+  "codigo_b": "M2901019",
+  "estado": "igual",
+  "nota": "confirmado por el usuario",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1109185",
+   "forzado": true,
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:51:09.000Z"
+ },
+ {
+  "id": 116,
+  "codigo_a": "M1246163",
+  "codigo_b": "M1246435",
+  "estado": "igual",
+  "nota": "confirmado por el usuario",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M1246435",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:51:09.000Z"
+ },
+ {
+  "id": 117,
+  "codigo_a": "M4611136",
+  "codigo_b": "M4611175",
+  "estado": "igual",
+  "nota": "confirmado por el usuario",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M4611175",
+   "forzado": true,
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:51:09.000Z"
+ },
+ {
+  "id": 118,
+  "codigo_a": "M3702112",
+  "codigo_b": "M3706202",
+  "estado": "igual",
+  "nota": "confirmado por el usuario",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M3706202",
+   "sacado": {
+    "id": 43,
+    "anio": 2026,
+    "droga": "INMUNOGLOBULINA ANTITETANICA + TOXOIDE TETANICO",
+    "codigo": "M3706202",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "INMUNOGLOBULINA ANTITETANICA + TOXOIDE TETANICO - SUSPENSIÓN INYECTABLE - 500 UI + 75 UI"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 266,
+    "drogaAntes": "GAMMAGLOBULINA ANTITETANICA-TOXOIDE FCO. // AMPOLLA .I.// .I.",
+    "codigoAntes": "M3702112",
+    "controladoAntes": 1,
+    "descripcionAntes": "GAMMAGLOBULINA ANTITETANICA-TOXOIDE FCO. // AMPOLLA .I.// .I. 500U 75U AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:51:09.000Z"
+ },
+ {
+  "id": 119,
+  "codigo_a": "M3408111",
+  "codigo_b": "M3409053",
+  "estado": "igual",
+  "nota": "confirmado por el usuario",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M3409053",
+   "sacado": {
+    "id": 55,
+    "anio": 2026,
+    "droga": "INSULINA HUMANA REGULAR",
+    "codigo": "M3409053",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "INSULINA HUMANA REGULAR - SOLUCIÓN INYECTABLE - 100 UI/ML"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 627,
+    "drogaAntes": "INSULINA CORRIENTE HUMANA FCO. .I/ML -",
+    "codigoAntes": "M3408111",
+    "controladoAntes": 1,
+    "descripcionAntes": "INSULINA CORRIENTE HUMANA FCO. .I/ML - 100U 10 ML AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:51:09.000Z"
+ },
+ {
+  "id": 120,
+  "codigo_a": "M3701008",
+  "codigo_b": "M3706201",
+  "estado": "igual",
+  "nota": "confirmado por el usuario",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M3706201",
+   "forzado": true,
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:51:09.000Z"
+ },
+ {
+  "id": 121,
+  "codigo_a": "M3310111",
+  "codigo_b": "M3318148",
+  "estado": "igual",
+  "nota": "confirmado por el usuario",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M3318148",
+   "sacado": {
+    "id": 205,
+    "anio": 2026,
+    "droga": "GLUCOSA + CLORURO DE SODIO + CITRATO DE SODIO + CLORURO DE POTASIO",
+    "codigo": "M3318148",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "GLUCOSA + CLORURO DE SODIO + CITRATO DE SODIO + CLORURO DE POTASIO - POLVO PARA SOLUCIÓN ORAL - 20 G + 3,5 G + 2,9 G + 1,5 G"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 336,
+    "drogaAntes": "SALES DE REHIDRATACION SOBRES 27.9",
+    "codigoAntes": "M3310111",
+    "controladoAntes": 1,
+    "descripcionAntes": "SALES DE REHIDRATACION SOBRES 27.9 ORAL"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:51:09.000Z"
+ },
+ {
+  "id": 122,
+  "codigo_a": "M0502111",
+  "codigo_b": "M4601016",
+  "estado": "igual",
+  "nota": "confirmado por el usuario",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M4601016",
+   "sacado": {
+    "id": 33,
+    "anio": 2026,
+    "droga": "VITAMINA B1-B2-B6-B12-NICOTIN A-ACIDO FOLICO",
+    "codigo": "M4601016",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "VITAMINA B1-B2-B6-B12-NICOTIN A-ACIDO FOLICO - INYECTABLE - 100-0.2-5-1-10-15 MG"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 390,
+    "drogaAntes": "ACIDO FOLICO-COMPLEJO B",
+    "codigoAntes": "M0502111",
+    "controladoAntes": 1,
+    "descripcionAntes": "ACIDO FOLICO-COMPLEJO B 15MG INYECTABLE"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:51:10.000Z"
+ },
+ {
+  "id": 123,
+  "codigo_a": "M3701111",
+  "codigo_b": "M3706203",
+  "estado": "distinto",
+  "nota": null,
+  "detalle": null,
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:51:10.000Z"
+ },
+ {
+  "id": 124,
+  "codigo_a": "M3103183",
+  "codigo_b": "M3103193",
+  "estado": "distinto",
+  "nota": null,
+  "detalle": null,
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:51:10.000Z"
+ },
+ {
+  "id": 125,
+  "codigo_a": "M2534128",
+  "codigo_b": "M2534252",
+  "estado": "igual",
+  "nota": "confirmado por el usuario: 10 mg por unidad",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2534252",
+   "sacado": {
+    "id": 81,
+    "anio": 2026,
+    "droga": "MILRINONA",
+    "codigo": "M2534252",
+    "cantidad": 0,
+    "semestre": 1,
+    "controlado": 0,
+    "creado_por": 1,
+    "descripcion": "MILRINONA - SOLUCIÓN INYECTABLE - 1 MG/ML"
+   },
+   "forzado": true,
+   "renglon": {
+    "id": 462,
+    "drogaAntes": "MILRINONA FCO. I.V.",
+    "codigoAntes": "M2534128",
+    "controladoAntes": 1,
+    "descripcionAntes": "MILRINONA FCO. I.V. 10MG/ML - 1 ML AMPOLLA"
+   },
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-08T02:52:59.000Z"
+ },
+ {
+  "id": 126,
+  "codigo_a": "M1601013",
+  "codigo_b": "M1601132",
+  "estado": "distinto",
+  "nota": null,
+  "detalle": null,
+  "usuario_id": 1,
+  "created_at": "2026-11-12T01:05:52.000Z"
+ },
+ {
+  "id": 127,
+  "codigo_a": "M2709188",
+  "codigo_b": "M2709215",
+  "estado": "igual",
+  "nota": "Mismo producto que M2709215 (codigo actual en MS)",
+  "detalle": {
+   "anio": 2026,
+   "queda": "M2709215",
+   "semestre": 1
+  },
+  "usuario_id": 1,
+  "created_at": "2026-11-12T01:05:52.000Z"
+ },
+ {
+  "id": 128,
+  "codigo_a": "M2509999",
+  "codigo_b": "M2615233",
+  "estado": "distinto",
+  "nota": null,
+  "detalle": null,
+  "usuario_id": 1,
+  "created_at": "2026-11-12T01:06:57.000Z"
+ },
+ {
+  "id": 129,
+  "codigo_a": "M1201078",
+  "codigo_b": "M1223111",
+  "estado": "distinto",
+  "nota": null,
+  "detalle": null,
+  "usuario_id": 1,
+  "created_at": "2026-11-12T01:06:57.000Z"
+ },
+ {
+  "id": 130,
+  "codigo_a": "M0701037",
+  "codigo_b": "M0724158",
+  "estado": "distinto",
+  "nota": null,
+  "detalle": null,
+  "usuario_id": 1,
+  "created_at": "2026-11-12T01:06:57.000Z"
+ }
+]

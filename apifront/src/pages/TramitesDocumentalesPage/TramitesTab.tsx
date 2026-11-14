@@ -4,6 +4,8 @@ import { useToast } from '../../ui/toast';
 import { CuilAnsesPanel } from './CuilAnsesPanel';
 import { RdamPanel } from './RdamPanel';
 import { FormularioDesignacionPanel } from './FormularioDesignacionPanel';
+import { NotaDesignacionPanel } from './NotaDesignacionPanel';
+import { PasePlantaPanel } from './PasePlantaPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Flujo nuevo (2026-08): consulta de interinos 10430 por rango de años -> cuadro
@@ -39,6 +41,8 @@ type TandaAgente = {
   dependenciaNombre?: string | null;
   origen?: 'anio' | 'manual' | null;
   anio?: number | null;
+  ley14783?: number | null; // 1 = entra por Ley 14783 (se le pide el Anexo 1)
+  ley10592?: number | null; // 1 = entra por Ley 10592 de discapacidad (se le pide el certificado)
 };
 
 type BuscarAgenteRow = {
@@ -238,6 +242,8 @@ export function TramitesTab() {
   const [verRdam, setVerRdam] = useState(false);
   const [verRdamSueltos, setVerRdamSueltos] = useState(false);
   const [verFormulario, setVerFormulario] = useState(false);
+  const [verNotaGdeba, setVerNotaGdeba] = useState(false);
+  const [verPasePlanta, setVerPasePlanta] = useState(false);
 
   // Tandas
   const [tandaRows, setTandaRows] = useState<TandaAgente[]>([]);
@@ -458,6 +464,37 @@ export function TramitesTab() {
       setAgente((a) => (a && a.id === row.id ? { ...a, estado } : a));
     } catch (e: any) {
       toast.error('No se pudo cambiar el estado', e?.message || 'Error');
+    }
+  }
+
+  // Tilde "Ley 14783": si está, en Documentación incompleta se le pide el Anexo 1
+  // y el certificado de nacimiento que lo acompaña; si no, no.
+  async function cambiarLey14783(row: TandaAgente) {
+    const valor = Number(row.ley14783) === 1 ? 0 : 1;
+    try {
+      await apiFetch('/tramites-documentales/tandas/ley-14783', {
+        method: 'POST',
+        body: JSON.stringify({ tanda: row.tanda, dni: row.dni, valor: valor === 1 }),
+      });
+      setTandaRows((rows) => rows.map((r) => (r.id === row.id ? { ...r, ley14783: valor } : r)));
+      setAgente((a) => (a && a.id === row.id ? { ...a, ley14783: valor } : a));
+    } catch (e: any) {
+      toast.error('No se pudo guardar Ley 14783', e?.message || 'Error');
+    }
+  }
+
+  // Tilde "Ley 10592" (discapacidad): si está, se le pide el Certificado de discapacidad.
+  async function cambiarLey10592(row: TandaAgente) {
+    const valor = Number(row.ley10592) === 1 ? 0 : 1;
+    try {
+      await apiFetch('/tramites-documentales/tandas/ley-10592', {
+        method: 'POST',
+        body: JSON.stringify({ tanda: row.tanda, dni: row.dni, valor: valor === 1 }),
+      });
+      setTandaRows((rows) => rows.map((r) => (r.id === row.id ? { ...r, ley10592: valor } : r)));
+      setAgente((a) => (a && a.id === row.id ? { ...a, ley10592: valor } : a));
+    } catch (e: any) {
+      toast.error('No se pudo guardar Ley 10592', e?.message || 'Error');
     }
   }
 
@@ -798,6 +835,14 @@ export function TramitesTab() {
         <FormularioDesignacionPanel key={selectedTanda} tanda={selectedTanda} onCerrar={() => setVerFormulario(false)} />
       ) : null}
 
+      {verNotaGdeba && selectedTanda ? (
+        <NotaDesignacionPanel key={selectedTanda} tanda={selectedTanda} onCerrar={() => setVerNotaGdeba(false)} />
+      ) : null}
+
+      {verPasePlanta && selectedTanda ? (
+        <PasePlantaPanel key={selectedTanda} tanda={selectedTanda} onCerrar={() => setVerPasePlanta(false)} />
+      ) : null}
+
       {/* ── Tandas + detalle del agente ───────────────────────────────────── */}
       <section style={{ background: CARD_BG, border: BORDER, borderRadius: 12, padding: 16, display: 'flex', gap: 16, minHeight: 460 }}>
         {/* Columna izquierda: tandas + agentes */}
@@ -886,6 +931,16 @@ export function TramitesTab() {
                 style={{ ...primaryBtn, ...accionBtn, background: verFormulario ? 'rgba(255,255,255,0.08)' : '#16a34a', cursor: verFormulario ? 'default' : 'pointer' }}>
                 📝 Formulario
               </button>
+              <button type="button" onClick={() => setVerNotaGdeba(true)} disabled={verNotaGdeba}
+                title={`Arma la nota de designación para GDEBA de cada agente de "${selectedTanda}" (.docx en DOCU\\<dni>\\Nota designacion GDEBA)`}
+                style={{ ...primaryBtn, ...accionBtn, background: verNotaGdeba ? 'rgba(255,255,255,0.08)' : '#0369a1', cursor: verNotaGdeba ? 'default' : 'pointer' }}>
+                🏛️ Nota GDEBA
+              </button>
+              <button type="button" onClick={() => setVerPasePlanta(true)} disabled={verPasePlanta}
+                title={`Copia antecedentes y planilla de compatibilidad de DOCU de los agentes de "${selectedTanda}" a la carpeta de Pase a planta (dependencia\\APELLIDO NOMBRE), en JPG y solo lo que falta. Primero muestra qué va a copiar.`}
+                style={{ ...primaryBtn, ...accionBtn, background: verPasePlanta ? 'rgba(255,255,255,0.08)' : '#b45309', cursor: verPasePlanta ? 'default' : 'pointer' }}>
+                📦 Pase a planta
+              </button>
             </div>
           ) : null}
 
@@ -935,6 +990,30 @@ export function TramitesTab() {
                   </div>
                   <div style={{ color: '#64748b', fontSize: '0.72rem' }}>DNI {a.dni}</div>
                 </div>
+                <button type="button"
+                  onClick={(e) => { e.stopPropagation(); void cambiarLey14783(a); }}
+                  title={Number(a.ley14783) === 1
+                    ? 'Entra por Ley 14783: se le pide el Anexo 1 y el certificado de nacimiento. Click para quitar.'
+                    : 'Click si entra por Ley 14783 (así se le pide el Anexo 1 y el certificado de nacimiento)'}
+                  style={{
+                    ...chipBtn, fontSize: '0.66rem', padding: '2px 6px', whiteSpace: 'nowrap',
+                    background: Number(a.ley14783) === 1 ? '#db2777' : 'rgba(255,255,255,0.04)',
+                    color: Number(a.ley14783) === 1 ? '#fff' : '#64748b',
+                  }}>
+                  {Number(a.ley14783) === 1 ? '✓ ' : ''}14783
+                </button>
+                <button type="button"
+                  onClick={(e) => { e.stopPropagation(); void cambiarLey10592(a); }}
+                  title={Number(a.ley10592) === 1
+                    ? 'Entra por Ley 10592 (discapacidad): se le pide el certificado de discapacidad. Click para quitar.'
+                    : 'Click si entra por Ley 10592 de discapacidad (así se le pide el certificado de discapacidad)'}
+                  style={{
+                    ...chipBtn, fontSize: '0.66rem', padding: '2px 6px', whiteSpace: 'nowrap',
+                    background: Number(a.ley10592) === 1 ? '#7c3aed' : 'rgba(255,255,255,0.04)',
+                    color: Number(a.ley10592) === 1 ? '#fff' : '#64748b',
+                  }}>
+                  {Number(a.ley10592) === 1 ? '✓ ' : ''}10592
+                </button>
                 <select value={a.estado} onClick={(e) => e.stopPropagation()} onChange={(e) => cambiarEstado(a, e.target.value)}
                   style={{
                     background: 'rgba(255,255,255,0.05)', border: BORDER, borderRadius: 6, padding: '3px 4px',
@@ -976,6 +1055,16 @@ export function TramitesTab() {
                 <Ficha k="Ley" v={agente.ocupacionLey || agente.leyNombre || '-'} />
                 <Ficha k="Planta" v={agente.plantaNombre || '-'} />
                 <Ficha k="Dependencia" v={agente.dependenciaNombre || '-'} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.78rem', color: Number(agente.ley14783) === 1 ? '#f9a8d4' : '#94a3b8', cursor: 'pointer' }}
+                  title="Si entra por Ley 14783 se le pide el Anexo 1 y el certificado de nacimiento que lo acompaña">
+                  <input type="checkbox" checked={Number(agente.ley14783) === 1} onChange={() => void cambiarLey14783(agente)} />
+                  Entra por Ley 14783
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.78rem', color: Number(agente.ley10592) === 1 ? '#c4b5fd' : '#94a3b8', cursor: 'pointer' }}
+                  title="Si entra por la Ley 10592 (discapacidad, Prov. Bs. As.) se le pide el certificado de discapacidad">
+                  <input type="checkbox" checked={Number(agente.ley10592) === 1} onChange={() => void cambiarLey10592(agente)} />
+                  Entra por Ley 10592 (discapacidad)
+                </label>
                 <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: ESTADO_COLOR[agente.estado], fontWeight: 700, textTransform: 'uppercase' }}>
                   ● {agente.estado}
                 </span>

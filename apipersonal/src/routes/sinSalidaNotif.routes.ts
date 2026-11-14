@@ -1,3 +1,4 @@
+import { escapeHtml } from "../utils/escapeHtml";
 // src/routes/sinSalidaNotif.routes.ts
 //
 // Notificaciones "sin salida" por mail (no-reply) a cada agente.
@@ -89,7 +90,7 @@ function mensajeAgente(a: AgenteSinSalida): { asunto: string; texto: string; htm
     `Este es un correo automático, por favor no responda a este mensaje.`;
   const html =
     `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.5;max-width:640px">
-       <p>Estimado/a <strong>${a.nombre}</strong>:</p>
+       <p>Estimado/a <strong>${escapeHtml(a.nombre)}</strong>:</p>
        <p>Por intermedio de la presente se le informa que <strong>no registramos fichaje de salida</strong> el/los día(s):</p>
        <p style="font-size:15px;color:#b02a37"><strong>${dias}</strong></p>
        <p>En caso de discrepancia, comunicarse con el WhatsApp de la oficina.</p>

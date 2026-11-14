@@ -1,6 +1,7 @@
 // src/pages/LicenciasMedicasControlPage/ExtensionDescarga.tsx
-// Descarga de la extensión de Chrome desde la app (queda en Descargas de cada PC) + guía de
-// instalación / actualización. El zip y version.json los arma whatsapp-extension\empaquetar.ps1
+// Descarga del instalador único de la extensión (Instalar-Extension-Personal.cmd: baja el zip del
+// servidor, actualiza la carpeta que ya usa el navegador o instala en C:\ExtensionPersonal, y crea la
+// tarea de actualización automática) + guía de instalación / actualización. El zip y version.json los arma whatsapp-extension\empaquetar.ps1
 // en public/extension-whatsapp/ (van a prod con el deploy del front).
 import { useEffect, useState } from 'react';
 import { useToast } from '../../ui/toast';
@@ -8,8 +9,10 @@ import { copiarTexto } from '../../utils/abrirCarpeta';
 
 const BASE = '/extension-whatsapp';
 const ZIP = 'personal-whatsapp-extension.zip';
-const CARPETA = 'personal-whatsapp-extension';
-const AVISO_SMARTSCREEN = 'Si al abrir instalar-actualizador.cmd Windows muestra “Windows protegió su PC”, tocá “Más información” → “Ejecutar de todas formas”.';
+const INSTALADOR = 'Instalar-Extension-Personal.cmd';
+/** Carpeta donde el instalador deja la extensión cuando la PC no la tenía cargada. */
+const CARPETA_FIJA = 'C:\\ExtensionPersonal';
+const avisoSmartscreen = () => <>Si {NAV.nombre} avisa que el archivo “puede ser peligroso”, tocá <b>Conservar</b>. Si al abrirlo Windows muestra “Windows protegió su PC”, tocá <b>Más información</b> → <b>Ejecutar de todas formas</b>.</>;
 
 /** Nombre con el que figura en chrome://extensions (desde v1.5.0 también baja el CUIL de ANSES). */
 export const NOMBRE_EXT = 'Personal - Asistente (WhatsApp y CUIL ANSES)';
@@ -85,7 +88,10 @@ export function ExtensionDescarga({ instalada, publicada, onCerrar }: {
         <span className="badge" title="Los pasos se muestran para el navegador en el que abriste esta página">Pasos para {NAV.nombre}</span>
         {publicada && <span className="muted" style={{ fontSize: '0.75rem' }}>Última versión: v{publicada}{instalada && instalada !== '?' ? ` · instalada: v${instalada}` : ''}</span>}
         <span style={{ flex: 1 }} />
-        <a className="btn" href={`${BASE}/${ZIP}`} download={ZIP} style={{ fontWeight: 700 }}>⬇️ Descargar extensión</a>
+        <a className="btn" href={`${BASE}/${INSTALADOR}`} download={INSTALADOR} style={{ fontWeight: 700 }}
+          title="Un solo archivo: instala, actualiza y deja activada la actualización automática">⬇️ Bajar instalador</a>
+        <a className="btn" href={`${BASE}/${ZIP}`} download={ZIP} style={btnChico}
+          title="Instalación a mano (zip + instalar-actualizador.cmd), como antes">zip</a>
         <button type="button" className="btn" onClick={onCerrar}>Cerrar</button>
       </div>
       <div className="muted" style={{ fontSize: '0.75rem', marginTop: 6 }}>
@@ -97,35 +103,32 @@ export function ExtensionDescarga({ instalada, publicada, onCerrar }: {
         <>
           <div style={{ marginTop: 10, fontWeight: 700 }}>🔄 Actualizar (ya la tenés instalada)</div>
           <ol style={{ listStyle: 'none', padding: 0, margin: '4px 0 0' }}>
-            {paso(1, <>Tocá <b>⬇️ Descargar extensión</b>. Queda en <b>Descargas</b> como <code>{ZIP}</code>.</>)}
-            {paso(2, <>En Descargas, clic derecho al archivo → <b>Extraer todo…</b> → <b>Extraer</b>. Si pregunta, <b>reemplazar</b> los archivos de la carpeta <code>{CARPETA}</code>.</>)}
-            {paso(3, <>En {NAV.nombre} abrí <code>{NAV.url}</code> {botonCopiar} (pegalo en la barra de direcciones).</>)}
-            {paso(4, <>En “{NOMBRE_EXT}” (antes “Personal - Avisos por WhatsApp”) {NAV.recargar}. Tiene que decir <b>{publicada}</b>.</>)}
-            {paso(5, <>En la carpeta <code>{CARPETA}</code> hacé <b>doble clic en <code>instalar-actualizador.cmd</code></b> (una sola vez):
-              desde ahí la extensión <b>se actualiza sola</b> y no hay que repetir estos pasos.</>)}
-            {paso(6, <>Volvé acá y apretá <b>F5</b>.</>)}
+            {paso(1, <>Tocá <b>⬇️ Bajar instalador</b> y abrí <code>{INSTALADOR}</code> (doble clic, desde Descargas o desde la barra de descargas del navegador).</>)}
+            {paso(2, <>Esperá que diga <b>LISTO</b>. Actualiza la misma carpeta que ya usa {NAV.nombre} y deja activada la actualización automática: no hay que tocar nada en {NAV.nombre}.
+              <div className="muted" style={{ fontSize: '0.75rem' }}>Si dice <b>ATENCIÓN: hay OTRA copia</b>, seguí lo que indica (quitar la repetida en <code>{NAV.url}</code> {botonCopiar}).</div></>)}
+            {paso(3, <>En unos minutos apretá <b>F5</b> acá. Si querés que sea ya: en <code>{NAV.url}</code>, en “{NOMBRE_EXT}” {NAV.recargar}.</>)}
           </ol>
-          <div className="muted" style={{ fontSize: '0.75rem', marginTop: 8 }}>{AVISO_SMARTSCREEN}</div>
+          <div className="muted" style={{ fontSize: '0.75rem', marginTop: 8 }}>{avisoSmartscreen()}</div>
         </>
       ) : (
         <>
           <div style={{ marginTop: 10, fontWeight: 700 }}>📖 Cómo instalarla en {NAV.nombre}</div>
           <ol style={{ listStyle: 'none', padding: 0, margin: '4px 0 0' }}>
-            {paso(1, <>Tocá <b>⬇️ Descargar extensión</b>. Queda en la carpeta <b>Descargas</b> como <code>{ZIP}</code>.</>)}
-            {paso(2, <>Abrí <b>Descargas</b>, clic derecho al archivo → <b>Extraer todo…</b> → <b>Extraer</b>. Se crea la carpeta <code>{CARPETA}</code>.
-              <div className="muted" style={{ fontSize: '0.75rem' }}>⚠️ No borres ni muevas esa carpeta después: {NAV.nombre} usa la extensión desde ahí.</div></>)}
-            {paso(3, <>En {NAV.nombre} abrí una pestaña nueva y pegá <code>{NAV.url}</code> en la barra de direcciones {botonCopiar}
+            {paso(1, <>Tocá <b>⬇️ Bajar instalador</b> y abrí <code>{INSTALADOR}</code> (doble clic). Esperá que termine.
+              <div className="muted" style={{ fontSize: '0.75rem' }}>Si la PC ya tenía la extensión, la actualiza y listo: saltá al paso 6.
+                Si no, la deja en <code>{CARPETA_FIJA}</code> (no la borres) y copia esa ruta.</div></>)}
+            {paso(2, <>En {NAV.nombre} abrí una pestaña nueva y pegá <code>{NAV.url}</code> en la barra de direcciones {botonCopiar}
               <div className="muted" style={{ fontSize: '0.75rem' }}>(no se puede abrir con un link: hay que pegarlo a mano)</div></>)}
-            {paso(4, NAV.modoDev)}
-            {paso(5, <>{NAV.cargar} y elegí <b>Descargas → {CARPETA}</b>. Hay que elegir la carpeta (la que adentro tiene <code>manifest.json</code>), no el .zip.</>)}
-            {paso(6, <>Tiene que aparecer <b>“{NOMBRE_EXT}”</b>{publicada ? <> versión <b>{publicada}</b></> : null}.</>)}
-            {paso(7, <>En la carpeta <code>{CARPETA}</code> hacé <b>doble clic en <code>instalar-actualizador.cmd</code></b> y esperá el “LISTO”.
-              Desde ahí la extensión <b>se actualiza sola</b> (al prender la PC y cada 2 horas): no hay que volver a instalarla.</>)}
-            {paso(8, <>Abrí <a href="https://web.whatsapp.com" target="_blank" rel="noreferrer">WhatsApp Web</a> en ese mismo {NAV.nombre} y vinculalo con el celular si no lo está.</>)}
-            {paso(9, <>Volvé acá y apretá <b>F5</b>: arriba tiene que decir <b>✅ Extensión instalada</b>.</>)}
+            {paso(3, NAV.modoDev)}
+            {paso(4, <>{NAV.cargar}. En la ventana de carpetas, arriba en la ruta, pegá con <b>Ctrl+V</b> <code>{CARPETA_FIJA}</code>{' '}
+              <button type="button" className="btn" style={btnChico} onClick={() => copiar(CARPETA_FIJA)}>📋 Copiar</button> y tocá <b>Seleccionar carpeta</b>.</>)}
+            {paso(5, <>Tiene que aparecer <b>“{NOMBRE_EXT}”</b>{publicada ? <> versión <b>{publicada}</b></> : null}. Desde ahí <b>se actualiza sola</b>.</>)}
+            {paso(6, <>Abrí <a href="https://web.whatsapp.com" target="_blank" rel="noreferrer">WhatsApp Web</a> en ese mismo {NAV.nombre} y vinculalo con el celular si no lo está.</>)}
+            {paso(7, <>Volvé acá y apretá <b>F5</b>: arriba tiene que decir <b>✅ Extensión instalada</b>.</>)}
           </ol>
           <div className="muted" style={{ fontSize: '0.75rem', marginTop: 8 }}>
-            {AVISO_SMARTSCREEN}{' '}{NAV.avisoDev}{' '}
+            {avisoSmartscreen()}{' '}{NAV.avisoDev}{' '}
+            Si la extensión no se actualiza sola en una PC, volvé a correr el instalador: la arregla.
             La app tiene que estar abierta por IP (192.168.0.21 o 10.115.31.28) para que la extensión la reconozca.
           </div>
         </>

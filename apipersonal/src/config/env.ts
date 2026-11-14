@@ -296,6 +296,8 @@ const schema = z.object({
   TRAMITES_PDF_INPUT_DIR: strish(""),
   SAMO_CLAVE_HABILITACION: strish(""), // clave fija que el admin carga para habilitar un mes en SAMO → Licencias Ministerio
   TRAMITES_DOCU_BASE_DIR: strish(""),
+  // Carpeta de Pase a planta (botón "Pase a planta" de Trámites): adentro va <HTAL|UPA 18|UPA 4>\<APELLIDO NOMBRE>.
+  PASE_A_PLANTA_DIR: strish("D:\\Pase a planta\\PASE A PLANTA PERMANENTE 2026"),
   // Ruta de la carpeta DOCU relativa al share de red (lo que va despues de \\host\).
   // Sirve para armar la ruta UNC que el front copia al portapapeles para abrir en el Explorador.
   // Si esta vacio se deriva de TRAMITES_DOCU_BASE_DIR sacandole la letra de unidad (D:\G\DOCU -> G\DOCU).
@@ -472,10 +474,9 @@ export function assertProdEnvOrThrow() {
     errors.push("En production: setear CORS_ALLOWLIST (y/o CORS_ALLOW_ALL=false)");
   }
 
-  // Reverse proxy: recomendación, no hard error (pero lo dejo como warning-error porque ya lo tenías así)
-  if (!env.TRUST_PROXY) {
-    errors.push("Recomendado en production: TRUST_PROXY=true (si hay reverse proxy)");
-  }
+  // Reverse proxy: TRUST_PROXY=true SOLO si hay un proxy delante. La API se expone directo
+  // (:3001), así que va en false: con true cualquiera falsea su IP por X-Forwarded-For y
+  // saltea el bloqueo de login por IP (auditoría 08/11). Ya no es error bloqueante.
 
   // Document storage: debe existir y ser accesible
   if (!env.DOCUMENTS_BASE_DIR?.trim()) {

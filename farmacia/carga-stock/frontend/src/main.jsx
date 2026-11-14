@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
-import * as XLSX from 'xlsx';
+// xlsx-js-style: misma API que xlsx pero guarda estilos (texto ajustado, bordes)
+import * as XLSX from 'xlsx-js-style';
 import {
   AlertTriangle,
   BarChart3,
@@ -20,6 +21,7 @@ import {
   Folder,
   FolderOpen,
   LayoutDashboard,
+  Link2,
   Lock,
   PackageSearch,
   LogOut,
@@ -36,6 +38,7 @@ import {
   Users,
   Warehouse
 } from 'lucide-react';
+import { AyudaPagina } from './ayudas.jsx';
 import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4310/api';
@@ -90,6 +93,7 @@ function apiClient(token) {
     cambiarCarpetaConsumoMs: (ruta) => request('/consumo-ms/carpeta', { method: 'PUT', body: JSON.stringify({ ruta }) }),
     stockActual: (descargaId) => request(`/stock-actual${descargaId ? `?descargaId=${descargaId}` : ''}`),
     descargarStockActual: () => request('/stock-actual/descargar', { method: 'POST', body: '{}' }),
+    stockRepetidos: () => request('/stock-actual/repetidos'),
     cambiarCarpetaStockActual: (ruta) => request('/stock-actual/carpeta', { method: 'PUT', body: JSON.stringify({ ruta }) }),
     requerimientosSource: () => request('/requerimientos/source'),
     sincronizarRequerimientos: () => request('/requerimientos/sincronizar', { method: 'POST', body: '{}' }),
@@ -100,9 +104,23 @@ function apiClient(token) {
     reqManual: (anio) => request(`/requerimientos/manual?anio=${anio}`),
     reqManualGuardar: (payload) => request('/requerimientos/manual', { method: 'POST', body: JSON.stringify(payload) }),
     reqManualEliminar: (id) => request(`/requerimientos/manual/${id}`, { method: 'DELETE' }),
+    reqManualControlado: (id, controlado) => request(`/requerimientos/manual/${id}/controlado`, { method: 'PUT', body: JSON.stringify({ controlado }) }),
     reqManualCopiar: (payload) => request('/requerimientos/manual/copiar', { method: 'POST', body: JSON.stringify(payload) }),
     reqColumnas: (codigos) => request('/requerimientos/columnas', { method: 'POST', body: JSON.stringify({ codigos }) }),
+    reqAjustes: (ciclo) => request(`/requerimientos/ajustes?ciclo=${encodeURIComponent(ciclo || '')}`),
+    reqAjustesHistorial: (ciclo) => request(`/requerimientos/ajustes/historial?ciclo=${encodeURIComponent(ciclo || '')}`),
+    reqAjusteGuardar: (body) => request('/requerimientos/ajustes', { method: 'POST', body: JSON.stringify(body) }),
+    reqAjusteVolver: (body) => request('/requerimientos/ajustes/volver', { method: 'POST', body: JSON.stringify(body) }),
     reqManualColumnas: (anio, semestre) => request(`/requerimientos/manual/columnas?anio=${anio}&semestre=${semestre}`),
+    reqManualComparacion: (anio, semestre) => request(`/requerimientos/manual/comparacion?anio=${anio}&semestre=${semestre}`),
+    equivSugerencias: (anio, semestre) => request(`/codigos-equiv/sugerencias?anio=${anio}&semestre=${semestre}`),
+    equivHuellas: (codigos) => request('/codigos-equiv/huellas', { method: 'POST', body: JSON.stringify({ codigos }) }),
+    equivHistorial: () => request('/codigos-equiv'),
+    equivUnificar: (payload) => request('/codigos-equiv/unificar', { method: 'POST', body: JSON.stringify(payload) }),
+    equivDescartar: (payload) => request('/codigos-equiv/descartar', { method: 'POST', body: JSON.stringify(payload) }),
+    equivDeshacer: (id) => request(`/codigos-equiv/${id}`, { method: 'DELETE' }),
+    equivComparar: (codigo, con) => request('/codigos-equiv/comparar', { method: 'POST', body: JSON.stringify({ codigo, con }) }),
+    equivAuditoria: () => request('/codigos-equiv/auditoria'),
     trimestreSource: () => request('/trimestre/source'),
     trimestreDesdeConsumo: () => request('/trimestre/desde-consumo', { method: 'POST', body: '{}' }),
     importarTrimestre: (fileName) => request('/trimestre/importar', { method: 'POST', body: JSON.stringify({ fileName }) }),
@@ -295,13 +313,13 @@ function App() {
         </div>
       </header>
 
-      {view === 'dashboard' ? <Dashboard user={session.user} onOpen={setView} /> : null}
+      {view === 'dashboard' ? <Dashboard user={session.user} token={session.token} onOpen={setView} /> : null}
       {view === 'stock' && isAdmin ? <StockPage token={session.token} /> : null}
       {view === 'consumo' && isAdmin ? <ConsumoPage token={session.token} /> : null}
       {view === 'comparar' && isAdmin ? <ComparacionPage token={session.token} /> : null}
       {view === 'trimestral' && isAdmin ? <TrimestralPage token={session.token} /> : null}
       {view === 'requerimiento' && isAdmin ? <RequerimientoAnualPage token={session.token} /> : null}
-      {view === 'carga2025' && isAdmin ? <CargaRequerimientoManualPage token={session.token} anio={2025} /> : null}
+      {view === 'carga2025' && isAdmin ? <CargaRequerimientoManualPage token={session.token} anio={2026} /> : null}
       {view === 'ministerio' && isAdmin ? <RequerimientoAnualPage token={session.token} soloMinisterio /> : null}
       {view === 'stockactual' && isAdmin ? <StockActualPage token={session.token} /> : null}
       {view === 'consumoms' && isAdmin ? <ConsumoMsPage token={session.token} /> : null}
@@ -316,7 +334,26 @@ function App() {
   );
 }
 
-function Dashboard({ user, onOpen }) {
+// Card de farmacos repetidos del ultimo Stock Actual, en el inicio (solo admin)
+function DashboardRepetidos({ token, onOpen }) {
+  const client = useMemo(() => apiClient(token), [token]);
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    client.stockRepetidos().then(setData).catch((err) => setData({ error: err.message }));
+  }, [client]);
+  if (!data) return null;
+  if (data.error) return <div className="alert" style={{ marginTop: 12 }}>No se pudieron leer los fármacos repetidos: {data.error}</div>;
+  return (
+    <RepetidosCard
+      repetidos={data.repetidos}
+      fechaStock={data.fechaStock}
+      inicialAbierta={false}
+      onBuscar={() => onOpen('stockactual')}
+    />
+  );
+}
+
+function Dashboard({ user, token, onOpen }) {
   const modules = [
     {
       id: 'stock',
@@ -376,8 +413,8 @@ function Dashboard({ user, onOpen }) {
     },
     {
       id: 'carga2025',
-      title: 'Carga Requerimiento 2025',
-      body: 'Carga a mano del requerimiento 2025 por semestre (no hay PDF): elegís semestre, droga y cantidad.',
+      title: 'Carga Requerimiento 2026',
+      body: 'Carga a mano del requerimiento 2026 por semestre (no hay PDF): elegís semestre, droga y cantidad.',
       roles: ['admin'],
       icon: ClipboardList
     },
@@ -421,6 +458,8 @@ function Dashboard({ user, onOpen }) {
           <p>Modulos habilitados para nivel {user.role}</p>
         </div>
       </div>
+      <AyudaPagina id="dashboard" />
+      {user.role === 'admin' && token ? <DashboardRepetidos token={token} onOpen={onOpen} /> : null}
       <div className="module-grid">
         {visible.map((mod) => {
           const Icon = mod.icon;
@@ -446,6 +485,11 @@ function Dashboard({ user, onOpen }) {
 
 function cellValue(text) {
   const value = String(text ?? '').replace(/\s+/g, ' ').trim();
+  // Numero con formato argentino (1.000 / 1.234,5 / 0,25) -> numero real
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(value) || /^-?\d+,\d+$/.test(value)) {
+    const number = Number(value.replace(/\./g, '').replace(',', '.'));
+    if (Number.isFinite(number)) return number;
+  }
   // Numero puro con decimal opcional -> numero real (salvo codigos con cero inicial)
   if (/^-?\d+(\.\d+)?$/.test(value) && !/^-?0\d/.test(value)) {
     const number = Number(value);
@@ -454,9 +498,106 @@ function cellValue(text) {
   return value;
 }
 
+const escXml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// La libreria no escribe la configuracion de impresion: se agrega en el XML del .xlsx.
+// Hoja Legal apaisada, todas las columnas en 1 pagina de ancho (alto libre),
+// fila de encabezado repetida en cada hoja impresa y "Página X de Y" al pie.
+function configurarImpresion(data, nombresHojas) {
+  const cfb = XLSX.CFB.read(new Uint8Array(data), { type: 'array' });
+  const buscar = (p) => cfb.FileIndex[cfb.FullPaths.findIndex((x) => x.endsWith(`/${p}`))];
+  const leer = (e) => new TextDecoder().decode(new Uint8Array(e.content));
+  const escribir = (e, txt) => { e.content = new TextEncoder().encode(txt); e.size = e.content.length; };
+  nombresHojas.forEach((_n, i) => {
+    const e = buscar(`xl/worksheets/sheet${i + 1}.xml`);
+    if (!e) return;
+    let x = leer(e);
+    const fit = '<pageSetUpPr fitToPage="1"/>';
+    if (/<sheetPr\b[^>]*\/>/.test(x)) x = x.replace(/<sheetPr\b([^>]*)\/>/, `<sheetPr$1>${fit}</sheetPr>`);
+    else if (/<sheetPr\b[^>]*>/.test(x)) x = x.replace(/<sheetPr\b[^>]*>/, (m) => `${m}${fit}`);
+    else x = x.replace(/<worksheet\b[^>]*>/, (m) => `${m}<sheetPr>${fit}</sheetPr>`);
+    const setup = '<pageSetup paperSize="5" orientation="landscape" fitToWidth="1" fitToHeight="0"/>'
+      + '<headerFooter><oddFooter>&amp;CPágina &amp;P de &amp;N</oddFooter></headerFooter>';
+    x = /<pageMargins\b[^>]*\/>/.test(x)
+      ? x.replace(/<pageMargins\b[^>]*\/>/, (m) => `${m}${setup}`)
+      : x.replace(/(<ignoredErrors|<\/worksheet>)/, `${setup}$1`);
+    escribir(e, x);
+  });
+  const w = buscar('xl/workbook.xml');
+  if (w) {
+    const titulos = nombresHojas.map((n, i) => `<definedName name="_xlnm.Print_Titles" localSheetId="${i}">${escXml(`'${n.replace(/'/g, "''")}'!$1:$1`)}</definedName>`).join('');
+    let x = leer(w);
+    x = x.includes('<definedNames>') ? x.replace('<definedNames>', `<definedNames>${titulos}`) : x.replace('</sheets>', `</sheets><definedNames>${titulos}</definedNames>`);
+    escribir(w, x);
+  }
+  return XLSX.CFB.write(cfb, { fileType: 'zip', type: 'array' });
+}
+
 function descargarLibro(wb, filename) {
   const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  XLSX.writeFile(wb, `${filename}-${fecha}.xlsx`);
+  for (const nombre of wb.SheetNames) {
+    const ws = wb.Sheets[nombre];
+    // Las hojas que no pasaron por formatearHoja se ajustan aca (anchos, texto partido, bordes)
+    if (!ws['!rows']) formatearHoja(ws, XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }));
+    ws['!margins'] = { left: 0.4, right: 0.4, top: 0.5, bottom: 0.6, header: 0.3, footer: 0.3 };
+  }
+  let data = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  try {
+    data = configurarImpresion(data, wb.SheetNames);
+  } catch (err) {
+    console.warn('No se pudo agregar la configuracion de impresion', err);
+  }
+  const url = URL.createObjectURL(new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}-${fecha}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// Anchos de columna ajustados al contenido, texto ajustado (varias lineas), bordes y alto de fila
+// segun las lineas que ocupa cada celda: queda legible al abrir sin tener que acomodar nada.
+function formatearHoja(ws, aoa) {
+  if (!aoa.length) return;
+  const nCols = Math.max(...aoa.map((r) => r.length));
+  const largo = (v) => String(v ?? '').length;
+  const anchos = [];
+  for (let c = 0; c < nCols; c += 1) {
+    const datos = aoa.slice(1).map((r) => r[c]);
+    const maxDato = Math.max(0, ...datos.map(largo));
+    const palabras = String(aoa[0][c] ?? '').split(' ');
+    const maxPalabra = Math.max(0, ...palabras.map((p) => p.length));
+    const esTexto = datos.some((v) => typeof v === 'string' && v.length > 12);
+    // Texto largo (nombre del medicamento): ancho fijo y se parte en lineas; numeros: lo justo
+    const ancho = esTexto ? Math.min(Math.max(maxDato, maxPalabra), 45) : Math.max(maxDato, maxPalabra, 4);
+    anchos.push(ancho + 1);
+  }
+  ws['!cols'] = anchos.map((wch) => ({ wch }));
+  const lineas = (v, ancho) => {
+    let n = 1;
+    let actual = 0;
+    for (const p of String(v ?? '').split(' ')) {
+      if (actual && actual + 1 + p.length > ancho - 1) { n += 1; actual = p.length; } else actual += (actual ? 1 : 0) + p.length;
+    }
+    return n;
+  };
+  const borde = { style: 'thin', color: { rgb: '000000' } };
+  const bordes = { top: borde, bottom: borde, left: borde, right: borde };
+  ws['!rows'] = aoa.map((fila, r) => {
+    const maxLineas = Math.max(1, ...fila.map((v, c) => lineas(v, anchos[c])));
+    fila.forEach((v, c) => {
+      const ref = XLSX.utils.encode_cell({ r, c });
+      if (!ws[ref]) return;
+      ws[ref].s = {
+        alignment: { wrapText: true, vertical: r === 0 ? 'center' : 'top', horizontal: r === 0 || typeof v === 'string' ? 'left' : 'right' },
+        border: bordes,
+        ...(r === 0 ? { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'E7ECF0' } } } : {})
+      };
+    });
+    return { hpt: Math.max(15, maxLineas * 15) };
+  });
 }
 
 function exportTableToXlsx(table, filename) {
@@ -465,14 +606,18 @@ function exportTableToXlsx(table, filename) {
   // Primera fila de encabezados (la de los buscadores por columna no se exporta)
   const encabezado = table.querySelector(':scope > thead > tr:not(.filtro-columnas)');
   aoa.push(Array.from(encabezado ? encabezado.children : [])
-    .map((th) => String(th.textContent || '').replace(/\s+/g, ' ').trim()));
+    .map((th) => String(th.textContent || '').replace(/\s+/g, ' ').trim()
+      // "Consumo 1er sem. 2023" -> "1er sem. 2023" (en el Excel sobra la palabra)
+      .replace(/^Consumo\s+(?=(1er|2do|\d))/i, '')));
   for (const tr of table.querySelectorAll(':scope > tbody > tr')) {
     if (tr.classList.contains('detail-row') || tr.querySelector('td.empty')) continue;
     // filtrada por los buscadores de columna (las ocultas solo por la paginacion si se exportan)
     if (tr.dataset.filtrada === '1') continue;
-    aoa.push(Array.from(tr.children).map((td) => cellValue(td.textContent)));
+    // data-excel: valor a exportar cuando la celda muestra algo mas (ej. el requerido corregido con el del PDF abajo)
+    aoa.push(Array.from(tr.children).map((td) => cellValue(td.dataset.excel ?? td.textContent)));
   }
   const ws = XLSX.utils.aoa_to_sheet(aoa);
+  formatearHoja(ws, aoa);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Datos');
   descargarLibro(wb, filename);
@@ -744,6 +889,7 @@ function StockPage({ token }) {
       <section className="page-title">
         <h2>Carga de Stock Critico</h2>
       </section>
+      <AyudaPagina id="stock" />
 
       <section className="toolbar" style={{ flexWrap: 'wrap', alignItems: 'center', fontSize: 12 }}>
         <span style={{ fontWeight: 700 }}>Carpeta vigilada: D:\\FARMACIA\\CRITICO</span>
@@ -1005,6 +1151,7 @@ function ConsumoPage({ token }) {
       <section className="page-title">
         <h2>Consumo mensual</h2>
       </section>
+      <AyudaPagina id="consumo" />
 
       <section className="toolbar">
         <label className="upload-button">
@@ -1253,6 +1400,7 @@ function SugeridosPage({ token }) {
       <section className="page-title">
         <h2>Stock Sugeridos (borrador)</h2>
       </section>
+      <AyudaPagina id="sugeridos" />
 
       <section className="toolbar" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
         <button className="script-button" onClick={generar} disabled={busy}><Sigma size={18} /> Generar / recalcular desde trimestre</button>
@@ -1622,6 +1770,7 @@ function TrimestralPage({ token }) {
       <section className="page-title">
         <h2>Análisis Trimestral</h2>
       </section>
+      <AyudaPagina id="trimestral" sub={vista} />
 
       <section className="toolbar" style={{ flexWrap: 'wrap', alignItems: 'center', fontSize: 12 }}>
         <span style={{ fontWeight: 700 }}>Carpeta vigilada: {sourceDir || 'D:\\FARMACIA\\TRIMESTRE'}</span>
@@ -1991,6 +2140,7 @@ function ComparacionPage({ token }) {
       <section className="page-title">
         <h2>Comparar años</h2>
       </section>
+      <AyudaPagina id="comparar" />
 
       <section className="toolbar">
         <span style={{ fontWeight: 700 }}>Años:</span>
@@ -2233,6 +2383,7 @@ function RotulosPage({ token }) {
       <section className="page-title">
         <h2>Rotulos</h2>
       </section>
+      <AyudaPagina id="rotulos" />
 
       <section className="rotulos-form">
         <label>
@@ -2562,6 +2713,7 @@ function resumenDrive(r) {
   if (r.vinculadas) partes.push(`${r.vinculadas} filas que ya estaban quedaron vinculadas`);
   if (r.haciaPlanilla) partes.push(`${r.haciaPlanilla} cambios enviados al archivo`);
   if (r.haciaBase) partes.push(`${r.haciaBase} cambios traídos del archivo`);
+  if (r.postergada) partes.push('lo que va hacia el archivo espera a que dejen de editarlo');
   return partes.join(', ');
 }
 
@@ -2759,6 +2911,13 @@ function DrivePanel({ client, onSincronizado }) {
                 {drive.ultimaSync ? <span>· última: {new Date(drive.ultimaSync).toLocaleString('es-AR')}</span> : null}
               </div>
               {drive.ultimoError ? <div className="alert">{drive.ultimoError}</div> : null}
+              {!drive.ultimoError && drive.resumen?.postergada ? (
+                <div className="oc-ayuda">
+                  {drive.resumen.postergada.quien} está editando el archivo: sus cambios ya se traen a la base, pero el sistema no
+                  escribe el Excel hasta las {new Date(drive.resumen.postergada.hasta).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} para
+                  no bloquearle los cambios.
+                </div>
+              ) : null}
               <div className="oc-buttons">
                 <a className="ghost oc-link" href={d.url} target="_blank" rel="noreferrer"><ExternalLink size={18} /> Abrir archivo</a>
                 <button type="button" className="ghost" onClick={sincronizarAhora} disabled={!!busy}>
@@ -3553,6 +3712,7 @@ function OrdenesCompraPage({ token }) {
       <section className="page-title">
         <h2>Órdenes de Compra</h2>
       </section>
+      <AyudaPagina id="ordenes" sub={pestana} />
 
       <section className="toolbar">
         <button className={`ghost ${pestana === 'ordenes' ? 'active' : ''}`} onClick={() => setPestana('ordenes')}>Órdenes de compra</button>
@@ -3952,6 +4112,13 @@ function fmtFechaAr(value) {
   const s = String(value).slice(0, 10);
   const [y, m, d] = s.split('-');
   return d ? `${d}/${m}/${y}` : s;
+}
+
+function fmtFechaHoraAr(value) {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 function fmtCantidad(value) {
@@ -4408,109 +4575,248 @@ function etiquetaCiclo(ciclo) {
   return `${sem === '1' ? '1er' : '2do'} semestre ${anio}`;
 }
 
+// Nombre corto de un formulario de requerimiento en papel (formulario / expediente)
+function etiquetaFuente(g) {
+  if (!g) return '';
+  if (g.etiqueta) return g.etiqueta;
+  const exp = g.expediente || '';
+  return g.formulario ? `Form. ${g.formulario} · ${exp}` : exp;
+}
+
+// Motivos de la comparacion entre la carga manual de un anio y el PDF del mismo semestre del anio siguiente.
+// tono: ok (esta bien / no es diferencia real), revisar, alerta
+function motivosComparacion(anio, semCorto) {
+  const sig = anio + 1;
+  return {
+    soloEste: [
+      { k: 'cambioCodigo', tono: 'ok', label: 'Mismo producto, cambió el código', corto: 'No es una diferencia real',
+        texto: `El mismo producto está en el PDF ${sig} con otro código (misma droga y misma concentración, o misma cantidad pedida). Unilos en «Códigos equivalentes» y desaparece de la comparación.` },
+      { k: 'minNo', tono: 'ok', label: 'Ministerio dijo NO comprar', corto: 'Está bien que no esté',
+        texto: `La comunicación del Ministerio para el ${semCorto} semestre ${sig} dice que este código NO se compra (lo provee o adjudica el Ministerio).` },
+      { k: 'minNoNuevo', tono: 'ok', label: 'Ministerio dijo NO (código nuevo)', corto: 'Está bien que no esté',
+        texto: `El Ministerio dice NO comprar el mismo producto con su código nuevo. Está bien que no esté; conviene unir el código viejo con el nuevo en «Códigos equivalentes».` },
+      { k: 'otraConc', tono: 'revisar', label: 'Otra concentración o presentación', corto: 'Revisar',
+        texto: `En el PDF ${sig} está la misma droga, pero en otra concentración o presentación. Revisá si la reemplaza o si faltó pedirla.` },
+      { k: 'sinNada', tono: 'alerta', label: `No hay nada en ${sig}`, corto: 'Revisar',
+        texto: `Esta droga no está en ningún PDF ${sig} ni en la comunicación del Ministerio. Puede faltar un PDF (por ejemplo el de psicofármacos y estupefacientes) o quedó afuera del pedido.` }
+    ],
+    soloSig: [
+      { k: 'reemplaza', tono: 'ok', label: `Código nuevo de algo pedido en ${anio}`, corto: 'No es una diferencia real',
+        texto: `En ${anio} el mismo producto se pidió con el código viejo. Unilos en «Códigos equivalentes» y desaparece de la comparación.` },
+      { k: 'otraConcSig', tono: 'revisar', label: `En ${anio} se pidió otra concentración`, corto: 'Revisar',
+        texto: `En ${anio} se pidió la misma droga pero en otra concentración o presentación. Revisá si en ${anio} también hacía falta esta.` },
+      { k: 'minNoPedido', tono: 'alerta', label: 'Pedido aunque el Ministerio dijo NO', corto: 'Revisar',
+        texto: `Está en el PDF ${sig} aunque la comunicación del Ministerio dice NO comprar ese código.` },
+      { k: 'nuevo', tono: 'revisar', label: `Nuevo en ${sig}`, corto: 'Revisar',
+        texto: `No se pedía en ${anio} (ni con otro código). Si en ${anio} también hacía falta, cargá la cantidad; si no, dejalo en 0.` }
+    ]
+  };
+}
+const TONO_MOTIVO = {
+  ok: { bg: '#e7f6ec', borde: '#9fd3b0', color: '#1f7a3a' },
+  revisar: { bg: '#fff6d6', borde: '#e8cf7a', color: '#8a5a00' },
+  alerta: { bg: '#fde2e1', borde: '#f0a9a4', color: '#b42318' }
+};
+
 // Columnas opcionales de la carga manual. get(d, fila, meta) -> numero | texto | null
 function columnasCargaManual(anio, semestre) {
   const sem = semestre === 1 ? '1er sem.' : '2do sem.';
+  const meses = semestre === 1 ? 'enero a junio' : 'julio a diciembre';
   const num = (v) => (v == null || Number.isNaN(v) ? null : v);
   return [
-    { key: 'consumoSem', grupo: 'Consumo', label: `Consumo ${sem} ${anio}`, get: (d) => num(d.consumoSem ?? 0), title: 'Análisis Trimestral, todos los sectores' },
-    { key: 'promMensual', grupo: 'Consumo', label: 'Promedio mensual', get: (d, f, m) => (m.mesesSem ? Math.round((d.consumoSem || 0) / m.mesesSem) : null) },
-    { key: 'consumoSemAnt', grupo: 'Consumo', label: `Consumo ${sem} ${anio - 1}`, get: (d) => num(d.consumoSemAnt) },
-    { key: 'consumoAnioSig', grupo: 'Consumo', label: `Consumo ${anio + 1}`, get: (d) => num(d.consumoAnioSig) },
-    { key: 'pedidoOtroSem', grupo: 'Pedido', label: `Pedido ${semestre === 1 ? '2do' : '1er'} sem. ${anio}`, get: (d) => num(d.pedidoOtroSem) },
-    { key: 'totalAnio', grupo: 'Pedido', label: `Total pedido ${anio}`, get: (d) => num(d.totalAnio) },
-    { key: 'reqAnioSig', grupo: 'Pedido', label: `Req. PDF ${anio + 1}`, get: (d) => num(d.reqAnioSig) },
-    { key: 'reqAnioSig2', grupo: 'Pedido', label: `Req. PDF ${anio + 2}`, get: (d) => num(d.reqAnioSig2) },
-    { key: 'stockActual', grupo: 'Stock', label: 'Stock actual', get: (d) => num(d.stockActual) },
-    { key: 'minMs', grupo: 'Stock', label: 'Mín MS', get: (d) => num(d.minMs) },
-    { key: 'maxMs', grupo: 'Stock', label: 'Máx MS', get: (d) => num(d.maxMs) },
-    { key: 'minSug', grupo: 'Stock', label: 'Mín sugerido', get: (d) => num(d.minSug) },
-    { key: 'maxSug', grupo: 'Stock', label: 'Máx sugerido', get: (d) => num(d.maxSug) },
-    { key: 'proxVto', grupo: 'Vencimientos', label: 'Próximo vto.', tipo: 'fecha', get: (d) => d.proxVto || null },
-    { key: 'proxVtoCant', grupo: 'Vencimientos', label: 'Cant. que vence', get: (d) => num(d.proxVtoCant) },
-    { key: 'ocPedida', grupo: 'Compras', label: `O.C. pedida ${sem} ${anio}`, get: (d) => num(d.ocPedida) },
-    { key: 'ocEntregada', grupo: 'Compras', label: `O.C. entregada ${sem} ${anio}`, get: (d) => num(d.ocEntregada) },
-    { key: 'justiprecio', grupo: 'Compras', label: 'Justiprecio', tipo: 'pesos', get: (d) => num(d.justiprecio) },
-    { key: 'bajasSem', grupo: 'Bajas', label: `Bajas ${sem} ${anio}`, get: (d) => num(d.bajasSem), title: 'Descarte y por vencimiento (Farmacia MS, desde oct 2025)' },
-    { key: 'difConsumo', grupo: 'Calculadas', label: 'Pedido − consumo', get: (d, f) => Number(f.cantidad) - (d.consumoSem || 0) },
-    { key: 'difPct', grupo: 'Calculadas', label: '% pedido vs consumo', tipo: 'pct', get: (d, f) => (d.consumoSem ? Math.round((Number(f.cantidad) / d.consumoSem) * 100) : null) },
-    { key: 'monto', grupo: 'Calculadas', label: 'Monto estimado', tipo: 'pesos', get: (d, f) => (d.justiprecio != null ? Number(f.cantidad) * d.justiprecio : null) }
+    { key: 'consumoSem', grupo: 'Consumo', label: `Consumo ${sem} ${anio}`, get: (d) => num(d.consumoSem ?? 0),
+      title: `Unidades que se gastaron (salieron de farmacia) de ${meses} de ${anio}, todos los sectores. Sale del Análisis Trimestral. ${EQUIV_TXT}` },
+    { key: 'promMensual', grupo: 'Consumo', label: `Consumo promedio por mes ${sem} ${anio}`, get: (d, f, m) => (m.mesesSem ? Math.round((d.consumoSem || 0) / m.mesesSem) : null),
+      title: `Consumo del ${sem} ${anio} dividido por los meses que ya están cargados en el Análisis Trimestral.` },
+    { key: 'consumoSemAnt', grupo: 'Consumo', label: `Consumo ${sem} ${anio - 1}`, get: (d) => num(d.consumoSemAnt),
+      title: `Unidades que se gastaron de ${meses} de ${anio - 1}, todos los sectores (Análisis Trimestral). ${EQUIV_TXT}` },
+    { key: 'consumoAnioSig', grupo: 'Consumo', label: `Consumo ${anio + 1}`, get: (d) => num(d.consumoAnioSig),
+      title: `Unidades gastadas en ${anio + 1} hasta el último trimestre cargado (Análisis Trimestral). ${EQUIV_TXT}` },
+    { key: 'pedidoOtroSem', grupo: 'Requerido', label: `Cargado a mano ${semestre === 1 ? '2do' : '1er'} sem. ${anio}`, get: (d) => num(d.pedidoOtroSem),
+      title: `Lo cargado en esta misma pantalla para el ${semestre === 1 ? '2do' : '1er'} semestre de ${anio}.` },
+    { key: 'totalAnio', grupo: 'Requerido', label: `Cargado a mano total ${anio}`, get: (d) => num(d.totalAnio),
+      title: `Suma de lo cargado en esta pantalla para los dos semestres de ${anio}.` },
+    { key: 'reqSigSem1', grupo: 'Requerido', label: `Requerido PDF 1er sem. ${anio + 1}`, get: (d) => num(d.reqSigSem1),
+      title: `Suma de lo pedido en los PDF de requerimiento del Ministerio para enero a junio de ${anio + 1}. ${EQUIV_TXT}` },
+    { key: 'reqSigSem2', grupo: 'Requerido', label: `Requerido PDF 2do sem. ${anio + 1}`, get: (d) => num(d.reqSigSem2),
+      title: `Suma de lo pedido en los PDF de requerimiento del Ministerio para julio a diciembre de ${anio + 1}. ${EQUIV_TXT}` },
+    { key: 'reqAnioSig', grupo: 'Requerido', label: `Requerido PDF ${anio + 1} (año entero)`, get: (d) => num(d.reqAnioSig),
+      title: `Suma de los dos semestres de ${anio + 1} en los PDF de requerimiento del Ministerio. ${EQUIV_TXT}` },
+    { key: 'reqAnioSig2', grupo: 'Requerido', label: `Requerido PDF ${anio + 2} (año entero)`, get: (d) => num(d.reqAnioSig2),
+      title: `Suma de lo pedido en los PDF de requerimiento del Ministerio para ${anio + 2}. ${EQUIV_TXT}` },
+    { key: 'stockActual', grupo: 'Stock', label: 'Stock actual', get: (d) => num(d.stockActual),
+      title: `Unidades en stock en la última descarga de Farmacia MS (fecha arriba, «Stock al…»), sumando todos los sectores. ${EQUIV_TXT}` },
+    { key: 'minMs', grupo: 'Stock', label: 'Stock mínimo (Farmacia MS)', get: (d) => num(d.minMs), title: 'Stock mínimo cargado en Farmacia MS, sumando los sectores.' },
+    { key: 'maxMs', grupo: 'Stock', label: 'Stock máximo (Farmacia MS)', get: (d) => num(d.maxMs), title: 'Stock máximo cargado en Farmacia MS, sumando los sectores.' },
+    { key: 'minSug', grupo: 'Stock', label: 'Stock mínimo sugerido', get: (d) => num(d.minSug), title: 'Stock mínimo sugerido por el sistema a partir del consumo (pantalla Análisis Trimestral).' },
+    { key: 'maxSug', grupo: 'Stock', label: 'Stock máximo sugerido', get: (d) => num(d.maxSug), title: 'Stock máximo sugerido por el sistema a partir del consumo (pantalla Análisis Trimestral).' },
+    { key: 'proxVto', grupo: 'Vencimientos', label: 'Próximo vencimiento', tipo: 'fecha', get: (d) => d.proxVto || null,
+      title: 'Fecha de vencimiento más cercana (desde hoy) de lo que hay en stock, según la última descarga de Vencimientos de Farmacia MS.' },
+    { key: 'proxVtoCant', grupo: 'Vencimientos', label: 'Unidades que vencen en esa fecha', get: (d) => num(d.proxVtoCant),
+      title: 'Cuántas unidades en stock vencen en la fecha de «Próximo vencimiento».' },
+    { key: 'ocPedida', grupo: 'Compras', label: `Comprado (O.C.) ${sem} ${anio}`, get: (d) => num(d.ocPedida),
+      title: `Unidades pedidas en las órdenes de compra del ${sem} ${anio}, según la planilla de O.C. de Drive. ${EQUIV_TXT}` },
+    { key: 'ocEntregada', grupo: 'Compras', label: `Entregado (O.C.) ${sem} ${anio}`, get: (d) => num(d.ocEntregada),
+      title: `Unidades ya entregadas por el proveedor de esas órdenes de compra del ${sem} ${anio}.` },
+    { key: 'justiprecio', grupo: 'Compras', label: 'Justiprecio', tipo: 'pesos', get: (d) => num(d.justiprecio),
+      title: 'Precio unitario de referencia del PDF de requerimiento más reciente que lo trae.' },
+    { key: 'bajasSem', grupo: 'Bajas', label: `Bajas ${sem} ${anio}`, get: (d) => num(d.bajasSem),
+      title: `Unidades dadas de baja por descarte o vencimiento de ${meses} de ${anio} (Farmacia MS; hay datos desde octubre de 2025). ${EQUIV_TXT}` },
+    { key: 'difConsumo', grupo: 'Calculadas', label: `Cantidad − consumo ${sem} ${anio}`, get: (d, f) => Number(f.cantidad) - (d.consumoSem || 0),
+      title: `Cálculo: la cantidad cargada en este renglón menos el consumo del ${sem} ${anio}. Negativo (rojo) = se pide menos de lo que se gastó; positivo (verde) = se pide más.` },
+    { key: 'difPct', grupo: 'Calculadas', label: `Cantidad vs consumo ${sem} ${anio} (%)`, tipo: 'pct', get: (d, f) => (d.consumoSem ? Math.round((Number(f.cantidad) / d.consumoSem) * 100) : null),
+      title: `Cálculo: cantidad cargada ÷ consumo del ${sem} ${anio} × 100. 100 % = se pide lo mismo que se gastó.` },
+    { key: 'monto', grupo: 'Calculadas', label: 'Monto estimado ($)', tipo: 'pesos', get: (d, f) => (d.justiprecio != null ? Number(f.cantidad) * d.justiprecio : null),
+      title: 'Cálculo: cantidad cargada × justiprecio.' }
   ];
 }
 const COLUMNAS_MANUAL_DEFAULT = ['consumoSem', 'stockActual', 'difConsumo'];
+// Columnas fijas que se pueden ocultar desde el boton Columnas
+function basicasReqCodigo(ciclo) {
+  return [
+    { key: 'codigo', label: 'Código', fija: true, title: 'Código del Ministerio que figura en el PDF de requerimiento.' },
+    { key: 'sigaf', label: 'Cód. Sigaf', title: 'Código SIGAF del PDF de requerimiento.' },
+    { key: 'droga', label: 'Droga', title: 'Nombre de la droga en el PDF.' },
+    { key: 'descripcion', label: 'Descripción', title: 'Descripción del producto en el PDF.' },
+    { key: 'cantidad', label: `Requerido ${cortoCiclo(ciclo)}`, title: `Suma de lo pedido para este código en todos los PDF de requerimiento del ${cortoCiclo(ciclo)} (${rangoCiclo(ciclo)}). Se puede corregir con un clic: el valor del PDF se guarda y en amarillo se ven los corregidos. Total $ y las columnas calculadas usan el valor corregido.` },
+    { key: 'veces', label: 'Veces', title: 'En cuántos renglones de los PDF aparece el código (naranja: en varios requerimientos; rojo: repetido dentro del mismo).' },
+    { key: 'requerimientos', label: 'Requerimientos', title: 'En qué PDF, hoja e ítem aparece.' },
+    { key: 'justiprecio', label: 'Justiprecio', title: 'Precio unitario de referencia que trae el PDF.' },
+    { key: 'total', label: 'Total $', title: 'Cálculo: requerido × justiprecio.' }
+  ];
+}
+const BASICAS_CARGA_MANUAL = [
+  { key: 'controlado', label: 'Controlado', fija: true, title: 'Al tildar, el renglón pasa a la pestaña Controlados.' },
+  { key: 'codigo', label: 'Código', fija: true, title: 'Código del Ministerio. Abajo, con ⇔, los códigos equivalentes (viejos) que se suman.' },
+  { key: 'droga', label: 'Droga', title: 'Nombre de la droga.' },
+  { key: 'descripcion', label: 'Descripción', title: 'Descripción del producto.' },
+  { key: 'fuentes', label: 'Formulario / Exp.', title: 'Formularios de requerimiento o expedientes en papel donde figura.' },
+  { key: 'cantidad', label: 'Cantidad', title: 'Cantidad que se carga a mano para este semestre.' },
+  { key: 'pedidoSig', label: 'Pedido año siguiente', title: 'Lo pedido para el mismo semestre del año siguiente en los PDF de requerimiento del Ministerio.' },
+  { key: 'acciones', label: 'Editar / Quitar', title: 'Botones para editar o quitar el renglón.' }
+];
 
 function formatoColumna(col, v) {
   if (v == null) return '—';
   if (col.tipo === 'fecha') return fmtFechaAr(v);
   if (col.tipo === 'pesos') return formatPesos(v);
   if (col.tipo === 'pct') return `${v} %`;
+  if (col.tipo === 'texto') return String(v);
   return Number(v).toLocaleString('es-AR');
 }
 
 // Columnas elegibles del Analisis de Requerimiento (pestaña Por codigo). get(d, g) con d = datos del codigo y g = grupo de la fila
+// Nombre corto y rango de meses de un ciclo 'AAAA-S'
+function cortoCiclo(c) { const [a, x] = String(c || '').split('-'); return `${x === '1' ? '1er' : '2do'} sem. ${a}`; }
+function rangoCiclo(c) { const [a, x] = String(c || '').split('-'); return x === '1' ? `enero a junio de ${a}` : `julio a diciembre de ${a}`; }
+const EQUIV_TXT = 'Suma los códigos viejos y nuevos de la misma droga (Códigos equivalentes).';
+
 function columnasAnalisisReq(meta, ciclo) {
   const m = meta || {};
   const num = (v) => (v == null || Number.isNaN(v) ? null : v);
-  const corto = (c) => { const [a, s] = String(c).split('-'); return `${s === '1' ? '1er' : '2do'} sem. ${a}`; };
+  const corto = cortoCiclo;
   const semActual = semestreDeCiclo(ciclo);
   const cols = [];
   const ciclosCons = m.ciclosConsumo || [];
   for (const c of ciclosCons) {
     const meses = m.mesesConsumo?.[c] || 0;
     const parcial = meses && meses < 6 ? ` (${meses} meses)` : '';
-    cols.push({ key: `cons:${c}`, grupo: 'Consumo', label: `Consumo ${corto(c)}${parcial}`, title: 'Análisis Trimestral, todos los sectores', get: (d) => num(d.consumo?.[c] ?? 0) });
+    cols.push({ key: `cons:${c}`, grupo: 'Consumo', label: `Consumo ${corto(c)}${parcial}`,
+      title: `Unidades que se gastaron (salieron de farmacia) de ${rangoCiclo(c)}, todos los sectores. Sale del Análisis Trimestral${parcial ? `; por ahora hay ${meses} meses cargados` : ''}. ${EQUIV_TXT}`,
+      get: (d) => num(d.consumo?.[c] ?? 0) });
   }
   for (const c of ciclosCons) {
     const meses = m.mesesConsumo?.[c] || 0;
-    cols.push({ key: `prom:${c}`, grupo: 'Promedio mensual', label: `Prom. mensual ${corto(c)}`, get: (d) => (meses ? Math.round((d.consumo?.[c] || 0) / meses) : null) });
+    cols.push({ key: `prom:${c}`, grupo: 'Promedio mensual', label: `Consumo promedio por mes ${corto(c)}`,
+      title: `Consumo del ${corto(c)} dividido por los meses con datos (${meses}).`,
+      get: (d) => (meses ? Math.round((d.consumo?.[c] || 0) / meses) : null) });
   }
-  const ciclosMan = Array.from(new Set(['2025-1', '2025-2', ...(m.ciclosManual || [])])).sort();
-  for (const c of ciclosMan) cols.push({ key: `man:${c}`, grupo: 'Pedidos', label: `Carga manual ${corto(c)}`, get: (d) => num(d.manual?.[c]) });
-  for (const c of (m.ciclosReq || []).filter((x) => x !== ciclo)) cols.push({ key: `req:${c}`, grupo: 'Pedidos', label: `Req. PDF ${corto(c)}`, get: (d) => num(d.req?.[c]) });
+  const ciclosMan = Array.from(new Set(m.ciclosManual || [])).sort();
+  for (const c of ciclosMan) cols.push({ key: `man:${c}`, grupo: 'Requerido', label: `Cargado a mano ${corto(c)}`,
+    title: `Cantidad cargada a mano en la pantalla Carga Requerimiento para el ${corto(c)}. ${EQUIV_TXT}`, get: (d) => num(d.manual?.[c]) });
+  for (const c of (m.ciclosReq || [])) cols.push({ key: `req:${c}`, grupo: 'Requerido', label: `Requerido PDF ${corto(c)}${c === ciclo ? ' (este)' : ''}`,
+    title: `Suma de lo pedido en los PDF de requerimiento del Ministerio para el período de ${rangoCiclo(c)}.${c === ciclo ? ' Es el mismo número que la columna «Requerido» de la tabla.' : ''} ${EQUIV_TXT}`,
+    get: (d) => num(d.req?.[c]) });
+  const fechaStock = m.stockFecha ? ` del ${fmtFechaAr(m.stockFecha)}` : '';
   cols.push(
-    { key: 'stockActual', grupo: 'Stock', label: 'Stock actual', get: (d) => num(d.stockActual) },
-    { key: 'minMs', grupo: 'Stock', label: 'Mín MS', get: (d) => num(d.minMs) },
-    { key: 'maxMs', grupo: 'Stock', label: 'Máx MS', get: (d) => num(d.maxMs) },
-    { key: 'minSug', grupo: 'Stock', label: 'Mín sugerido', get: (d) => num(d.minSug) },
-    { key: 'maxSug', grupo: 'Stock', label: 'Máx sugerido', get: (d) => num(d.maxSug) },
-    { key: 'proxVto', grupo: 'Vencimientos', label: 'Próximo vto.', tipo: 'fecha', get: (d) => d.proxVto || null },
-    { key: 'proxVtoCant', grupo: 'Vencimientos', label: 'Cant. que vence', get: (d) => num(d.proxVtoCant) }
+    { key: 'stockActual', grupo: 'Stock', label: 'Stock actual', title: `Unidades en stock en la última descarga de Farmacia MS${fechaStock}, sumando todos los sectores. ${EQUIV_TXT}`, get: (d) => num(d.stockActual) },
+    { key: 'minMs', grupo: 'Stock', label: 'Stock mínimo (Farmacia MS)', title: 'Stock mínimo cargado en Farmacia MS, sumando los sectores.', get: (d) => num(d.minMs) },
+    { key: 'maxMs', grupo: 'Stock', label: 'Stock máximo (Farmacia MS)', title: 'Stock máximo cargado en Farmacia MS, sumando los sectores.', get: (d) => num(d.maxMs) },
+    { key: 'minSug', grupo: 'Stock', label: 'Stock mínimo sugerido', title: 'Stock mínimo sugerido por el sistema a partir del consumo (pantalla Análisis Trimestral).', get: (d) => num(d.minSug) },
+    { key: 'maxSug', grupo: 'Stock', label: 'Stock máximo sugerido', title: 'Stock máximo sugerido por el sistema a partir del consumo (pantalla Análisis Trimestral).', get: (d) => num(d.maxSug) },
+    { key: 'proxVto', grupo: 'Vencimientos', label: 'Próximo vencimiento', tipo: 'fecha', title: 'Fecha de vencimiento más cercana (desde hoy) de lo que hay en stock, según la última descarga de Vencimientos de Farmacia MS.', get: (d) => d.proxVto || null },
+    { key: 'proxVtoCant', grupo: 'Vencimientos', label: 'Unidades que vencen en esa fecha', title: 'Cuántas unidades en stock vencen en la fecha de «Próximo vencimiento».', get: (d) => num(d.proxVtoCant) }
   );
   for (const c of m.ciclosOc || []) {
-    cols.push({ key: `ocp:${c}`, grupo: 'Compras (O.C.)', label: `O.C. pedida ${corto(c)}`, get: (d) => num(d.ocPedida?.[c]) });
-    cols.push({ key: `oce:${c}`, grupo: 'Compras (O.C.)', label: `O.C. entregada ${corto(c)}`, get: (d) => num(d.ocEntregada?.[c]) });
+    cols.push({ key: `ocp:${c}`, grupo: 'Compras (O.C.)', label: `Comprado (O.C.) ${corto(c)}`, title: `Unidades pedidas en las órdenes de compra del ${corto(c)}, según la planilla de O.C. de Drive. ${EQUIV_TXT}`, get: (d) => num(d.ocPedida?.[c]) });
+    cols.push({ key: `oce:${c}`, grupo: 'Compras (O.C.)', label: `Entregado (O.C.) ${corto(c)}`, title: `Unidades ya entregadas por el proveedor de esas órdenes de compra del ${corto(c)}.`, get: (d) => num(d.ocEntregada?.[c]) });
   }
-  for (const c of m.ciclosBajas || []) cols.push({ key: `baj:${c}`, grupo: 'Bajas', label: `Bajas ${corto(c)}`, title: 'Descarte y por vencimiento (Farmacia MS, desde oct 2025)', get: (d) => num(d.bajas?.[c]) });
+  for (const c of m.ciclosBajas || []) cols.push({ key: `baj:${c}`, grupo: 'Bajas', label: `Bajas ${corto(c)}`, title: `Unidades dadas de baja por descarte o vencimiento de ${rangoCiclo(c)} (Farmacia MS; hay datos desde octubre de 2025). ${EQUIV_TXT}`, get: (d) => num(d.bajas?.[c]) });
 
   // Calculadas: contra el mismo semestre del anio anterior con consumo completo (o el ultimo con datos)
   const mismos = ciclosCons.filter((c) => c < ciclo && Number(c.split('-')[1]) === semActual);
   const ref = mismos[mismos.length - 1] || ciclosCons.filter((c) => c < ciclo).pop() || null;
   const mesesRef = ref ? (m.mesesConsumo?.[ref] || 0) : 0;
-  const manRef = semActual ? `2025-${semActual}` : null;
+  const anioCiclo = Number(String(ciclo || '').split('-')[0]);
+  const manRef = semActual && anioCiclo ? `${anioCiclo - 1}-${semActual}` : null;
+  const req = `requerido ${corto(ciclo)}`;
   if (ref) {
     cols.push(
-      { key: 'calc:dif', grupo: 'Calculadas', label: `Pedido − consumo ${corto(ref)}`, get: (d, g) => Number(g.cantidad || 0) - (d.consumo?.[ref] || 0) },
-      { key: 'calc:pct', grupo: 'Calculadas', label: `% pedido vs consumo ${corto(ref)}`, tipo: 'pct', get: (d, g) => (d.consumo?.[ref] ? Math.round((Number(g.cantidad || 0) / d.consumo[ref]) * 100) : null) },
-      { key: 'calc:cobertura', grupo: 'Calculadas', label: 'Meses de cobertura (stock + pedido)', title: `(stock actual + pedido) / consumo mensual de ${corto(ref)}`, get: (d, g) => {
-        const mensual = mesesRef ? (d.consumo?.[ref] || 0) / mesesRef : 0;
-        return mensual ? Math.round(((Number(d.stockActual || 0) + Number(g.cantidad || 0)) / mensual) * 10) / 10 : null;
-      } }
+      { key: 'calc:dif', grupo: 'Calculadas', label: `Requerido ${corto(ciclo)} − consumo ${corto(ref)}`,
+        title: `Cálculo: ${req} (PDF) menos el consumo del ${corto(ref)}. Negativo (rojo) = se pide menos de lo que se gastó.`,
+        get: (d, g) => Number(g.cantidad || 0) - (d.consumo?.[ref] || 0) },
+      { key: 'calc:pct', grupo: 'Calculadas', label: `Requerido vs consumo ${corto(ref)} (%)`, tipo: 'pct',
+        title: `Cálculo: ${req} ÷ consumo del ${corto(ref)} × 100. 100 % = se pide lo mismo que se gastó; menos de 100 % = se pide menos.`,
+        get: (d, g) => (d.consumo?.[ref] ? Math.round((Number(g.cantidad || 0) / d.consumo[ref]) * 100) : null) },
+      { key: 'calc:cobertura', grupo: 'Calculadas', label: 'Meses que alcanza (stock + requerido)',
+        title: `Cálculo: (stock actual + ${req}) ÷ consumo promedio por mes del ${corto(ref)}. Cuántos meses alcanzaría con lo que hay más lo que se pide.`,
+        get: (d, g) => {
+          const mensual = mesesRef ? (d.consumo?.[ref] || 0) / mesesRef : 0;
+          return mensual ? Math.round(((Number(d.stockActual || 0) + Number(g.cantidad || 0)) / mensual) * 10) / 10 : null;
+        } }
     );
   }
   if (manRef) {
     cols.push(
-      { key: 'calc:vsManual', grupo: 'Calculadas', label: `Pedido − carga manual ${corto(manRef)}`, get: (d, g) => (d.manual?.[manRef] == null ? null : Number(g.cantidad || 0) - d.manual[manRef]) }
+      { key: 'calc:vsManual', grupo: 'Calculadas', label: `Requerido ${corto(ciclo)} − cargado a mano ${corto(manRef)}`,
+        title: `Cálculo: ${req} (PDF) menos lo cargado a mano para el ${corto(manRef)} en Carga Requerimiento.`,
+        get: (d, g) => (d.manual?.[manRef] == null ? null : Number(g.cantidad || 0) - d.manual[manRef]) }
     );
   }
   return { cols, ref };
 }
 
 // Panel de casillas para elegir columnas (agrupadas)
-function PanelColumnas({ columnas, visibles, onCambiar, porDefecto, onCerrar }) {
+// Columnas fijas de una tabla que se pueden ocultar (las de "fija: true" no). Se recuerdan en el navegador.
+function useColumnasOcultas(clave) {
+  const [ocultas, setOcultasState] = useState(() => {
+    try { const v = JSON.parse(localStorage.getItem(clave) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
+  });
+  const setOcultas = (lista) => {
+    setOcultasState(lista);
+    try { localStorage.setItem(clave, JSON.stringify(lista)); } catch { /* sin almacenamiento */ }
+  };
+  return [ocultas, setOcultas];
+}
+
+function PanelColumnas({ columnas, visibles, onCambiar, porDefecto, onCerrar, basicas, ocultas = [], onOcultas }) {
   const grupos = Array.from(new Set(columnas.map((c) => c.grupo)));
   const alternar = (key) => onCambiar(visibles.includes(key) ? visibles.filter((k) => k !== key) : [...visibles, key]);
+  const alternarBasica = (key) => onOcultas(ocultas.includes(key) ? ocultas.filter((k) => k !== key) : [...ocultas, key]);
+  const sacables = (basicas || []).filter((b) => !b.fija).map((b) => b.key);
   return (
     <div style={{ position: 'absolute', zIndex: 30, top: '100%', left: 0, marginTop: 4, background: '#fff', border: '1px solid #c9d3da', borderRadius: 8, padding: 14, boxShadow: '0 8px 22px rgba(0,0,0,.14)', display: 'flex', flexWrap: 'wrap', gap: 22, maxWidth: 'min(1100px, 94vw)', maxHeight: '70vh', overflowY: 'auto' }}>
+      {basicas?.length ? (
+        <div style={{ minWidth: 180 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Básicas</div>
+          {basicas.map((b) => (
+            <label key={b.key} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14, margin: '3px 0', cursor: b.fija ? 'default' : 'pointer', color: b.fija ? '#7a8790' : undefined }} title={`${b.title || ''}${b.fija ? ' (siempre visible)' : ''}`}>
+              <input type="checkbox" checked={b.fija || !ocultas.includes(b.key)} disabled={b.fija} onChange={() => alternarBasica(b.key)} />
+              {b.label}
+            </label>
+          ))}
+        </div>
+      ) : null}
       {grupos.map((g) => (
         <div key={g} style={{ minWidth: 180 }}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>{g}</div>
@@ -4523,12 +4829,337 @@ function PanelColumnas({ columnas, visibles, onCambiar, porDefecto, onCerrar }) 
         </div>
       ))}
       <div style={{ width: '100%', display: 'flex', gap: 8 }}>
-        <button type="button" className="ghost small" onClick={() => onCambiar(columnas.map((c) => c.key))}>Todas</button>
-        <button type="button" className="ghost small" onClick={() => onCambiar([])}>Ninguna</button>
-        <button type="button" className="ghost small" onClick={() => onCambiar(porDefecto)}>Por defecto</button>
+        <button type="button" className="ghost small" onClick={() => { onCambiar(columnas.map((c) => c.key)); if (onOcultas) onOcultas([]); }}>Todas</button>
+        <button type="button" className="ghost small" onClick={() => { onCambiar([]); if (onOcultas) onOcultas(sacables); }}>Ninguna</button>
+        <button type="button" className="ghost small" onClick={() => { onCambiar(porDefecto); if (onOcultas) onOcultas([]); }}>Por defecto</button>
         <button type="button" className="small" onClick={onCerrar} style={{ marginLeft: 'auto' }}>Listo</button>
       </div>
     </div>
+  );
+}
+
+// Donde aparece un codigo (stock, consumo, O.C., requerimiento de PDF): ayuda a ver cual es el viejo y cual el nuevo
+function textoHuella(h) {
+  if (!h) return '';
+  const p = [];
+  p.push(h.stock != null ? `stock ${Number(h.stock).toLocaleString('es-AR')}` : 'sin stock actual');
+  if (h.consumo) p.push(`consumo ${h.consumo.desde === h.consumo.hasta ? h.consumo.desde : `${h.consumo.desde}–${h.consumo.hasta}`} (${Number(h.consumo.cantidad).toLocaleString('es-AR')})`);
+  else if (h.consumoMs) p.push(`consumo MS ${h.consumoMs.anio} (${Number(h.consumoMs.total).toLocaleString('es-AR')})`);
+  else p.push('sin consumo');
+  if (h.oc) p.push(`O.C. ${h.oc.desde === h.oc.hasta ? h.oc.desde : `${h.oc.desde}–${h.oc.hasta}`} (${h.oc.n})`);
+  if (h.reqPdf) p.push(`req. PDF ${h.reqPdf.anio}`);
+  return p.join(' · ');
+}
+
+// Detalle chiquito de un codigo: consumo de cada año y cada O.C. con numero, proveedor y cantidad
+function DetalleHuella({ h }) {
+  if (!h) return null;
+  const n = (v) => Number(v || 0).toLocaleString('es-AR');
+  const consumo = (h.consumoAnios || []).map((c) => `${c.anio}: ${n(c.cantidad)}${c.ms ? ' (MS)' : ''}`);
+  const ocs = (h.ocs || []).map((o) => `${o.numero || 's/n'}${o.proveedor ? ` ${o.proveedor}` : ''}${o.cantidad != null ? ` (${n(o.cantidad)})` : ''}`);
+  const MAX = 4;
+  if (!consumo.length && !ocs.length) return null;
+  return (
+    <div style={{ fontSize: 11.5, color: '#6b7a85', lineHeight: 1.35 }}>
+      {consumo.length ? <div>Consumo · {consumo.join(' · ')}</div> : null}
+      {ocs.length ? (
+        <div title={ocs.join('\n')}>O.C. · {ocs.slice(0, MAX).join(' · ')}{ocs.length > MAX ? ` · y ${ocs.length - MAX} más` : ''}</div>
+      ) : null}
+    </div>
+  );
+}
+
+const NIVEL_EQUIV = {
+  alta: { label: 'Coincide todo', bg: '#e3f4e8', color: '#1f7a3a' },
+  media: { label: 'Falta un dato', bg: '#fff4d6', color: '#8a5a00' },
+  baja: { label: 'Faltan datos', bg: '#f1f3f5', color: '#5b6b76' },
+  no: { label: 'No coincide', bg: '#fdecec', color: '#b42318' },
+  manual: { label: 'Elegido a mano', bg: '#e6eefb', color: '#174e8d' }
+};
+
+// Droga / concentracion / presentacion: ✓ coincide, ≈ parecida, ? falta el dato en un codigo, ✗ no coincide
+function ChequeosEquiv({ cmp }) {
+  if (!cmp) return null;
+  const est = {
+    si: ['✓', '#1f7a3a', '#e3f4e8'],
+    parecida: ['≈', '#8a5a00', '#fff4d6'],
+    falta: ['?', '#5b6b76', '#f1f3f5'],
+    no: ['✗', '#b42318', '#fdecec']
+  };
+  const titulos = { si: 'coincide', parecida: 'parecida', falta: 'falta el dato en uno de los códigos', no: 'NO coincide' };
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
+      {[['droga', 'Droga'], ['concentracion', 'Concentración'], ['presentacion', 'Presentación']].map(([k, label]) => {
+        const [ic, color, bg] = est[cmp[k]] || est.falta;
+        const det = cmp.detalle?.[k];
+        return (
+          <span key={k} title={`${label}: ${titulos[cmp[k]] || ''}${det ? ` · ${det}` : ''}`} style={{ background: bg, color, borderRadius: 4, padding: '1px 6px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {ic} {label}{cmp[k] !== 'si' && det ? `: ${det}` : ''}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// Historial de cambios de codigo: sugiere, para cada renglon por controlar con cantidad 0, el codigo
+// (viejo) con el que el mismo producto ya figura, y permite unificarlos o marcar que no son el mismo.
+function UnificarCodigosPanel({ client, anio, semestre, catalogo, onCambio, onCerrar }) {
+  const [vista, setVista] = useState('sugerencias');
+  const [datos, setDatos] = useState(null);
+  const [hist, setHist] = useState(null);
+  const [error, setError] = useState('');
+  const [aviso, setAviso] = useState('');
+  const [trabajando, setTrabajando] = useState('');
+  const [quedaNuevo, setQuedaNuevo] = useState(true);
+  const [soloConSug, setSoloConSug] = useState(true);
+  const [filtro, setFiltro] = useState('');
+  const [busqueda, setBusqueda] = useState({});
+  const [extras, setExtras] = useState({});
+  const [auditoria, setAuditoria] = useState({});
+  const [soloNoCoinciden, setSoloNoCoinciden] = useState(false);
+
+  async function cargarSugerencias() {
+    setError('');
+    try { setDatos(await client.equivSugerencias(anio, semestre)); } catch (e) { setError(e.message); }
+  }
+  async function cargarHistorial() {
+    setError('');
+    try {
+      const [h, a] = await Promise.all([client.equivHistorial(), client.equivAuditoria()]);
+      setHist(h.data || []);
+      setAuditoria(Object.fromEntries((a.data || []).map((x) => [x.id, x.comparacion])));
+    } catch (e) { setError(e.message); }
+  }
+  const noCoinciden = (hist || []).filter((h) => h.estado === 'igual' && auditoria[h.id] && !auditoria[h.id].ok).length;
+  useEffect(() => { cargarSugerencias(); cargarHistorial(); }, [anio, semestre]);
+
+  const huellas = datos?.huellas || {};
+  const pendientes = useMemo(() => {
+    const palabras = filtro.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return (datos?.pendientes || []).filter((p) => {
+      if (soloConSug && !p.candidatos.length && !(extras[p.codigo] || []).length) return false;
+      const txt = `${p.codigo} ${p.droga} ${p.descripcion} ${p.candidatos.map((c) => `${c.codigo} ${c.descripcion}`).join(' ')}`.toLowerCase();
+      return palabras.every((w) => txt.includes(w));
+    });
+  }, [datos, soloConSug, filtro, extras]);
+  const conSugerencia = (datos?.pendientes || []).filter((p) => p.candidatos.length).length;
+
+  function quitarPendiente(codigos) {
+    setDatos((d) => d && ({ ...d, pendientes: d.pendientes.filter((p) => !codigos.includes(p.codigo)) }));
+  }
+
+  async function unificar(p, c, forzar = false) {
+    const queda = quedaNuevo ? p.codigo : c.codigo;
+    setTrabajando(`${p.codigo}|${c.codigo}`);
+    setError('');
+    try {
+      try {
+        await client.equivUnificar({ anio, semestre, codigo: p.codigo, con: c.codigo, queda, forzar });
+      } catch (e) {
+        if (e.status !== 422) throw e;
+        setTrabajando('');
+        const resp = window.prompt(`${p.codigo} y ${c.codigo} NO son el mismo producto según la descripción.\n${e.message}\n\nSolo unificalos si estás seguro de que la descripción está mal. Para unificarlos igual escribí UNIFICAR:`);
+        if (String(resp || '').trim().toUpperCase() !== 'UNIFICAR') return;
+        setTrabajando(`${p.codigo}|${c.codigo}`);
+        await client.equivUnificar({ anio, semestre, codigo: p.codigo, con: c.codigo, queda, forzar: true });
+      }
+      setAviso(`Unificados ${p.codigo} y ${c.codigo}${c.manual ? ` · queda un solo renglón con el código ${queda}` : ''}.`);
+      quitarPendiente([p.codigo, ...(c.manual && !c.manual.controlado && !c.manual.cantidad ? [c.codigo] : [])]);
+      onCambio();
+      cargarHistorial();
+    } catch (e) {
+      setError(`${p.codigo} + ${c.codigo}: ${e.message}`);
+    } finally {
+      setTrabajando('');
+    }
+  }
+
+  async function descartar(p, c) {
+    setTrabajando(`${p.codigo}|${c.codigo}`);
+    try {
+      await client.equivDescartar({ codigo: p.codigo, con: c.codigo });
+      setDatos((d) => d && ({ ...d, pendientes: d.pendientes.map((x) => (x.codigo === p.codigo ? { ...x, candidatos: x.candidatos.filter((y) => y.codigo !== c.codigo) } : x)) }));
+      setExtras((e) => ({ ...e, [p.codigo]: (e[p.codigo] || []).filter((y) => y.codigo !== c.codigo) }));
+      cargarHistorial();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setTrabajando('');
+    }
+  }
+
+  async function deshacer(h) {
+    const txt = h.estado === 'igual'
+      ? `¿Deshacer la unificación de ${h.codigo_a} y ${h.codigo_b}? Si al unificar se sacó un renglón de la carga, vuelve a aparecer como estaba.`
+      : `¿Volver a sugerir ${h.codigo_a} y ${h.codigo_b} como posible mismo producto?`;
+    if (!window.confirm(txt)) return;
+    setTrabajando(`h${h.id}`);
+    try {
+      await client.equivDeshacer(h.id);
+      await Promise.all([cargarHistorial(), cargarSugerencias()]);
+      onCambio();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setTrabajando('');
+    }
+  }
+
+  async function elegirOtro(p, item) {
+    setBusqueda((b) => ({ ...b, [p.codigo]: '' }));
+    let h = huellas[item.codigo];
+    if (!h) {
+      try {
+        const r = await client.equivHuellas([item.codigo]);
+        h = r[item.codigo];
+        setDatos((d) => d && ({ ...d, huellas: { ...d.huellas, ...r } }));
+      } catch { /* sin huella */ }
+    }
+    let cmp = null;
+    try { cmp = (await client.equivComparar(p.codigo, item.codigo)).comparacion; } catch { /* sin comparacion */ }
+    setExtras((e) => ({ ...e, [p.codigo]: [...(e[p.codigo] || []).filter((x) => x.codigo !== item.codigo), { codigo: item.codigo, droga: item.droga, descripcion: item.descripcion, nivel: cmp && !cmp.ok ? 'no' : 'manual', comparacion: cmp, motivos: [], manual: null }] }));
+  }
+
+  const filaCodigo = (codigo, descripcion, extra) => (
+    <div style={{ minWidth: 0 }}>
+      <div><strong>{codigo}</strong> · {descripcion}{extra}</div>
+      <div style={{ fontSize: 12, color: '#5b6b76' }}>{textoHuella(huellas[codigo])}</div>
+      <DetalleHuella h={huellas[codigo]} />
+    </div>
+  );
+
+  return createPortal(
+    <div className="folder-overlay" onClick={onCerrar}>
+      <div className="folder-picker" style={{ width: 'min(1100px, 100%)', maxHeight: '92vh' }} onClick={(e) => e.stopPropagation()}>
+        <div className="section-head" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0 }}>Códigos equivalentes · {semestre === 1 ? '1er' : '2do'} semestre {anio}</h2>
+          <button type="button" className="ghost small" onClick={onCerrar}>Cerrar</button>
+        </div>
+        <p style={{ color: '#5b6b76', fontSize: 13, margin: '6px 0 10px' }}>
+          El Ministerio fue cambiando los códigos: el mismo producto figura con el código viejo en el consumo y las O.C., y con el nuevo en el stock y el requerimiento.
+          Solo se sugieren códigos con la <strong>misma droga, concentración y presentación</strong>; si alguna no coincide, no se sugiere y para unificarlos hay que confirmarlo.
+          Al unificar, los datos de los dos códigos se suman y, si los dos estaban en la carga, queda un solo renglón con la cantidad y el tilde que ya tenía.
+        </p>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+          {[['sugerencias', `Por revisar (${datos ? datos.pendientes.length : '…'})`], ['historial', `Historial (${hist ? hist.length : '…'})${noCoinciden ? ` · ⚠ ${noCoinciden} no coinciden` : ''}`]].map(([k, label]) => (
+            <button key={k} type="button" className={`ghost small ${vista === k ? 'active' : ''}`} style={vista === k ? { boxShadow: 'inset 0 0 0 2px #174e8d' } : undefined} onClick={() => setVista(k)}>{label}</button>
+          ))}
+        </div>
+        {error ? <div className="alert">{error}</div> : null}
+        {aviso ? <div className="notice">{aviso}</div> : null}
+
+        {vista === 'sugerencias' ? (
+          <>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8, fontSize: 14 }}>
+              <input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="Filtrar: código o droga" style={{ width: 220, flex: '0 1 auto' }} />
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+                <input type="checkbox" checked={soloConSug} onChange={(e) => setSoloConSug(e.target.checked)} /> Solo los que tienen sugerencia ({conSugerencia})
+              </label>
+              <span style={{ marginLeft: 'auto' }}>Al unificar queda el código:</span>
+              <label style={{ display: 'flex', gap: 4, alignItems: 'center', cursor: 'pointer' }}>
+                <input type="radio" checked={quedaNuevo} onChange={() => setQuedaNuevo(true)} /> del renglón por controlar (nuevo)
+              </label>
+              <label style={{ display: 'flex', gap: 4, alignItems: 'center', cursor: 'pointer' }}>
+                <input type="radio" checked={!quedaNuevo} onChange={() => setQuedaNuevo(false)} /> el sugerido (viejo)
+              </label>
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+              {!datos && !error ? <div className="empty">Buscando códigos equivalentes…</div> : null}
+              {datos && !pendientes.length ? <div className="empty">No hay renglones por revisar con este filtro.</div> : null}
+              {pendientes.map((p) => {
+                const cands = [...p.candidatos, ...(extras[p.codigo] || []).filter((x) => !p.candidatos.some((c) => c.codigo === x.codigo))];
+                const q = (busqueda[p.codigo] || '').trim().toLowerCase();
+                const resultados = q.length >= 2
+                  ? catalogo.filter((c) => c.codigo !== p.codigo && q.split(/\s+/).every((w) => `${c.codigo} ${c.droga || ''} ${c.descripcion || ''}`.toLowerCase().includes(w))).slice(0, 12)
+                  : [];
+                return (
+                  <div key={p.codigo} style={{ border: '1px solid #dfe5ea', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                    {filaCodigo(p.codigo, p.descripcion, <span className="status" style={{ marginLeft: 8, fontSize: 12 }}>por controlar · cantidad 0</span>)}
+                    {cands.map((c) => {
+                      const nivel = NIVEL_EQUIV[c.nivel] || NIVEL_EQUIV.baja;
+                      const ocupado = trabajando === `${p.codigo}|${c.codigo}`;
+                      return (
+                        <div key={c.codigo} style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px dashed #e3e8ec', flexWrap: 'wrap' }}>
+                          <span style={{ background: nivel.bg, color: nivel.color, borderRadius: 999, padding: '2px 8px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }} title={c.motivos?.join(', ')}>{nivel.label}</span>
+                          <div style={{ flex: '1 1 420px', minWidth: 0 }}>
+                            {filaCodigo(c.codigo, c.descripcion, c.manual ? (
+                              <span className="status cargado" style={{ marginLeft: 8, fontSize: 12 }}>
+                                en la carga: {Number(c.manual.cantidad).toLocaleString('es-AR')}{c.manual.controlado ? ' · controlado' : ''}
+                              </span>
+                            ) : null)}
+                            <ChequeosEquiv cmp={c.comparacion} />
+                            {c.motivos?.length ? <div style={{ fontSize: 12, color: '#7a8790' }}>{c.motivos.join(' · ')}</div> : null}
+                          </div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button type="button" className="small" disabled={!!trabajando} onClick={() => unificar(p, c)}>
+                              {ocupado ? 'Guardando…' : 'Es el mismo · unificar'}
+                            </button>
+                            <button type="button" className="ghost small" disabled={!!trabajando} onClick={() => descartar(p, c)} title="No se vuelve a sugerir este par">No es</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {!cands.length ? <div style={{ fontSize: 13, color: '#7a8790', marginTop: 6 }}>Ningún código coincide en droga, concentración y presentación. Si existe, buscalo a mano.</div> : null}
+                    <div style={{ position: 'relative', marginTop: 8, maxWidth: 520 }}>
+                      <input
+                        value={busqueda[p.codigo] || ''}
+                        onChange={(e) => setBusqueda((b) => ({ ...b, [p.codigo]: e.target.value }))}
+                        placeholder="Buscar otro código (código, droga o descripción)"
+                        style={{ width: '100%', fontSize: 13 }}
+                      />
+                      {resultados.length ? (
+                        <div style={{ position: 'absolute', zIndex: 5, left: 0, right: 0, top: '100%', background: '#fff', border: '1px solid #c9d3da', borderRadius: 6, maxHeight: 240, overflowY: 'auto', boxShadow: '0 6px 18px rgba(0,0,0,.12)' }}>
+                          {resultados.map((r) => (
+                            <button key={r.codigo} type="button" onClick={() => elegirOtro(p, r)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 0, borderBottom: '1px solid #eef1f3', background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
+                              <strong>{r.codigo}</strong> · {r.descripcion || r.droga}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+            {hist && !hist.length ? <div className="empty">Todavía no hay códigos unificados ni descartados.</div> : null}
+            {noCoinciden ? (
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 14, margin: '4px 0 8px', color: '#b42318' }}>
+                <input type="checkbox" checked={soloNoCoinciden} onChange={(e) => setSoloNoCoinciden(e.target.checked)} />
+                Ver solo las {noCoinciden} unificaciones donde la droga, la concentración o la presentación no coinciden
+              </label>
+            ) : null}
+            {hist && hist.length ? (
+              <table>
+                <thead>
+                  <tr><th>Fecha</th><th>Usuario</th><th>Códigos</th><th>Resultado</th><th /></tr>
+                </thead>
+                <tbody>
+                  {hist.filter((h) => !soloNoCoinciden || (h.estado === 'igual' && auditoria[h.id] && !auditoria[h.id].ok)).map((h) => (
+                    <tr key={h.id} style={h.estado === 'igual' && auditoria[h.id] && !auditoria[h.id].ok ? { background: '#fdf3f2' } : undefined}>
+                      <td style={{ whiteSpace: 'nowrap' }}>{new Date(h.created_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                      <td>{h.usuario || '—'}</td>
+                      <td style={{ fontSize: 13 }}>
+                        <div><strong>{h.codigo_a}</strong> · {h.desc_a || ''}</div>
+                        <div><strong>{h.codigo_b}</strong> · {h.desc_b || ''}</div>
+                        {h.detalle?.queda ? <div style={{ color: '#5b6b76' }}>Quedó en la carga con {h.detalle.queda}{h.detalle.sacado ? ` (se sacó el renglón ${h.detalle.sacado.codigo})` : ''}</div> : null}
+                        {h.estado === 'igual' ? <ChequeosEquiv cmp={auditoria[h.id]} /> : null}
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{h.estado === 'igual' ? <span className="status cargado">Mismo producto</span> : <span className="status">No es el mismo</span>}</td>
+                      <td><button type="button" className="ghost compact" disabled={!!trabajando} onClick={() => deshacer(h)}>Deshacer</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -4547,11 +5178,28 @@ function CargaRequerimientoManualPage({ token, anio }) {
   const [pagina, setPagina] = useState(1);
   const [porPagina, setPorPagina] = useState(50);
   const [filtroTabla, setFiltroTabla] = useState('');
-  const [filtroCant, setFiltroCant] = useState('todos');
+  const [filtroCant, setFiltroCant] = useState(() => {
+    try { return localStorage.getItem('reqManualFiltroCant') || 'todos'; } catch { return 'todos'; }
+  });
+  function setFiltroCantRec(v) {
+    setFiltroCant(v);
+    try { localStorage.setItem('reqManualFiltroCant', v); } catch { /* sin almacenamiento */ }
+  }
+  const [pestana, setPestana] = useState('pendientes');
+  // Comparacion con el año siguiente: '' | 'soloSig' (pedido el año siguiente y no este) | 'soloEste' (pedido este y no el siguiente)
+  const [filtroComp, setFiltroCompState] = useState('');
+  const [filtroMotivo, setFiltroMotivo] = useState('');
+  const setFiltroComp = (k) => { setFiltroCompState(k); setFiltroMotivo(''); };
+  const [comp, setComp] = useState({ porCodigo: {}, ministerio: null, listo: false });
+  const [compCargando, setCompCargando] = useState(false);
+  const [letra, setLetra] = useState('');
+  const [grupos, setGrupos] = useState([]);
+  const [filtroFuente, setFiltroFuente] = useState('');
   const [edits, setEdits] = useState({});
   const [guardando, setGuardando] = useState({});
   const [colData, setColData] = useState({ datos: {}, meta: {} });
   const [panelCols, setPanelCols] = useState(false);
+  const [panelEquiv, setPanelEquiv] = useState(false);
   const [colsVisibles, setColsVisiblesState] = useState(() => {
     try {
       const v = JSON.parse(localStorage.getItem('reqManualColumnas') || 'null');
@@ -4565,11 +5213,13 @@ function CargaRequerimientoManualPage({ token, anio }) {
   const todasCols = useMemo(() => columnasCargaManual(anio, semestre), [anio, semestre]);
   const cols = todasCols.filter((c) => colsVisibles.includes(c.key));
   const gruposCols = useMemo(() => Array.from(new Set(todasCols.map((c) => c.grupo))), [todasCols]);
-  const alternarCol = (key) => setColsVisibles(colsVisibles.includes(key) ? colsVisibles.filter((k) => k !== key) : [...colsVisibles, key]);
+  const [ocultasMan, setOcultasMan] = useColumnasOcultas('reqManualOcultas');
+  const verMan = (k) => !ocultasMan.includes(k);
 
   async function cargarFilas() {
     const r = await client.reqManual(anio);
     setFilas(r.data || []);
+    setGrupos(r.grupos || []);
   }
 
   useEffect(() => {
@@ -4597,22 +5247,91 @@ function CargaRequerimientoManualPage({ token, anio }) {
     return m;
   }, [filasTodas, semestre]);
   const datosDe = (f) => ({ ...(colData.datos[f.codigo] || {}), ...(pedidosFront.get(f.codigo) || {}) });
+  // Lo pedido en los PDF para el mismo semestre del año siguiente
+  const pedidoSigDe = (f) => {
+    const d = colData.datos[f.codigo] || {};
+    const v = semestre === 1 ? d.reqSigSem1 : d.reqSigSem2;
+    return v == null ? null : Number(v);
+  };
+  const cantidadDe = (f) => Number(edits[f.id] ?? f.cantidad) || 0;
+  const pasaComp = (f, k) => {
+    if (!k) return true;
+    const sig = pedidoSigDe(f) || 0;
+    const este = Number(f.cantidad) || 0;
+    return k === 'soloSig' ? sig > 0 && este === 0 : este > 0 && sig === 0;
+  };
+  const semCorto = semestre === 1 ? '1er' : '2do';
+  const motivos = useMemo(() => motivosComparacion(anio, semCorto), [anio, semCorto]);
+  const motivoPorClave = useMemo(() => new Map([...motivos.soloEste, ...motivos.soloSig].map((m) => [m.k, m])), [motivos]);
+  const motivoDe = (f) => comp.porCodigo[f.codigo] || null;
+  // Motivos: se calculan en el backend solo con una comparacion activa (tarda unos segundos); se recalcula si cambian las cantidades
+  const cantidadesKey = useMemo(() => filasTodas.filter((f) => Number(f.semestre) === semestre).map((f) => `${f.codigo}:${Number(f.cantidad) > 0 ? 1 : 0}`).sort().join('|'), [filasTodas, semestre]);
+  useEffect(() => {
+    if (!filtroComp) return undefined;
+    let vivo = true;
+    setCompCargando(true);
+    client.reqManualComparacion(anio, semestre)
+      .then((r) => { if (vivo) setComp({ ...r, listo: true }); })
+      .catch((e) => { if (vivo) setMessage(e.message); })
+      .finally(() => { if (vivo) setCompCargando(false); });
+    return () => { vivo = false; };
+  }, [client, anio, semestre, cantidadesKey, !!filtroComp]);
 
+  const grupoPorClave = useMemo(() => new Map(grupos.map((g) => [g.clave, g])), [grupos]);
+  // Cantidad de renglones del semestre por formulario (para el desplegable)
+  const cuentaFuente = useMemo(() => {
+    const m = new Map();
+    for (const f of filas) {
+      const fs = f.fuentes ? String(f.fuentes).split('|') : ['__sin'];
+      for (const k of fs) m.set(k, (m.get(k) || 0) + 1);
+    }
+    return m;
+  }, [filas]);
   // Filtro + paginado de la tabla
-  const filasVista = useMemo(() => {
+  const filasSinLetra = useMemo(() => {
     const palabras = filtroTabla.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return filas.filter((f) => {
+      // Con una comparacion entre años activa se buscan en las dos pestañas (controlados y por controlar)
+      if (!filtroComp && (pestana === 'controlados') !== !!Number(f.controlado)) return false;
+      if (filtroFuente) {
+        const fs = f.fuentes ? String(f.fuentes).split('|') : [];
+        if (filtroFuente === '__sin' ? fs.length : !fs.includes(filtroFuente)) return false;
+      }
       if (filtroCant === 'sin' && Number(f.cantidad) !== 0) return false;
       if (filtroCant === 'con' && Number(f.cantidad) === 0) return false;
+      if (!pasaComp(f, filtroComp)) return false;
+      if (filtroComp && filtroMotivo && motivoDe(f)?.motivo !== filtroMotivo) return false;
       if (!palabras.length) return true;
-      const txt = `${f.codigo} ${f.droga || ''} ${f.descripcion || ''}`.toLowerCase();
+      const txt = `${f.codigo} ${(f.equivalentes || []).join(' ')} ${f.droga || ''} ${f.descripcion || ''} ${(f.fuentes ? String(f.fuentes).split('|') : []).map((k) => etiquetaFuente(grupoPorClave.get(k))).join(' ')}`.toLowerCase();
       return palabras.every((p) => txt.includes(p));
     });
-  }, [filas, filtroTabla, filtroCant]);
+  }, [filas, filtroTabla, filtroCant, pestana, filtroFuente, grupoPorClave, filtroComp, filtroMotivo, comp, colData, semestre]);
+  // Filtro por letra inicial de la droga (sin acentos; "#" = empieza con numero u otro signo)
+  const letraDe = (f) => {
+    const c = String(f.droga || f.descripcion || '').trim().normalize('NFD').replace(/[̀-ͯ]/g, '').charAt(0).toUpperCase();
+    return c >= 'A' && c <= 'Z' ? c : '#';
+  };
+  const letrasConDatos = useMemo(() => new Set(filasSinLetra.map(letraDe)), [filasSinLetra]);
+  const filasVista = useMemo(() => (letra ? filasSinLetra.filter((f) => letraDe(f) === letra) : filasSinLetra), [filasSinLetra, letra]);
   const totalPaginas = Math.max(1, Math.ceil(filasVista.length / porPagina));
   const paginaOk = Math.min(pagina, totalPaginas);
   const filasPagina = filasVista.slice((paginaOk - 1) * porPagina, paginaOk * porPagina);
-  useEffect(() => { setPagina(1); }, [semestre, filtroTabla, filtroCant, porPagina]);
+  useEffect(() => { setPagina(1); }, [semestre, filtroTabla, filtroCant, porPagina, pestana, filtroFuente, letra, filtroComp, filtroMotivo]);
+  // Cuantos renglones de la comparacion activa hay por motivo
+  const cuentaMotivo = useMemo(() => {
+    const m = new Map();
+    if (!filtroComp) return m;
+    for (const f of filas) {
+      if (!pasaComp(f, filtroComp)) continue;
+      const k = comp.porCodigo[f.codigo]?.motivo || '__sin';
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    return m;
+  }, [filas, filtroComp, comp, colData, semestre]);
+  // Cuantos renglones (de las dos pestañas) caen en cada filtro de comparacion
+  const cuentaComp = useMemo(() => {
+    return { soloSig: filas.filter((f) => pasaComp(f, 'soloSig')).length, soloEste: filas.filter((f) => pasaComp(f, 'soloEste')).length };
+  }, [filas, pestana, colData, semestre]);
 
   // Guarda la cantidad escrita en la tabla (si cambio)
   async function guardarCantidadFila(f) {
@@ -4637,6 +5356,19 @@ function CargaRequerimientoManualPage({ token, anio }) {
       setGuardando((g) => { const n = { ...g }; delete n[f.id]; return n; });
     }
   }
+  // Tilde "controlado": el renglon pasa a la pestaña Controlados (o vuelve si se destilda)
+  async function alternarControlado(f) {
+    const nuevo = !Number(f.controlado);
+    setFilas((prev) => prev.map((x) => (x.id === f.id ? { ...x, controlado: nuevo ? 1 : 0 } : x)));
+    try {
+      await client.reqManualControlado(f.id, nuevo);
+    } catch (err) {
+      setFilas((prev) => prev.map((x) => (x.id === f.id ? { ...x, controlado: nuevo ? 0 : 1 } : x)));
+      setMessage(`${f.codigo}: ${err.message}`);
+    }
+  }
+  const cuentaControlados = filas.filter((f) => Number(f.controlado)).length;
+
   function teclaCantidad(e, idx) {
     if (e.key !== 'Enter' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     e.preventDefault();
@@ -4660,14 +5392,33 @@ function CargaRequerimientoManualPage({ token, anio }) {
   }
 
   function exportarExcel() {
-    const encabezado = ['Código', 'Droga', 'Descripción', 'Cantidad', ...cols.map((c) => c.label)];
-    const aoa = [encabezado, ...filas.map((f) => {
+    // Mismas columnas que se ven en pantalla (las basicas ocultas no salen)
+    const base = [
+      ['controlado', 'Controlado', (f) => (Number(f.controlado) ? 'Sí' : '')],
+      ['codigo', 'Código', (f) => f.codigo],
+      ['codigo', 'Códigos equivalentes', (f) => (f.equivalentes || []).join(', ')],
+      ['droga', 'Droga', (f) => f.droga],
+      ['descripcion', 'Descripción', (f) => f.descripcion],
+      ['fuentes', 'Formulario / Exp.', (f) => (f.fuentes ? String(f.fuentes).split('|') : []).map((k) => etiquetaFuente(grupoPorClave.get(k)) || k).join(' / ')],
+      ['cantidad', 'Cantidad', (f) => Number(f.cantidad)],
+      ['pedidoSig', `Pedido ${semCorto} sem. ${anio + 1}`, (f) => pedidoSigDe(f) ?? '']
+    ].filter(([k]) => verMan(k));
+    if (comp.listo) {
+      base.push(['motivo', `Motivo ${anio} vs ${anio + 1}`, (f) => motivoPorClave.get(motivoDe(f)?.motivo)?.label || '']);
+      base.push(['motivo', 'Relación encontrada', (f) => motivoDe(f)?.rel || '']);
+    }
+    const encabezado = [...base.map((b) => b[1]), ...cols.map((c) => c.label)];
+    // Sale lo mismo que muestra la tabla: pestaña, comparacion, motivo, cantidad 0, formulario, texto y letra (todas las paginas)
+    const aoa = [encabezado, ...filasVista.map((f) => {
       const d = datosDe(f);
-      return [f.codigo, f.droga, f.descripcion, Number(f.cantidad), ...cols.map((c) => c.get(d, f, colData.meta) ?? '')];
+      return [...base.map((b) => b[2](f)), ...cols.map((c) => c.get(d, f, colData.meta) ?? '')];
     })];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), `${semestre === 1 ? '1er' : '2do'} sem ${anio}`);
-    descargarLibro(wb, `requerimiento-${anio}-sem${semestre}`);
+    const sufijo = filtroComp
+      ? `-${filtroComp === 'soloEste' ? `pedido${anio}-no${anio + 1}` : `pedido${anio + 1}-no${anio}`}${filtroMotivo ? `-${filtroMotivo}` : ''}`
+      : `-${pestana === 'controlados' ? 'controlados' : 'por-controlar'}`;
+    descargarLibro(wb, `requerimiento-${anio}-sem${semestre}${sufijo}`);
   }
   const cuentaSem = (s) => filasTodas.filter((f) => Number(f.semestre) === s).length;
   const cargados = useMemo(() => new Map(filas.map((f) => [f.codigo, f])), [filas]);
@@ -4731,11 +5482,51 @@ function CargaRequerimientoManualPage({ token, anio }) {
 
   const totalUnidades = filas.reduce((s, f) => s + Number(f.cantidad || 0), 0);
 
+  // Barra de paginas + filtro por letra (se muestra arriba y abajo de la tabla)
+  const barraPaginas = (donde) => (
+    <section className="toolbar" style={{ marginTop: 8, flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+      <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
+        <span style={{ fontWeight: 700, marginRight: 4 }}>Letra:</span>
+        <button
+          type="button"
+          className={`ghost compact ${!letra ? 'active' : ''}`}
+          style={!letra ? { boxShadow: 'inset 0 0 0 2px #174e8d' } : undefined}
+          onClick={() => setLetra('')}
+        >
+          Todas
+        </button>
+        {[...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'].map((l) => (
+          <button
+            key={l}
+            type="button"
+            className={`ghost compact ${letra === l ? 'active' : ''}`}
+            style={{ minWidth: 30, padding: '4px 6px', ...(letra === l ? { boxShadow: 'inset 0 0 0 2px #174e8d' } : {}) }}
+            onClick={() => setLetra(letra === l ? '' : l)}
+            disabled={!letrasConDatos.has(l) && letra !== l}
+            title={l === '#' ? 'Empiezan con número u otro signo' : `Drogas que empiezan con ${l}`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+      <button type="button" className="ghost small" onClick={() => setPagina(1)} disabled={paginaOk <= 1}>« Primera</button>
+      <button type="button" className="ghost small" onClick={() => setPagina(paginaOk - 1)} disabled={paginaOk <= 1}>‹ Anterior</button>
+      <span>Página {paginaOk} de {totalPaginas} · {filasVista.length} renglones{letra ? ` con «${letra}»` : ''}</span>
+      <button type="button" className="ghost small" onClick={() => setPagina(paginaOk + 1)} disabled={paginaOk >= totalPaginas}>Siguiente ›</button>
+      <button type="button" className="ghost small" onClick={() => setPagina(totalPaginas)} disabled={paginaOk >= totalPaginas}>Última »</button>
+      <select value={porPagina} onChange={(e) => setPorPagina(Number(e.target.value))} style={{ width: 'auto', flex: '0 0 auto' }}>
+        {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} por página</option>)}
+      </select>
+      {donde === 'arriba' ? <span style={{ color: '#5b6b76', fontSize: 13 }}>Escribí la cantidad en la tabla: se guarda al salir de la celda. Enter o ↓ pasa a la siguiente.</span> : null}
+    </section>
+  );
+
   return (
     <div className="req-page">
       <section className="page-title">
         <h2>Carga Requerimiento {anio}</h2>
       </section>
+      <AyudaPagina id="carga2025" />
 
       {message ? <div className="notice">{message}</div> : null}
 
@@ -4756,7 +5547,20 @@ function CargaRequerimientoManualPage({ token, anio }) {
         <button type="button" className="ghost small" onClick={copiarRequerimientoNuevo} disabled={busy} style={{ marginLeft: 'auto' }} title="Agrega los fármacos del requerimiento de PDF más nuevo con cantidad 0 (no pisa lo cargado)">
           <ClipboardList size={15} /> Copiar fármacos del requerimiento nuevo (cantidad 0)
         </button>
+        <button type="button" className="ghost small" onClick={() => setPanelEquiv(true)} disabled={!filas.length} title="El mismo producto con código viejo y código nuevo: sugerencias para unificarlos e historial">
+          <Link2 size={15} /> Códigos equivalentes
+        </button>
       </section>
+      {panelEquiv ? (
+        <UnificarCodigosPanel
+          client={client}
+          anio={anio}
+          semestre={semestre}
+          catalogo={catalogo}
+          onCambio={() => cargarFilas().catch((e) => setMessage(e.message))}
+          onCerrar={() => setPanelEquiv(false)}
+        />
+      ) : null}
 
       <form className="toolbar" onSubmit={guardar} style={{ flexWrap: 'wrap', alignItems: 'flex-start', gap: 10 }}>
         <div style={{ position: 'relative', flex: '1 1 420px', minWidth: 260 }}>
@@ -4803,59 +5607,195 @@ function CargaRequerimientoManualPage({ token, anio }) {
         <Metric label="Sin cantidad (0)" value={filas.filter((f) => Number(f.cantidad) === 0).length} />
       </section>
 
-      <section className="toolbar" style={{ marginTop: 14, position: 'relative', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+        {[['pendientes', 'Por controlar', filas.length - cuentaControlados], ['controlados', 'Controlados', cuentaControlados]].map(([k, label, n]) => (
+          <button
+            key={k}
+            type="button"
+            className={`ghost small ${pestana === k ? 'active' : ''}`}
+            style={pestana === k && !filtroComp ? { boxShadow: 'inset 0 0 0 2px #174e8d' } : undefined}
+            onClick={() => { setPestana(k); setFiltroComp(''); }}
+          >
+            {label} ({n})
+          </button>
+        ))}
+      </div>
+
+      <section className="toolbar" style={{ marginTop: 8, position: 'relative', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <button type="button" className={`ghost small ${panelCols ? 'active' : ''}`} onClick={() => setPanelCols(!panelCols)}>
-          <Sigma size={15} /> Columnas ({cols.length})
+          <Sigma size={15} /> Columnas ({cols.length}){ocultasMan.length ? ` · ${ocultasMan.length} ocultas` : ''}
         </button>
-        <button type="button" className="ghost small" onClick={exportarExcel} disabled={!filas.length}><Download size={15} /> Exportar a Excel</button>
-        <input value={filtroTabla} onChange={(e) => setFiltroTabla(e.target.value)} placeholder="Filtrar tabla: código o droga" style={{ minWidth: 220 }} />
-        <select value={filtroCant} onChange={(e) => setFiltroCant(e.target.value)}>
-          <option value="todos">Todos</option>
-          <option value="sin">Sin cantidad (0)</option>
-          <option value="con">Con cantidad</option>
+        <button type="button" className="ghost small" onClick={exportarExcel} disabled={!filasVista.length} title="Exporta los renglones que muestra la tabla con los filtros aplicados (todas las páginas)"><Download size={15} /> Exportar a Excel ({filasVista.length})</button>
+        <input value={filtroTabla} onChange={(e) => setFiltroTabla(e.target.value)} placeholder="Filtrar tabla: código, droga o expediente" style={{ minWidth: 220 }} />
+        <select value={filtroFuente} onChange={(e) => setFiltroFuente(e.target.value)} style={{ width: 'auto', flex: '0 1 auto', maxWidth: 420 }} title="Formulario de requerimiento / expediente en papel donde figura el código">
+          <option value="">Todos los formularios / expedientes</option>
+          {grupos.map((g) => <option key={g.clave} value={g.clave}>{etiquetaFuente(g)} ({cuentaFuente.get(g.clave) || 0})</option>)}
+          <option value="__sin">Sin formulario en papel ({cuentaFuente.get('__sin') || 0})</option>
         </select>
+        <span style={{ fontWeight: 700, marginLeft: 6 }}>Cantidad 0:</span>
+        {[['con', 'Ocultar los de 0'], ['todos', 'Mostrar todos'], ['sin', 'Solo los de 0']].map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            className={`ghost small ${filtroCant === k ? 'active' : ''}`}
+            style={filtroCant === k ? { boxShadow: 'inset 0 0 0 2px #174e8d' } : undefined}
+            onClick={() => setFiltroCantRec(k)}
+          >
+            {label}
+          </button>
+        ))}
+        {[
+          ['', 'Sin comparar', null, 'Muestra todos los renglones, sin filtrar por la comparación entre años', 'Comparar:'],
+          ['soloEste', `Pedido en ${anio} y no en ${anio + 1}`, cuentaComp.soloEste, `Renglones con cantidad cargada en ${anio} que no figuran (o están en 0) en los PDF del ${semCorto} sem. ${anio + 1}`, `${anio} vs ${anio + 1}:`],
+          ['soloSig', `Pedido en ${anio + 1} y no en ${anio}`, cuentaComp.soloSig, `Renglones con cantidad 0 en ${anio} que sí figuran en los PDF del ${semCorto} sem. ${anio + 1}`, `${anio + 1} vs ${anio}:`]
+        ].map(([k, label, n, title, rotulo]) => (
+          <React.Fragment key={k || 'todos'}>
+          <span style={{ fontWeight: 700, marginLeft: 6 }}>{rotulo}</span>
+          <button
+            type="button"
+            className={`ghost small ${filtroComp === k ? 'active' : ''}`}
+            style={filtroComp === k ? { boxShadow: 'inset 0 0 0 2px #174e8d' } : undefined}
+            onClick={() => setFiltroComp(k)}
+            title={title}
+          >
+            {label}{n != null ? ` (${n})` : ''}
+          </button>
+          </React.Fragment>
+        ))}
         {colData.meta?.stockFecha ? <span style={{ color: '#5b6b76', fontSize: 13 }}>Stock al {fmtFechaAr(colData.meta.stockFecha)}</span> : null}
         {panelCols ? (
-          <div style={{ position: 'absolute', zIndex: 30, top: '100%', left: 0, marginTop: 4, background: '#fff', border: '1px solid #c9d3da', borderRadius: 8, padding: 14, boxShadow: '0 8px 22px rgba(0,0,0,.14)', display: 'flex', flexWrap: 'wrap', gap: 22, maxWidth: 'min(920px, 92vw)' }}>
-            {gruposCols.map((g) => (
-              <div key={g} style={{ minWidth: 170 }}>
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>{g}</div>
-                {todasCols.filter((c) => c.grupo === g).map((c) => (
-                  <label key={c.key} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14, margin: '3px 0', cursor: 'pointer' }} title={c.title || ''}>
-                    <input type="checkbox" checked={colsVisibles.includes(c.key)} onChange={() => alternarCol(c.key)} />
-                    {c.label}
-                  </label>
-                ))}
-              </div>
-            ))}
-            <div style={{ width: '100%', display: 'flex', gap: 8 }}>
-              <button type="button" className="ghost small" onClick={() => setColsVisibles(todasCols.map((c) => c.key))}>Todas</button>
-              <button type="button" className="ghost small" onClick={() => setColsVisibles([])}>Ninguna</button>
-              <button type="button" className="ghost small" onClick={() => setColsVisibles(COLUMNAS_MANUAL_DEFAULT)}>Por defecto</button>
-              <button type="button" className="small" onClick={() => setPanelCols(false)} style={{ marginLeft: 'auto' }}>Listo</button>
-            </div>
-          </div>
+          <PanelColumnas columnas={todasCols} visibles={colsVisibles} onCambiar={setColsVisibles} porDefecto={COLUMNAS_MANUAL_DEFAULT} onCerrar={() => setPanelCols(false)}
+            basicas={BASICAS_CARGA_MANUAL} ocultas={ocultasMan} onOcultas={setOcultasMan} />
         ) : null}
       </section>
 
+      {filtroComp ? (
+        <section className="motivos-panel">
+          <div className="motivos-titulo">
+            <strong>
+              {filtroComp === 'soloEste' ? `¿Por qué se pidió en ${anio} y no en ${anio + 1}?` : `¿Por qué se pide en ${anio + 1} y no se pidió en ${anio}?`}
+            </strong>
+            <span>
+              {compCargando ? 'Calculando motivos…' : 'Tocá un cuadro para ver solo esos renglones. El motivo es una sugerencia automática: revisalo.'}
+            </span>
+          </div>
+          <div className="motivos-grid">
+            <button type="button" className={`motivo-card ${!filtroMotivo ? 'activo' : ''}`} onClick={() => setFiltroMotivo('')}>
+              <span className="motivo-n">{filtroComp === 'soloEste' ? cuentaComp.soloEste : cuentaComp.soloSig}</span>
+              <span className="motivo-label">Todos</span>
+              <span className="motivo-corto">Todos los motivos</span>
+            </button>
+            {motivos[filtroComp].map((m) => {
+              const t = TONO_MOTIVO[m.tono];
+              const n = cuentaMotivo.get(m.k) || 0;
+              return (
+                <button
+                  key={m.k}
+                  type="button"
+                  className={`motivo-card ${filtroMotivo === m.k ? 'activo' : ''}`}
+                  style={{ background: t.bg, borderColor: filtroMotivo === m.k ? t.color : t.borde }}
+                  onClick={() => setFiltroMotivo(filtroMotivo === m.k ? '' : m.k)}
+                  title={m.texto}
+                  disabled={!comp.listo}
+                >
+                  <span className="motivo-n" style={{ color: t.color }}>{comp.listo ? n : '…'}</span>
+                  <span className="motivo-label">{m.label}</span>
+                  <span className="motivo-corto" style={{ color: t.color }}>{m.corto}</span>
+                </button>
+              );
+            })}
+          </div>
+          {filtroMotivo ? <div className="motivos-explica">{motivoPorClave.get(filtroMotivo)?.texto}</div> : null}
+          {comp.listo && !comp.ministerio ? (
+            <div className="motivos-explica" style={{ color: '#b42318' }}>
+              No hay comunicación del Ministerio cargada para el {semCorto} semestre {anio + 1} (pantalla «Ministerio (habilitación)»): los motivos «Ministerio dijo NO» no se pueden calcular.
+            </div>
+          ) : comp.ministerio ? (
+            <div className="motivos-fuente">Ministerio: «{comp.ministerio.archivo}» ({comp.ministerio.items} ítems).</div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {filtroComp ? (
+        <div className="notice" style={{ marginTop: 8, lineHeight: 1.5 }}>
+          {filtroComp === 'soloSig' ? (
+            <>
+              <strong>Pedido en {anio + 1} y no en {anio}:</strong> fármacos que el Ministerio tiene en los PDF de requerimiento del {semCorto} semestre {anio + 1}, pero que acá tienen <strong>cantidad 0</strong> para {anio}.
+              {' '}Muchos entraron con el botón «Copiar fármacos del requerimiento nuevo (cantidad 0)»: no estaban en ningún formulario en papel de {anio} y se agregaron para que no se pierdan.
+              {' '}Qué hacer: si en {anio} también hacía falta, escribí la cantidad; si no, dejalo en 0 y tildalo como controlado (o usá «Quitar»).
+            </>
+          ) : (
+            <>
+              <strong>Pedido en {anio} y no en {anio + 1}:</strong> fármacos que tienen cantidad cargada para {anio} pero <strong>no aparecen</strong> (o están en 0) en los PDF de requerimiento del {semCorto} semestre {anio + 1}.
+              {' '}Sirve para revisar si se dejaron de pedir a propósito o si quedaron afuera del requerimiento nuevo por error.
+            </>
+          )}
+          {' '}Se muestran los renglones de las <strong>dos pestañas</strong> (Por controlar y Controlados): mirá la casilla «Contr.» para saber en cuál está cada uno. Tocá «Sin comparar» para volver a la pestaña.
+        </div>
+      ) : null}
+
+      <details className="ayuda-carga">
+        <summary>¿Cómo leer esta tabla? (explicación de columnas, colores y filtros)</summary>
+        <ul>
+          <li><strong>Cantidad {anio}:</strong> lo que se pide para el {semCorto} semestre {anio}. Se escribe directo en la tabla y se guarda al salir de la celda.</li>
+          <li><strong>Pedido {semCorto} sem. {anio + 1}:</strong> lo que el Ministerio tiene en los PDF de requerimiento para el mismo semestre de {anio + 1} (sumando códigos equivalentes). «—» = no figura en ningún PDF de {anio + 1}.</li>
+          <li><span style={{ color: '#b54708', fontWeight: 700 }}>Número en naranja</span>: se pide en {anio + 1} pero acá está en 0 para {anio}.</li>
+          <li><span style={{ color: '#b42318', fontWeight: 700 }}>Número en rojo</span>: hay cantidad para {anio} pero no se pide en {anio + 1}.</li>
+          <li><strong>Fila amarilla:</strong> renglón con cantidad 0.</li>
+          <li><strong>Formulario / Exp. con «—»:</strong> el código no está en ningún formulario ni expediente en papel de {anio}. Suele pasar con los que se agregaron desde el PDF nuevo (etiqueta <span className="tag-pdf">solo PDF {anio + 1}</span> abajo del código).</li>
+          <li><strong>Comparar «{anio} vs {anio + 1}»:</strong> «Pedido en {anio} y no en {anio + 1}» muestra los rojos (se pedían en {anio} y en {anio + 1} ya no).</li>
+          <li><strong>Cuadros de motivos:</strong> al elegir una comparación aparecen cuadros con el porqué de cada diferencia (cambio de código, Ministerio dijo NO, otra concentración, no hay nada…). Tocá uno para ver solo esos renglones; la columna «Motivo» dice con qué código o con qué renglón del Ministerio se relacionó.
+            {' '}<span style={{ color: '#1f7a3a', fontWeight: 700 }}>Verde</span> = está bien o no es una diferencia real; <span style={{ color: '#8a5a00', fontWeight: 700 }}>amarillo</span> = revisar; <span style={{ color: '#b42318', fontWeight: 700 }}>rojo</span> = revisar con prioridad.</li>
+          <li><strong>Comparar «{anio + 1} vs {anio}»:</strong> «Pedido en {anio + 1} y no en {anio}» muestra los naranjas (son nuevos en {anio + 1}). «Sin comparar» vuelve a mostrar todo. Las comparaciones buscan en las dos pestañas (Por controlar y Controlados); el número entre paréntesis es el total.</li>
+          <li><strong>Por controlar / Controlados:</strong> al tildar la casilla «Contr.», el renglón pasa a Controlados; al destildarlo, vuelve.</li>
+        </ul>
+      </details>
+
+      {barraPaginas('arriba')}
+
       <section className="table-wrap" style={{ marginTop: 8 }}>
-        <table>
+        <table className="carga-manual">
           <thead>
             <tr>
-              <th>Código</th>
-              <th>Droga</th>
-              <th>Descripción</th>
-              <th style={{ textAlign: 'right' }}>Cantidad</th>
+              <th style={{ textAlign: 'center', width: 56 }} title="Controlado. Al tildar, el renglón pasa a la pestaña Controlados">Contr.</th>
+              <th title={BASICAS_CARGA_MANUAL[1].title}>Código</th>
+              {verMan('droga') ? <th title={BASICAS_CARGA_MANUAL[2].title}>Droga</th> : null}
+              {verMan('descripcion') ? <th title={BASICAS_CARGA_MANUAL[3].title}>Descripción</th> : null}
+              {verMan('fuentes') ? <th title="Formularios de requerimiento / expedientes en papel donde figura">Formulario / Exp.</th> : null}
+              {verMan('cantidad') ? <th style={{ textAlign: 'right' }} title={BASICAS_CARGA_MANUAL[5].title}>Cantidad {anio}</th> : null}
+              {verMan('pedidoSig') ? <th style={{ textAlign: 'right' }} title={`Lo pedido en los PDF de requerimiento del Ministerio para el ${semCorto} semestre ${anio + 1}. Naranja: pedido en ${anio + 1} y en 0 en ${anio}. Rojo: pedido en ${anio} y no en ${anio + 1}. ${EQUIV_TXT}`}>Pedido {semCorto} sem. {anio + 1}</th> : null}
+              {filtroComp ? <th style={{ minWidth: 220 }} title="Motivo probable de la diferencia entre los dos años y con qué se relacionó">Motivo</th> : null}
               {cols.map((c) => <th key={c.key} style={{ textAlign: 'right' }} title={c.title || ''}>{c.label}</th>)}
-              <th />
+              {verMan('acciones') ? <th /> : null}
             </tr>
           </thead>
           <tbody>
             {filasPagina.map((f, idx) => (
               <tr key={f.id} style={Number(f.cantidad) === 0 && edits[f.id] == null ? { background: '#fffbea' } : undefined}>
-                <td>{f.codigo}</td>
-                <td>{f.droga}</td>
-                <td>{f.descripcion}</td>
+                <td style={{ textAlign: 'center' }}>
+                  <input type="checkbox" checked={!!Number(f.controlado)} onChange={() => alternarControlado(f)} style={{ width: 18, height: 18, cursor: 'pointer' }} title={Number(f.controlado) ? 'Destildar: vuelve a Por controlar' : 'Tildar: pasa a Controlados'} />
+                </td>
+                <td>
+                  {f.codigo}
+                  {f.equivalentes?.length ? (
+                    <div style={{ fontSize: 11, color: '#5b6b76', whiteSpace: 'nowrap' }} title="Códigos equivalentes: sus datos (stock, consumo, O.C., formularios) se suman en este renglón">
+                      <Link2 size={11} /> {f.equivalentes.join(', ')}
+                    </div>
+                  ) : null}
+                  {!f.fuentes && Number(f.cantidad) === 0 && (pedidoSigDe(f) || 0) > 0 ? (
+                    <div><span className="tag-pdf" title={`No está en ningún formulario en papel de ${anio}: viene de los PDF de requerimiento de ${anio + 1} y quedó con cantidad 0 en ${anio}.`}>solo PDF {anio + 1}</span></div>
+                  ) : null}
+                </td>
+                {verMan('droga') ? <td>{f.droga}</td> : null}
+                {verMan('descripcion') ? <td>{f.descripcion}</td> : null}
+                {verMan('fuentes') ? (
+                <td style={{ fontSize: 11, color: '#3b4a55' }}>
+                  {f.fuentes ? String(f.fuentes).split('|').map((k) => (
+                    <div key={k} style={{ whiteSpace: 'nowrap' }}>{etiquetaFuente(grupoPorClave.get(k)) || k}</div>
+                  )) : <span style={{ color: '#9aa7b0' }} title={`No figura en ningún formulario ni expediente en papel de ${anio}`}>—</span>}
+                </td>
+                ) : null}
+                {verMan('cantidad') ? (
                 <td style={{ textAlign: 'right' }}>
                   <input
                     type="number"
@@ -4868,41 +5808,52 @@ function CargaRequerimientoManualPage({ token, anio }) {
                     onBlur={() => guardarCantidadFila(f)}
                     onKeyDown={(e) => teclaCantidad(e, idx)}
                     disabled={!!guardando[f.id]}
-                    style={{ width: 100, textAlign: 'right' }}
+                    style={{ width: 84, textAlign: 'right', padding: '4px 6px' }}
                   />
                 </td>
+                ) : null}
+                {verMan('pedidoSig') ? (() => {
+                  const sig = pedidoSigDe(f);
+                  const este = cantidadDe(f);
+                  const color = (sig || 0) > 0 && este === 0 ? '#b54708' : este > 0 && !(sig > 0) ? '#b42318' : undefined;
+                  return <td style={{ textAlign: 'right', whiteSpace: 'nowrap', color, fontWeight: color ? 700 : undefined }}>{sig == null ? '—' : sig.toLocaleString('es-AR')}</td>;
+                })() : null}
+                {filtroComp ? (() => {
+                  const mo = motivoDe(f);
+                  const def = mo && motivoPorClave.get(mo.motivo);
+                  if (!def) return <td style={{ color: '#9aa7b0', fontSize: 12 }}>{compCargando ? 'Calculando…' : '—'}</td>;
+                  const t = TONO_MOTIVO[def.tono];
+                  return (
+                    <td style={{ fontSize: 12 }}>
+                      <span className="motivo-tag" style={{ background: t.bg, color: t.color, borderColor: t.borde }} title={def.texto}>{def.label}</span>
+                      {mo.rel ? <div style={{ color: '#3b4a55', marginTop: 3 }}>{mo.rel}</div> : null}
+                    </td>
+                  );
+                })() : null}
                 {cols.map((c) => {
                   const v = c.get(datosDe(f), { ...f, cantidad: edits[f.id] ?? f.cantidad }, colData.meta);
                   const color = c.key === 'difConsumo' && v != null ? (v < 0 ? '#b42318' : v > 0 ? '#1f7a3a' : undefined) : undefined;
                   return <td key={c.key} style={{ textAlign: 'right', whiteSpace: 'nowrap', color }}>{formatoColumna(c, v)}</td>;
                 })}
+                {verMan('acciones') ? (
                 <td style={{ whiteSpace: 'nowrap' }}>
                   <button type="button" className="ghost compact" onClick={() => elegir({ codigo: f.codigo, droga: f.droga, descripcion: f.descripcion })} disabled={busy}>Editar</button>
                   <button type="button" className="ghost compact" onClick={() => eliminar(f)} disabled={busy}>Quitar</button>
                 </td>
+                ) : null}
               </tr>
             ))}
             {filas.length && !filasVista.length ? (
-              <tr><td colSpan={5 + cols.length} style={{ color: '#5b6b76', textAlign: 'center' }}>Ningún renglón coincide con el filtro.</td></tr>
+              <tr><td colSpan={BASICAS_CARGA_MANUAL.length - ocultasMan.length + cols.length + (filtroComp ? 1 : 0)} style={{ color: '#5b6b76', textAlign: 'center' }}>{pestana === 'controlados' && !cuentaControlados ? 'Todavía no hay renglones controlados.' : pestana === 'pendientes' && cuentaControlados === filas.length ? 'Ya están todos controlados.' : 'Ningún renglón coincide con el filtro.'}</td></tr>
             ) : null}
             {!filas.length ? (
-              <tr><td colSpan={5 + cols.length} style={{ color: '#5b6b76', textAlign: 'center' }}>Todavía no hay nada cargado para el {semestre === 1 ? '1er' : '2do'} semestre {anio}.</td></tr>
+              <tr><td colSpan={BASICAS_CARGA_MANUAL.length - ocultasMan.length + cols.length + (filtroComp ? 1 : 0)} style={{ color: '#5b6b76', textAlign: 'center' }}>Todavía no hay nada cargado para el {semestre === 1 ? '1er' : '2do'} semestre {anio}.</td></tr>
             ) : null}
           </tbody>
         </table>
       </section>
 
-      <section className="toolbar" style={{ marginTop: 8, flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-        <button type="button" className="ghost small" onClick={() => setPagina(1)} disabled={paginaOk <= 1}>« Primera</button>
-        <button type="button" className="ghost small" onClick={() => setPagina(paginaOk - 1)} disabled={paginaOk <= 1}>‹ Anterior</button>
-        <span>Página {paginaOk} de {totalPaginas} · {filasVista.length} renglones</span>
-        <button type="button" className="ghost small" onClick={() => setPagina(paginaOk + 1)} disabled={paginaOk >= totalPaginas}>Siguiente ›</button>
-        <button type="button" className="ghost small" onClick={() => setPagina(totalPaginas)} disabled={paginaOk >= totalPaginas}>Última »</button>
-        <select value={porPagina} onChange={(e) => setPorPagina(Number(e.target.value))}>
-          {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} por página</option>)}
-        </select>
-        <span style={{ color: '#5b6b76', fontSize: 13 }}>Escribí la cantidad en la tabla: se guarda al salir de la celda. Enter o ↓ pasa a la siguiente.</span>
-      </section>
+      {barraPaginas('abajo')}
     </div>
   );
 }
@@ -4969,6 +5920,9 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
   });
   const [bajasData, setBajasData] = useState({ data: [], vinculos: [], historico: [] });
   const [filtroNoEmp, setFiltroNoEmp] = useState('sin');
+  // Farmacos repetidos del Stock Actual con su estado en Codigos equivalentes (para el filtro "Sin unir")
+  const [repStock, setRepStock] = useState(null);
+  const [equivRows, setEquivRows] = useState([]); // Codigos equivalentes (igual / distinto) para sumar familias
   const [vtoData, setVtoData] = useState({ items: [], hasta: null });
   const [filtroConsumo, setFiltroConsumo] = useState('todos');
   // Columnas elegibles de la pestaña Por codigo
@@ -4981,6 +5935,14 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
     setColsReqVisiblesState(lista);
     try { localStorage.setItem('reqAnalisisColumnas', JSON.stringify(lista)); } catch { /* sin almacenamiento */ }
   };
+  const [ocultasReq, setOcultasReq] = useColumnasOcultas('reqAnalisisOcultas');
+  // Correcciones del requerimiento (valor corregido a mano; el original del PDF se conserva)
+  const [ajustes, setAjustes] = useState([]);
+  const [histAjustes, setHistAjustes] = useState([]);
+  const [editReq, setEditReq] = useState(null); // { codigo, cantidad, motivo }
+  const [guardandoReq, setGuardandoReq] = useState(false);
+  const [soloCorregidos, setSoloCorregidos] = useState(false);
+  const verReq = (k) => !ocultasReq.includes(k);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -5035,6 +5997,19 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
     const timer = setInterval(() => refresh(true), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  async function cargarRepStock() {
+    try {
+      setRepStock(await client.stockRepetidos());
+    } catch (err) {
+      setRepStock({ error: err.message });
+    }
+    try {
+      const r = await client.equivHistorial();
+      setEquivRows(Array.isArray(r) ? r : r.data || []);
+    } catch { /* sin equivalencias: cada codigo va solo */ }
+  }
+  useEffect(() => { cargarRepStock(); }, []);
 
   async function leerCarpeta() {
     setBusy(true);
@@ -5212,7 +6187,86 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
   const { cols: todasColsReq, ref: cicloRefReq } = useMemo(() => columnasAnalisisReq(colsReq.meta, ciclo), [colsReq.meta, ciclo]);
   const colsReqDefault = useMemo(() => (cicloRefReq ? [`cons:${cicloRefReq}`, 'stockActual', 'calc:dif'] : ['stockActual']), [cicloRefReq]);
   const colsReqElegidas = colsReqVisibles || colsReqDefault;
-  const colsReq2 = todasColsReq.filter((c) => colsReqElegidas.includes(c.key));
+  const todasColsReqAj = useMemo(() => [
+    ...todasColsReq,
+    { key: 'aj:original', grupo: 'Corrección', label: `Requerido original (PDF) ${cortoCiclo(ciclo)}`,
+      title: 'Lo que dice el PDF del Ministerio, sin la corrección. Si no se corrigió es igual a «Requerido».',
+      get: (d, g) => (g.ajuste ? g.cantidadPdf : g.cantidad) },
+    { key: 'aj:dif', grupo: 'Corrección', label: 'Diferencia (corregido − PDF)',
+      title: 'Cálculo: valor corregido menos el valor original del PDF. Vacío si no se corrigió.',
+      get: (d, g) => (g.ajuste ? g.cantidad - g.cantidadPdf : null) },
+    { key: 'aj:motivo', grupo: 'Corrección', label: 'Motivo de la corrección', tipo: 'texto',
+      title: 'Lo que se escribió al corregir (opcional).', get: (d, g) => g.ajuste?.motivo || null },
+    { key: 'aj:quien', grupo: 'Corrección', label: 'Corregido por', tipo: 'texto',
+      title: 'Usuario y fecha de la última corrección.', get: (d, g) => (g.ajuste ? `${g.ajuste.usuario_nombre || '—'} · ${fmtFechaHoraAr(g.ajuste.updated_at)}` : null) }
+  ], [todasColsReq, ciclo]);
+  const colsReq2 = todasColsReqAj.filter((c) => colsReqElegidas.includes(c.key));
+
+  async function cargarAjustes() {
+    if (!ciclo) { setAjustes([]); setHistAjustes([]); return; }
+    try {
+      const [a, h] = await Promise.all([client.reqAjustes(ciclo), client.reqAjustesHistorial(ciclo)]);
+      setAjustes(a.data || []);
+      setHistAjustes(h.data || []);
+    } catch (e) { setMessage(e.message); }
+  }
+  useEffect(() => { cargarAjustes(); setEditReq(null); }, [client, ciclo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function guardarAjuste(volverOriginal = false) {
+    if (!editReq) return;
+    setGuardandoReq(true);
+    try {
+      if (volverOriginal) await client.reqAjusteVolver({ codigo: editReq.codigo, ciclo, motivo: editReq.motivo });
+      else {
+        const cant = Number(String(editReq.cantidad).replace(',', '.'));
+        if (!Number.isFinite(cant) || cant < 0) throw new Error('Escribí un número mayor o igual a 0');
+        await client.reqAjusteGuardar({ codigo: editReq.codigo, ciclo, cantidad: cant, motivo: editReq.motivo });
+      }
+      setEditReq(null);
+      await cargarAjustes();
+    } catch (e) { setMessage(e.message); } finally { setGuardandoReq(false); }
+  }
+
+  // Celda "Requerido": clic para corregir; si esta corregida muestra el valor del PDF abajo
+  const celdaRequerido = (g) => {
+    const aj = g.ajuste;
+    if (editReq?.codigo === g.codigo) {
+      const tecla = (e) => { if (e.key === 'Enter') guardarAjuste(); if (e.key === 'Escape') setEditReq(null); };
+      return (
+        <td style={{ textAlign: 'right', background: '#eef4fb', minWidth: 190 }}>
+          <input type="number" min="0" step="any" autoFocus value={editReq.cantidad} disabled={guardandoReq}
+            onChange={(e) => setEditReq({ ...editReq, cantidad: e.target.value })} onFocus={(e) => e.target.select()} onKeyDown={tecla}
+            style={{ width: 110, textAlign: 'right' }} title="Valor corregido. Enter guarda, Esc cancela." />
+          <input value={editReq.motivo} placeholder="Motivo (opcional)" maxLength={255} disabled={guardandoReq}
+            onChange={(e) => setEditReq({ ...editReq, motivo: e.target.value })} onKeyDown={tecla}
+            style={{ width: 170, marginTop: 4, fontSize: 12 }} />
+          <div style={{ fontSize: 11, color: '#5b6b76', marginTop: 2 }}>PDF: {fmtCantidad(aj ? g.cantidadPdf : g.cantidad)}</div>
+          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 4, flexWrap: 'wrap' }}>
+            <button type="button" className="small compact" onClick={() => guardarAjuste()} disabled={guardandoReq}>Guardar</button>
+            {aj ? <button type="button" className="ghost compact" onClick={() => guardarAjuste(true)} disabled={guardandoReq} title="Borra la corrección y deja el valor del PDF">Volver al original</button> : null}
+            <button type="button" className="ghost compact" onClick={() => setEditReq(null)} disabled={guardandoReq}>Cancelar</button>
+          </div>
+        </td>
+      );
+    }
+    const abrir = () => setEditReq({ codigo: g.codigo, cantidad: String(g.cantidad), motivo: aj?.motivo || '' });
+    if (!aj) {
+      return (
+        <td style={{ textAlign: 'right', cursor: 'pointer' }} onClick={abrir} title="Valor del PDF. Hacé clic para corregirlo.">
+          {fmtCantidad(g.cantidad)}
+        </td>
+      );
+    }
+    const pdfCambio = Number(aj.cantidad_original) !== Number(g.cantidadPdf);
+    return (
+      <td style={{ textAlign: 'right', cursor: 'pointer', background: '#fff4d6' }} onClick={abrir} data-excel={String(g.cantidad)}
+        title={`Corregido por ${aj.usuario_nombre || '—'} el ${fmtFechaHoraAr(aj.updated_at)}.\nValor del PDF: ${fmtCantidad(g.cantidadPdf)}.${aj.motivo ? `\nMotivo: ${aj.motivo}` : ''}${pdfCambio ? `\n⚠ Cuando se corrigió el PDF decía ${fmtCantidad(aj.cantidad_original)}; ahora dice ${fmtCantidad(g.cantidadPdf)}.` : ''}\nHacé clic para cambiarlo.`}>
+        <strong>{fmtCantidad(g.cantidad)}</strong>
+        <div style={{ fontSize: 11, color: '#8a5a00', whiteSpace: 'nowrap' }}>✎ PDF: {fmtCantidad(g.cantidadPdf)}</div>
+        {pdfCambio ? <div style={{ fontSize: 11, color: '#b42318', whiteSpace: 'nowrap' }}>⚠ el PDF cambió</div> : null}
+      </td>
+    );
+  };
   const porDroga = useMemo(() => agruparRequerimiento(items, claveDrogaForma), [items]);
   const totalDrogas = useMemo(() => new Set(items.map((it) => it.droga_clave)).size, [items]);
   const clavesVisibles = useMemo(() => ({
@@ -5220,9 +6274,31 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
     droga: new Set(itemsFiltrados.map(claveDrogaForma))
   }), [itemsFiltrados]);
 
+  const ajusteMap = useMemo(() => new Map(ajustes.map((a) => [a.codigo, a])), [ajustes]);
+  // Grupo con el valor corregido: la cantidad y el total pasan a ser los corregidos; el del PDF queda en cantidadPdf
+  const conAjuste = (g) => {
+    const aj = ajusteMap.get(g.codigo);
+    if (!aj) return g;
+    const precio = Number(g.cantidad) ? Number(g.total || 0) / Number(g.cantidad) : Number(g.precioMin || 0);
+    return { ...g, cantidadPdf: g.cantidad, cantidad: aj.cantidad, total: aj.cantidad * precio, ajuste: aj };
+  };
+  // Con un archivo/requerimiento elegido se respeta el orden del PDF (hoja e item);
+  // sin filtro, alfabetico por droga.
+  const posicionEnReq = (g) => {
+    let min = Infinity;
+    for (const it of g.items) {
+      if (String(it.importacion_id) !== reqFiltro) continue;
+      const pos = Number(it.hoja || 0) * 100000 + Number(it.item_nro || 0);
+      if (pos < min) min = pos;
+    }
+    return min;
+  };
+  const ordenGrupos = (a, b) => (reqFiltro ? posicionEnReq(a) - posicionEnReq(b) : 0)
+    || a.droga.localeCompare(b.droga) || a.codigo.localeCompare(b.codigo);
   const gruposCodigo = porCodigo
-    .filter((g) => clavesVisibles.codigo.has(g.clave) && (!soloRepetidos || g.veces > 1))
-    .sort((a, b) => a.droga.localeCompare(b.droga) || a.codigo.localeCompare(b.codigo));
+    .filter((g) => clavesVisibles.codigo.has(g.clave) && (!soloRepetidos || g.veces > 1) && (!soloCorregidos || ajusteMap.has(g.codigo)))
+    .map(conAjuste)
+    .sort(ordenGrupos);
   const gruposDroga = porDroga
     .filter((g) => clavesVisibles.droga.has(g.clave) && (!soloRepetidos || g.veces > 1))
     .sort((a, b) => a.droga.localeCompare(b.droga) || a.forma.localeCompare(b.forma) || a.concentracion.localeCompare(b.concentracion));
@@ -5236,7 +6312,7 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
   const codigosRequeridos = useMemo(() => new Set(items.map((it) => it.codigo)), [items]);
   const gruposVisibles = porCodigo
     .filter((g) => clavesVisibles.codigo.has(g.clave))
-    .sort((a, b) => a.droga.localeCompare(b.droga) || a.codigo.localeCompare(b.codigo));
+    .sort(ordenGrupos);
   const filasStock = gruposVisibles.map((g) => {
     const s = cruceMap.get(g.codigo);
     let situacion = 'con_stock';
@@ -5482,9 +6558,48 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
     return m;
   }, [productosConsumo]);
   const vinculosConsumo = new Map((bajasData.vinculos || []).map((v) => [v.codigo_pedido, v.codigo_consumo]));
+  // Codigos equivalentes ('igual'): consumo, stock y vencimientos de toda la familia se suman en el renglon
+  const familiaEquiv = useMemo(() => {
+    const padre = new Map();
+    const raiz = (c) => { if (!padre.has(c)) padre.set(c, c); while (padre.get(c) !== c) c = padre.get(c); return c; };
+    for (const r of equivRows) if (r.estado === 'igual') { const a = raiz(r.codigo_a); const b = raiz(r.codigo_b); if (a !== b) padre.set(a, b); }
+    const grupos = new Map();
+    for (const c of padre.keys()) { const k = raiz(c); if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(c); }
+    const out = new Map();
+    for (const g of grupos.values()) for (const c of g) out.set(c, g);
+    return out;
+  }, [equivRows]);
+  const famDe = (c) => familiaEquiv.get(c) || [c];
+  const mesesFam = (c) => {
+    if (!c) return null;
+    let out = null;
+    for (const x of famDe(c)) {
+      const m = consumoAnalisis.porCodigo.get(x);
+      if (!m) continue;
+      out = out || {};
+      for (const [k, v] of Object.entries(m)) out[k] = (out[k] || 0) + v;
+    }
+    return out;
+  };
+  const tieneConsumoFam = (c) => famDe(c).some((x) => consumoAnalisis.porCodigo.has(x));
+  const stockFam = (c) => {
+    let total = 0;
+    let hay = false;
+    for (const x of famDe(c)) {
+      const st = cruceMap.get(x);
+      if (st?.enStock) { hay = true; total += Number(st.stock || 0); }
+    }
+    return hay ? total : null;
+  };
+  const trimFam = (mapa, c) => {
+    if (!c) return undefined;
+    let total;
+    for (const x of famDe(c)) { const v = mapa.get(x); if (v != null) total = (total || 0) + Number(v); }
+    return total;
+  };
   const enlaceConsumo = (g) => {
     const v = vinculosConsumo.get(g.codigo);
-    if (consumoAnalisis.porCodigo.has(g.codigo) && (!v || ESTADO_CONSUMO[v])) return { codigo: g.codigo, via: 'codigo' };
+    if (tieneConsumoFam(g.codigo) && (!v || ESTADO_CONSUMO[v])) return { codigo: g.codigo, via: 'codigo' };
     if (v) return ESTADO_CONSUMO[v] ? { codigo: null, via: 'estado', estado: v } : { codigo: v, via: 'vinculo' };
     const k = claveProducto(g.droga, g.descripcion);
     const candidatos = k ? consumoPorNombre.get(k) || [] : [];
@@ -5503,10 +6618,9 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
     return m;
   }, [bajasData]);
   const stockDeFila = (f) => {
-    const propio = cruceMap.get(f.g.codigo);
-    if (propio?.enStock) return Number(propio.stock);
-    const enlazado = f.enlace?.codigo ? cruceMap.get(f.enlace.codigo) : null;
-    return enlazado?.enStock ? Number(enlazado.stock) : null;
+    const propio = stockFam(f.g.codigo);
+    if (propio != null) return propio;
+    return f.enlace?.codigo ? stockFam(f.enlace.codigo) : null;
   };
   const fechasVto = (lotes) => {
     const m = new Map();
@@ -5531,6 +6645,10 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
     }
     return m;
   }, [vtoData]);
+  const lotesFam = (c) => {
+    const lotes = famDe(c).flatMap((x) => vtoPorCodigo.get(x) || []);
+    return lotes.length ? lotes : null;
+  };
   const productosConsumoAtar = useMemo(() => {
     const lista = productosConsumo
       .map((p) => ({ codigo: p.codigo, texto: [p.nombre_generico, p.concentracion, [p.presentacion, p.forma].filter(Boolean).join(' ')].filter(Boolean).join(' · ') }));
@@ -5571,9 +6689,43 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
     const ini = anioC && (semC === 1 || semC === 2) ? anioC * 12 + (semC === 1 ? 0 : 6) : hoyC.getFullYear() * 12 + hoyC.getMonth() + 1;
     return [0, 1, 2, 3, 4, 5].map((i) => ini + i);
   })();
+  // Lo que se hizo con cada renglon: codigos unidos que se suman, y gemelos del stock que faltan unir
+  const totalConsumo = (c) => Object.values(consumoAnalisis.porCodigo.get(c) || {}).reduce((a, v) => a + v, 0);
+  const infoUnion = (codigo) => {
+    const fam = famDe(codigo);
+    if (fam.length < 2) return null;
+    const pares = equivRows.filter((r) => r.estado === 'igual' && fam.includes(r.codigo_a) && fam.includes(r.codigo_b));
+    // Nombre y presentacion del codigo sumado: Stock Actual, consumo de Farmacia MS o lo guardado al unirlo
+    const descDe = (c) => {
+      const st = cruceMap.get(c);
+      if (st?.nombre) return [st.nombre, st.concentracion, st.presentacion, st.forma].filter(Boolean).join(' · ');
+      const co = consumo.items.find((it) => it.codigo === c);
+      if (co) return [co.nombre_generico, co.concentracion, co.presentacion, co.forma].filter(Boolean).join(' · ');
+      const r = pares.find((x) => x.codigo_a === c || x.codigo_b === c);
+      return (r ? (r.codigo_a === c ? r.desc_a : r.desc_b) : '') || '';
+    };
+    const otros = fam.filter((c) => c !== codigo).map((c) => ({ codigo: c, desc: descDe(c), consumo: totalConsumo(c), stock: cruceMap.get(c)?.enStock ? Number(cruceMap.get(c).stock) : null }));
+    const ultima = pares.map((r) => r.created_at).filter(Boolean).sort().pop();
+    return { otros, cuando: ultima ? fmtFechaAr(String(ultima).slice(0, 10)) : '', notas: pares.map((r) => r.nota).filter(Boolean) };
+  };
+  const gruposSinUnir = repStock?.repetidos
+    ? [...repStock.repetidos.identicos, ...repStock.repetidos.probables].filter((x) => x.equivalencia === 'pendiente')
+    : [];
+  const gemelosSinUnir = (codigo) => {
+    const fam = new Set(famDe(codigo));
+    const out = [];
+    for (const grupo of gruposSinUnir) {
+      if (!grupo.items.some((it) => fam.has(it.codigo))) continue;
+      for (const it of grupo.items) if (!fam.has(it.codigo) && !out.some((o) => o.codigo === it.codigo)) out.push(it);
+    }
+    return out;
+  };
+  // Pares sin unir del stock que no tocan ningun renglon del requerimiento (igual se muestran en "Sin emparejar")
+  const codigosPedidos = new Set(porCodigo.flatMap((g) => famDe(g.codigo)));
+  const sinUnirNoPedidos = gruposSinUnir.filter((grupo) => !grupo.items.some((it) => codigosPedidos.has(it.codigo)));
   const filasConsumo = gruposVisibles.map((g) => {
     const enlace = enlaceConsumo(g);
-    const meses = enlace.codigo ? consumoAnalisis.porCodigo.get(enlace.codigo) : null;
+    const meses = enlace.codigo ? mesesFam(enlace.codigo) : null;
     const enConsumo = Boolean(meses);
     const porSemestre = {};
     if (meses) {
@@ -5595,26 +6747,27 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
     else if (!esperado) situacion = 'sin_consumo';
     else if (margen ? g.cantidad > rangoSup : ratio > 1.5) situacion = 'de_mas';
     else if (margen ? g.cantidad < rangoInf : ratio < 0.7) situacion = 'de_menos';
-    return { g, enlace, enConsumo, porSemestre, promedio, esperado, rangoInf, rangoSup, prono, ratio, situacion };
+    return { g, enlace, enConsumo, porSemestre, promedio, esperado, rangoInf, rangoSup, prono, ratio, situacion, union: infoUnion(g.codigo), sinUnir: gemelosSinUnir(g.codigo) };
   });
   // Vista consumo/vencimientos: filtro por farmaco (el de requerimiento es el reqFiltro de arriba)
   const farmacosVto = Array.from(new Set(filasConsumo.map((f) => f.g.droga).filter(Boolean))).sort((a, b) => a.localeCompare(b));
   const filasVto = filasConsumo.filter((f) => !farmacoVto || f.g.droga === farmacoVto);
   // Pedidos que no coinciden con el consumo por codigo ni nombre, los marcados (nuevo, otro sector...) y los atados a mano
-  const noEmparejadosConsumo = filasConsumo.filter((f) => ['sin', 'vinculo', 'estado'].includes(f.enlace.via));
+  const noEmparejadosConsumo = filasConsumo.filter((f) => ['sin', 'vinculo', 'estado'].includes(f.enlace.via) || f.sinUnir.length);
   const FILTROS_NO_EMP = [
-    { clave: 'sin', label: 'Sin emparejar', pred: (f) => f.enlace.via === 'sin' },
+    { clave: 'sin', label: 'Sin emparejar', pred: (f) => f.enlace.via === 'sin' || f.sinUnir.length > 0 },
     ...ESTADOS_CONSUMO.map((e) => ({ clave: e.codigo, label: e.texto, pred: (f) => f.enlace.via === 'estado' && f.enlace.estado === e.codigo })),
     { clave: 'vinculo', label: 'Atados a otro código', pred: (f) => f.enlace.via === 'vinculo' }, // sync-guard:ignore
     { clave: 'todos', label: 'Todos', pred: () => true }
   ];
   const filtroNoEmpActual = FILTROS_NO_EMP.find((x) => x.clave === filtroNoEmp) || FILTROS_NO_EMP[0];
   const opcionesNoEmp = FILTROS_NO_EMP
-    .map((x) => ({ clave: x.clave, label: x.label, cantidad: noEmparejadosConsumo.filter(x.pred).length }))
+    .map((x) => ({ clave: x.clave, label: x.label, cantidad: noEmparejadosConsumo.filter(x.pred).length + (['sin', 'todos'].includes(x.clave) ? sinUnirNoPedidos.length : 0) }))
     .filter((x) => x.cantidad || x.clave === 'sin' || x.clave === 'todos');
   const COLOR_PISTA = { stock: '#176338', oc: '#1d5fa8', historico: '#7b5600', nuevo: '#6b3fa0' };
-  const sinEmparejar = noEmparejadosConsumo.filter((f) => f.enlace.via === 'sin').length;
-  const panelNoEmparejados = consumo.items.length && noEmparejadosConsumo.length ? (
+  const sinEmparejar = noEmparejadosConsumo.filter((f) => f.enlace.via === 'sin' || f.sinUnir.length).length + sinUnirNoPedidos.length;
+  const verNoPedidos = ['sin', 'todos'].includes(filtroNoEmpActual.clave);
+  const panelNoEmparejados = consumo.items.length && (noEmparejadosConsumo.length || sinUnirNoPedidos.length) ? (
     <section className="table-wrap" style={{ marginTop: 8, overflow: 'visible', border: sinEmparejar ? '2px solid #e0a800' : undefined }}>
       <div style={{ padding: '8px 12px', fontSize: 14 }}>
         <b>Pedidos que no coinciden con el consumo por código ni por nombre ({sinEmparejar} sin emparejar)</b>
@@ -5641,11 +6794,32 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
           <tr><th>Código pedido</th><th>Droga</th><th>Descripción</th><th style={{ textAlign: 'right' }}>Pedido</th>{verReqNoEmp ? <th>Requerimiento</th> : null}<th>Pista</th><th>Estado</th><th>Atar a / marcar como</th></tr>
         </thead>
         <tbody>
+          {verNoPedidos ? sinUnirNoPedidos.map((grupo) => (
+            <tr key={`nopedido-${grupo.items.map((i) => i.codigo).join('-')}`} style={{ background: '#fff1dc', boxShadow: 'inset 4px 0 0 #e08a00' }}>
+              <td className="code">
+                {grupo.items.map((it) => <div key={it.codigo}>{it.codigo}</div>)}
+              </td>
+              <td style={{ fontWeight: 700 }}>{grupo.items[0].nombre}</td>
+              <td style={{ fontSize: 13 }}>
+                {grupo.items.map((it) => (
+                  <div key={it.codigo} style={{ marginBottom: 3 }}>
+                    <b>{it.codigo}</b> — {[it.nombre, it.concentracion, it.presentacion, it.forma].filter(Boolean).join(' · ')}
+                    <div style={{ color: '#8a4300', fontSize: 12 }}>stock {fmtCantidad(it.stock)} · {it.sector}{it.origen?.resumen ? ` · ${it.origen.resumen}` : ''}</div>
+                  </div>
+                ))}
+              </td>
+              <td style={{ textAlign: 'right', color: '#66717c', fontSize: 13 }}>no pedido</td>
+              {verReqNoEmp ? <td>-</td> : null}
+              <td style={{ fontSize: 12, color: '#8a4300' }}>mismo fármaco con {grupo.items.length} códigos en el Stock Actual</td>
+              <td><span className="status en_proceso" title="Todavía no están unidos en Códigos equivalentes">sin unir: {grupo.items.map((i) => i.codigo).join(' + ')}</span></td>
+              <td style={{ fontSize: 12, color: '#5b6b76' }}>Unir en «Códigos equivalentes» (Carga Requerimiento 2026)</td>
+            </tr>
+          )) : null}
           {noEmparejadosConsumo.filter(filtroNoEmpActual.pred).map((f) => {
             const marca = f.enlace.via === 'estado' ? ESTADO_CONSUMO[f.enlace.estado] : null;
             return (
-              <tr key={f.g.clave} style={f.enlace.via === 'sin' ? { background: '#fff8e1' } : undefined}>
-                <td className="code">{f.g.codigo}</td>
+              <tr key={f.g.clave} style={estiloUnion(f) || (f.enlace.via === 'sin' ? { background: '#fff8e1' } : undefined)}>
+                <td className="code">{f.g.codigo}<MarcaUnion f={f} /></td>
                 <td style={{ fontWeight: 700 }}>{f.g.droga}</td>
                 <td>{f.g.descripcion}</td>
                 <td style={{ textAlign: 'right' }}>{fmtCantidad(f.g.cantidad)}</td>
@@ -5655,6 +6829,7 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
                 </td>
                 <td>
                   {f.enlace.via === 'sin' ? <span className="status error">sin emparejar</span> : null}
+                  {f.sinUnir.length ? <span className="status en_proceso" title="Mismo fármaco con otro código en el Stock Actual, sin unir en Códigos equivalentes">sin unir con {f.sinUnir.map((x) => x.codigo).join(', ')}</span> : null}
                   {f.enlace.via === 'vinculo' ? <span className="status listo">atado a {f.enlace.codigo}</span> : null}
                   {marca ? <span style={{ fontSize: 13, fontWeight: 700, color: marca.color, background: marca.fondo, borderRadius: 4, padding: '2px 8px' }}>{marca.corto}</span> : null}
                 </td>
@@ -5671,7 +6846,7 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
               </tr>
             );
           })}
-          {!noEmparejadosConsumo.filter(filtroNoEmpActual.pred).length ? <tr><td colSpan={verReqNoEmp ? 8 : 7} className="empty">Nada en este filtro</td></tr> : null}
+          {!noEmparejadosConsumo.filter(filtroNoEmpActual.pred).length && !(verNoPedidos && sinUnirNoPedidos.length) ? <tr><td colSpan={verReqNoEmp ? 8 : 7} className="empty">Nada en este filtro</td></tr> : null}
         </tbody>
       </table>
     </section>
@@ -5786,6 +6961,19 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
       {g.precioDistinto
         ? <span className="status error" title="El mismo producto tiene justiprecios distintos">{formatPesos(g.precioMin)} – {formatPesos(g.precioMax)}</span>
         : formatPesos(g.precioMin)}
+      {g.precioDistinto ? (
+        // De donde sale cada precio: archivo, requerimiento, hoja e item
+        <div style={{ marginTop: 4, fontSize: 12, color: '#5b6b76', whiteSpace: 'normal', textAlign: 'left', minWidth: 190 }}>
+          {Array.from(new Set(g.items.filter((it) => it.justiprecio != null).map((it) => Number(it.justiprecio))))
+            .sort((a, b) => a - b)
+            .map((precio) => (
+              <div key={precio} style={{ marginTop: 2 }}>
+                <b style={{ color: '#1f2d36' }}>{formatPesos(precio)}</b>
+                {g.items.filter((it) => Number(it.justiprecio) === precio).map((it) => <div key={it.id}>{ubicacionItem(it)}</div>)}
+              </div>
+            ))}
+        </div>
+      ) : null}
     </td>
   );
 
@@ -5806,6 +6994,7 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
       <section className="page-title">
         <h2>{soloMinisterio ? 'Habilitación Ministerio' : 'Análisis de Requerimiento Anual'}</h2>
       </section>
+      <AyudaPagina id={soloMinisterio ? 'ministerio' : 'requerimiento'} sub={soloMinisterio ? minVista : vista} />
 
       {!soloMinisterio ? (
       <section className="toolbar" style={{ flexWrap: 'wrap', alignItems: 'center', fontSize: 14 }}>
@@ -5876,6 +7065,7 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
         <button className={`ghost ${vista === 'diferencias' ? 'active' : ''}`} onClick={() => setVista('diferencias')}>Diferencias</button>
         <button className={`ghost ${vista === 'ministerio' ? 'active' : ''}`} onClick={() => setVista('ministerio')}>Ministerio (habilitación)</button>
         <button className={`ghost ${vista === 'requerimientos' ? 'active' : ''}`} onClick={() => setVista('requerimientos')}>Requerimientos y archivos</button>
+        <button className={`ghost ${vista === 'correcciones' ? 'active' : ''}`} onClick={() => setVista('correcciones')} title="Valores del requerimiento corregidos a mano, con el original del PDF y el historial">Correcciones ({ajustes.length})</button>
       </section>
       </>) : null}
 
@@ -5896,6 +7086,11 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
               <input type="checkbox" checked={soloRepetidos} onChange={(event) => setSoloRepetidos(event.target.checked)} /> Solo repetidos
             </label>
           ) : null}
+          {vista === 'codigo' ? (
+            <label className="checkline" title="Solo los códigos cuyo requerido se corrigió a mano">
+              <input type="checkbox" checked={soloCorregidos} onChange={(event) => setSoloCorregidos(event.target.checked)} /> Solo corregidos ({ajustes.length})
+            </label>
+          ) : null}
         </section>
       ) : null}
 
@@ -5903,14 +7098,15 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
         <>
           <section className="toolbar" style={{ position: 'relative', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <button type="button" className={panelColsReq ? 'small' : 'ghost small'} onClick={() => setPanelColsReq(!panelColsReq)} title="Elegir qué datos agregar a la tabla">
-              <Sigma size={15} /> Columnas ({colsReq2.length})
+              <Sigma size={15} /> Columnas ({colsReq2.length}){ocultasReq.length ? ` · ${ocultasReq.length} ocultas` : ''}
             </button>
             <span style={{ color: '#5b6b76', fontSize: 13 }}>
-              Agregá consumo por semestre, carga manual 2025, otros requerimientos, stock, vencimientos, O.C. y bajas.
+              Agregá consumo por semestre, carga manual, otros requerimientos, stock, vencimientos, O.C. y bajas.
               {colsReq.meta?.stockFecha ? ` Stock al ${fmtFechaAr(colsReq.meta.stockFecha)}.` : ''}
             </span>
             {panelColsReq ? (
-              <PanelColumnas columnas={todasColsReq} visibles={colsReqElegidas} onCambiar={setColsReqVisibles} porDefecto={colsReqDefault} onCerrar={() => setPanelColsReq(false)} />
+              <PanelColumnas columnas={todasColsReqAj} visibles={colsReqElegidas} onCambiar={setColsReqVisibles} porDefecto={colsReqDefault} onCerrar={() => setPanelColsReq(false)}
+                basicas={basicasReqCodigo(ciclo)} ocultas={ocultasReq} onOcultas={setOcultasReq} />
             ) : null}
           </section>
           <ExportButton targetId="tabla-req-codigo" name="requerimiento-por-codigo" />
@@ -5919,15 +7115,15 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
               <thead>
                 <tr>
                   <th />
-                  <th>Código</th>
-                  <th>Cód. Sigaf</th>
-                  <th>Droga</th>
-                  <th>Descripción</th>
-                  <th style={{ textAlign: 'right' }}>Cantidad total</th>
-                  <th style={{ textAlign: 'center' }} title="Veces que aparece el código (naranja: en varios requerimientos; rojo: repetido dentro del mismo)">Veces</th>
-                  <th>Requerimientos</th>
-                  <th style={{ textAlign: 'right' }}>Justiprecio</th>
-                  <th style={{ textAlign: 'right' }}>Total $</th>
+                  <th title={basicasReqCodigo(ciclo)[0].title}>Código</th>
+                  {verReq('sigaf') ? <th title={basicasReqCodigo(ciclo)[1].title}>Cód. Sigaf</th> : null}
+                  {verReq('droga') ? <th title={basicasReqCodigo(ciclo)[2].title}>Droga</th> : null}
+                  {verReq('descripcion') ? <th title={basicasReqCodigo(ciclo)[3].title}>Descripción</th> : null}
+                  {verReq('cantidad') ? <th style={{ textAlign: 'right' }} title={basicasReqCodigo(ciclo)[4].title}>{basicasReqCodigo(ciclo)[4].label}</th> : null}
+                  {verReq('veces') ? <th style={{ textAlign: 'center' }} title="Veces que aparece el código (naranja: en varios requerimientos; rojo: repetido dentro del mismo)">Veces</th> : null}
+                  {verReq('requerimientos') ? <th title={basicasReqCodigo(ciclo)[6].title}>Requerimientos</th> : null}
+                  {verReq('justiprecio') ? <th style={{ textAlign: 'right' }} title={basicasReqCodigo(ciclo)[7].title}>Justiprecio</th> : null}
+                  {verReq('total') ? <th style={{ textAlign: 'right' }} title={basicasReqCodigo(ciclo)[8].title}>Total $</th> : null}
                   {colsReq2.map((c) => <th key={c.key} style={{ textAlign: 'right', background: '#eef6f8' }} title={c.title || ''}>{c.label}</th>)}
                 </tr>
               </thead>
@@ -5938,25 +7134,25 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
                     <tr key={g.clave}>
                       <td>{botonAbrir(`c-${g.clave}`)}</td>
                       <td className="code">{g.codigo}</td>
-                      <td>{g.sigaf}</td>
-                      <td style={{ fontWeight: 700 }}>{g.droga}</td>
-                      <td>{g.descripcion}</td>
-                      <td style={{ textAlign: 'right' }}>{fmtCantidad(g.cantidad)}</td>
-                      {celdaVeces(g)}
-                      <td>{g.ubicaciones.join(', ')}</td>
-                      {celdaPrecio(g)}
-                      <td style={{ textAlign: 'right' }}>{formatPesos(g.total)}</td>
+                      {verReq('sigaf') ? <td>{g.sigaf}</td> : null}
+                      {verReq('droga') ? <td style={{ fontWeight: 700 }}>{g.droga}</td> : null}
+                      {verReq('descripcion') ? <td>{g.descripcion}</td> : null}
+                      {verReq('cantidad') ? celdaRequerido(g) : null}
+                      {verReq('veces') ? celdaVeces(g) : null}
+                      {verReq('requerimientos') ? <td>{g.ubicaciones.join(', ')}</td> : null}
+                      {verReq('justiprecio') ? celdaPrecio(g) : null}
+                      {verReq('total') ? <td style={{ textAlign: 'right' }}>{formatPesos(g.total)}</td> : null}
                       {colsReq2.map((c) => {
                         const v = c.get(dCols, g);
                         const neg = typeof v === 'number' && v < 0;
-                        return <td key={c.key} style={{ textAlign: 'right', color: neg ? '#b42318' : undefined }}>{formatoColumna(c, v)}</td>;
+                        return <td key={c.key} style={{ textAlign: c.tipo === 'texto' ? 'left' : 'right', color: neg ? '#b42318' : undefined }}>{formatoColumna(c, v)}</td>;
                       })}
                     </tr>
                   )];
-                  if (abiertos.has(`c-${g.clave}`)) filas.push(detalleOcurrencias(`c-${g.clave}`, g.items, 10 + colsReq2.length));
+                  if (abiertos.has(`c-${g.clave}`)) filas.push(detalleOcurrencias(`c-${g.clave}`, g.items, 10 - ocultasReq.length + colsReq2.length));
                   return filas;
                 })}
-                {!gruposCodigo.length ? <tr><td colSpan={10 + colsReq2.length} className="empty">Sin datos</td></tr> : null}
+                {!gruposCodigo.length ? <tr><td colSpan={10 - ocultasReq.length + colsReq2.length} className="empty">Sin datos</td></tr> : null}
               </tbody>
             </table>
           </section>
@@ -6527,10 +7723,10 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
               </thead>
               <tbody>
                 {filasConsumo.map((f) => {
-                  const meses = f.enlace.codigo ? consumoAnalisis.porCodigo.get(f.enlace.codigo) : null;
+                  const meses = f.enlace.codigo ? mesesFam(f.enlace.codigo) : null;
                   return (
-                    <tr key={f.g.clave}>
-                      <td className="code">{f.g.codigo}</td>
+                    <tr key={f.g.clave} style={estiloUnion(f)}>
+                      <td className="code">{f.g.codigo}<MarcaUnion f={f} /></td>
                       <td style={{ fontWeight: 700 }}>{f.g.droga}</td>
                       <td>{f.g.descripcion}</td>
                       {semestresConsumo.map((s) => {
@@ -6597,13 +7793,14 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
               </thead>
               <tbody>
                 {filasConsumo.flatMap((f) => {
-                  const meses = f.enlace.codigo ? consumoAnalisis.porCodigo.get(f.enlace.codigo) : null;
+                  const meses = f.enlace.codigo ? mesesFam(f.enlace.codigo) : null;
                   const bajasCodigo = f.enlace.codigo ? bajasPorCodigo.get(f.enlace.codigo) || [] : [];
                   const abiertoSem = semestresConsumo.find((s) => abiertos.has(`neto|${f.g.clave}|${s.key}`));
                   const out = [(
-                    <tr key={f.g.clave}>
+                    <tr key={f.g.clave} style={estiloUnion(f)}>
                       <td className="code">
                         {f.g.codigo}
+                        <MarcaUnion f={f} />
                         {f.enlace.via === 'nombre' || f.enlace.via === 'vinculo'
                           ? <div style={{ fontSize: 11, color: '#7b5600', fontWeight: 400 }}>consumo: {f.enlace.codigo} ({f.enlace.via === 'nombre' ? 'por nombre' : 'atado'})</div>
                           : null}
@@ -6812,9 +8009,9 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
                 </thead>
                 <tbody>
                   {filasVto.map((f) => {
-                    const meses = f.enlace.codigo ? consumoAnalisis.porCodigo.get(f.enlace.codigo) : null;
+                    const meses = f.enlace.codigo ? mesesFam(f.enlace.codigo) : null;
                     const stock = stockDeFila(f);
-                    const lotes = vtoPorCodigo.get(f.g.codigo) || (f.enlace.codigo ? vtoPorCodigo.get(f.enlace.codigo) : null) || [];
+                    const lotes = lotesFam(f.g.codigo) || (f.enlace.codigo ? lotesFam(f.enlace.codigo) : null) || [];
                     const porMes = new Map();
                     let vencido = 0;
                     let despues = 0;
@@ -6886,9 +8083,10 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
                     const vtoAbierto = vtoAbiertos.has(f.g.clave);
                     return (
                       <React.Fragment key={f.g.clave}>
-                      <tr>
+                      <tr style={estiloUnion(f)}>
                         <td className="code">
                           {f.g.codigo}
+                          <MarcaUnion f={f} />
                           {f.enlace.via === 'vinculo' ? <div className="status listo" style={{ fontSize: 11, marginTop: 2 }} title="Emparejado a mano: consumo, stock y pronóstico salen de este código">atado a {f.enlace.codigo}</div> : null}
                           {f.enlace.via === 'nombre' ? <div style={{ fontSize: 11, color: '#5b6b76' }} title="Mismo producto con otro código en Farmacia MS">consumo de {f.enlace.codigo}</div> : null}
                         </td>
@@ -6898,7 +8096,7 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
                         </td>
                         {semestresVto.map((s) => {
                           if (s.fuente === 'trim') {
-                            const cant = s.trim.porCodigo.get(f.g.codigo) ?? (f.enlace.codigo ? s.trim.porCodigo.get(f.enlace.codigo) : undefined);
+                            const cant = trimFam(s.trim.porCodigo, f.g.codigo) ?? (f.enlace.codigo ? trimFam(s.trim.porCodigo, f.enlace.codigo) : undefined);
                             return (
                               <td key={s.key} style={{ textAlign: 'right' }}>
                                 {cant == null ? <span style={{ color: '#c3ccd3' }} title="No figura en el Análisis Trimestral">-</span> : fmtCantidad(Math.round(cant))}
@@ -7379,6 +8577,93 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
         </>
       ) : null}
 
+      {vista === 'correcciones' ? (
+        <>
+          <div className="notice" style={{ marginBottom: 8 }}>
+            Requerido del {cortoCiclo(ciclo)} corregido a mano. El PDF del Ministerio no se modifica: acá está el valor original y el corregido.
+            Para corregir, en «Por código» hacé clic en el número de la columna «Requerido».
+          </div>
+          <h3 style={{ margin: '10px 0 6px' }}>Correcciones vigentes ({ajustes.length})</h3>
+          <ExportButton targetId="tabla-req-correcciones" name={`correcciones-requerimiento-${ciclo}`} />
+          <section className="table-wrap">
+            <table id="tabla-req-correcciones" className="compact">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Droga</th>
+                  <th>Descripción</th>
+                  <th style={{ textAlign: 'right' }} title="Lo que dice el PDF hoy">Original (PDF)</th>
+                  <th style={{ textAlign: 'right' }} title="El valor que rige">Corregido</th>
+                  <th style={{ textAlign: 'right' }} title="Corregido menos original">Diferencia</th>
+                  <th>Motivo</th>
+                  <th>Corregido por</th>
+                  <th>Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ajustes.map((a) => {
+                  const g = porCodigo.find((x) => x.codigo === a.codigo);
+                  const pdfHoy = g ? g.cantidad : null;
+                  const dif = pdfHoy == null ? null : a.cantidad - pdfHoy;
+                  return (
+                    <tr key={a.id}>
+                      <td className="code">{a.codigo}</td>
+                      <td style={{ fontWeight: 700 }}>{g?.droga || '—'}</td>
+                      <td>{g?.descripcion || '—'}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        {pdfHoy == null ? '—' : fmtCantidad(pdfHoy)}
+                        {pdfHoy != null && Number(a.cantidad_original) !== Number(pdfHoy) ? <div style={{ fontSize: 11, color: '#b42318' }}>⚠ al corregir decía {fmtCantidad(a.cantidad_original)}</div> : null}
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmtCantidad(a.cantidad)}</td>
+                      <td style={{ textAlign: 'right', color: dif < 0 ? '#b42318' : dif > 0 ? '#1f7a3a' : undefined }}>{dif == null ? '—' : `${dif > 0 ? '+' : ''}${fmtCantidad(dif)}`}</td>
+                      <td>{a.motivo || ''}</td>
+                      <td>{a.usuario_nombre || '—'}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{fmtFechaHoraAr(a.updated_at)}</td>
+                    </tr>
+                  );
+                })}
+                {!ajustes.length ? <tr><td colSpan={9} className="empty">Todavía no hay correcciones para el {cortoCiclo(ciclo)}.</td></tr> : null}
+              </tbody>
+            </table>
+          </section>
+          <h3 style={{ margin: '16px 0 6px' }}>Historial de cambios ({histAjustes.length})</h3>
+          <ExportButton targetId="tabla-req-correcciones-hist" name={`historial-correcciones-${ciclo}`} />
+          <section className="table-wrap">
+            <table id="tabla-req-correcciones-hist" className="compact">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Código</th>
+                  <th>Droga</th>
+                  <th>Qué se hizo</th>
+                  <th style={{ textAlign: 'right' }} title="Lo que decía el PDF en ese momento">Original (PDF)</th>
+                  <th style={{ textAlign: 'right' }}>Valor anterior</th>
+                  <th style={{ textAlign: 'right' }}>Valor nuevo</th>
+                  <th>Motivo</th>
+                  <th>Usuario</th>
+                </tr>
+              </thead>
+              <tbody>
+                {histAjustes.map((h) => (
+                  <tr key={h.id}>
+                    <td style={{ whiteSpace: 'nowrap' }}>{fmtFechaHoraAr(h.created_at)}</td>
+                    <td className="code">{h.codigo}</td>
+                    <td>{porCodigo.find((x) => x.codigo === h.codigo)?.droga || '—'}</td>
+                    <td>{h.accion === 'volver' ? 'Volvió al valor del PDF' : 'Corrigió'}</td>
+                    <td style={{ textAlign: 'right' }}>{h.cantidad_original == null ? '—' : fmtCantidad(h.cantidad_original)}</td>
+                    <td style={{ textAlign: 'right' }}>{h.valor_anterior == null ? '—' : fmtCantidad(h.valor_anterior)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{h.valor_nuevo == null ? '—' : fmtCantidad(h.valor_nuevo)}</td>
+                    <td>{h.motivo || ''}</td>
+                    <td>{h.usuario_nombre || '—'}</td>
+                  </tr>
+                ))}
+                {!histAjustes.length ? <tr><td colSpan={9} className="empty">Sin cambios todavía.</td></tr> : null}
+              </tbody>
+            </table>
+          </section>
+        </>
+      ) : null}
+
       {vista === 'requerimientos' ? (
         <>
           <ExportButton targetId="tabla-req-cabeceras" name="requerimientos" />
@@ -7539,6 +8824,7 @@ function StockActualPage({ token }) {
       <section className="page-title">
         <h2>Stock Actual (Farmacia MS)</h2>
       </section>
+      <AyudaPagina id="stockactual" />
 
       <section className="toolbar" style={{ flexWrap: 'wrap', alignItems: 'center', fontSize: 14 }}>
         <span style={{ fontWeight: 700 }}>Carpeta de los Excel: {data.dir || 'D:\\FARMACIA\\STOCK ACTUAL'}</span>
@@ -7576,6 +8862,8 @@ function StockActualPage({ token }) {
         <Metric label="Bajo el mínimo" value={bajoMinimo} />
         <Metric label="Sin stock" value={sinStock} />
       </section>
+
+      <RepetidosCard repetidos={data.repetidos} onBuscar={(codigo) => { setSector(''); setSearch(codigo); }} />
 
       <section className="filters">
         <select value={descargaSel} onChange={(event) => { setDescargaSel(event.target.value); refresh(event.target.value); }}>
@@ -7643,6 +8931,174 @@ function StockActualPage({ token }) {
         </table>
       </section>
     </div>
+  );
+}
+
+// Card con los farmacos repetidos de la descarga de stock vista y de donde salio cada codigo
+// (lo calcula el backend: stockRepetidos.js + stockRepetidosOrigen.js)
+const ORIGEN_CLASES = {
+  oc: { texto: 'O.C.', clase: 'origen-oc' },
+  hospital: { texto: 'Otro hospital', clase: 'origen-hospital' },
+  sector: { texto: 'Otro sector', clase: 'origen-sector' },
+  donacion: { texto: 'Donación', clase: 'origen-manual' },
+  manual: { texto: 'Carga manual', clase: 'origen-manual' },
+  'sin-dato': { texto: 'Sin datos', clase: 'origen-sin' }
+};
+
+function OrigenCodigo({ origen }) {
+  const [verDetalle, setVerDetalle] = useState(false);
+  if (!origen) return <span className="origen-sin-texto">—</span>;
+  return (
+    <div className="origen-codigo">
+      {(origen.fuentes?.length ? origen.fuentes : [{ clase: origen.clase, texto: origen.resumen }]).map((f) => (
+        <span key={f.texto} className={`origen-chip ${ORIGEN_CLASES[f.clase]?.clase || ''}`}>{f.texto}</span>
+      ))}
+      {origen.detalle?.length ? (
+        <button type="button" className="link-detalle" onClick={() => setVerDetalle(!verDetalle)}>{verDetalle ? 'ocultar ingresos' : 'ver ingresos'}</button>
+      ) : null}
+      {verDetalle ? <ul className="origen-detalle">{origen.detalle.map((l) => <li key={l}>{l}</li>)}</ul> : null}
+    </div>
+  );
+}
+
+// Renglon del requerimiento: verde = suma codigos unidos; naranja = tiene un gemelo en el stock sin unir
+function estiloUnion(f) {
+  if (f.sinUnir?.length) return { background: '#fff1dc', boxShadow: 'inset 4px 0 0 #e08a00' };
+  if (f.union) return { background: '#eaf7ee', boxShadow: 'inset 4px 0 0 #2e9e5b' };
+  return undefined;
+}
+
+function MarcaUnion({ f }) {
+  if (!f.union && !f.sinUnir?.length) return null;
+  return (
+    <div style={{ fontFamily: 'inherit', fontWeight: 400, fontSize: 11, marginTop: 3, lineHeight: 1.35, whiteSpace: 'normal', minWidth: 230, maxWidth: 320 }}>
+      {f.union ? (
+        <div style={{ color: '#176338' }} title={f.union.notas.join(' · ') || 'Unido en Códigos equivalentes'}>
+          {f.union.otros.map((o) => (
+            <div key={o.codigo} style={{ marginBottom: 2 }}>
+              🔗 <b>Suma {o.codigo}</b>{o.desc ? <span style={{ fontFamily: 'inherit' }}> — {o.desc}</span> : null}
+              <div style={{ color: '#3d6b50' }}>
+                {[o.consumo ? `consumo ${fmtCantidad(o.consumo)}` : 'sin consumo', o.stock != null ? `stock ${fmtCantidad(o.stock)}` : 'sin stock'].join(' · ')}
+              </div>
+            </div>
+          ))}
+          <div style={{ color: '#5b6b76' }}>
+            {f.union.cuando ? `Unido el ${f.union.cuando}` : 'Unido'} en Códigos equivalentes{f.union.notas.length ? `: ${f.union.notas.join(' · ')}` : ''}
+          </div>
+        </div>
+      ) : null}
+      {f.sinUnir?.length ? (
+        <div style={{ color: '#8a4300' }} title="Mismo fármaco con otro código en el Stock Actual. Mientras no se una en Códigos equivalentes, su stock y su consumo NO se suman en este renglón.">
+          ⚠ <b>Sin unir</b>: {f.sinUnir.map((x) => `${x.codigo} (stock ${fmtCantidad(x.stock)}${x.origen?.fuentes?.[0] ? ` · ${x.origen.fuentes[0].texto}` : ''})`).join(', ')} — no se suma
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RepetidosCard({ repetidos, onBuscar, inicialAbierta = true, fechaStock = null }) {
+  const [abierta, setAbierta] = useState(inicialAbierta);
+  const [filtro, setFiltro] = useState('todos'); // todos | sinUnir | lotes
+  if (!repetidos) return null;
+  const todos = [
+    { key: 'identicos', titulo: 'Mismo producto con dos códigos distintos (descripción idéntica)', lista: repetidos.identicos || [] },
+    { key: 'probables', titulo: 'Casi seguro el mismo producto, pero escrito distinto', lista: repetidos.probables || [] },
+    { key: 'entreSectores', titulo: 'Mismo código en más de un sector', lista: repetidos.entreSectores || [] }
+  ];
+  const total = todos.reduce((acc, g) => acc + g.lista.length, 0);
+  const alertas = todos.reduce((acc, g) => acc + g.lista.filter((x) => x.alertas?.length).length, 0);
+  const pasa = (x) => (filtro === 'lotes' ? x.alertas?.length > 0 : filtro === 'sinUnir' ? x.equivalencia === 'pendiente' : true);
+  const grupos = todos.map((g) => ({ ...g, lista: g.lista.filter(pasa) }));
+  const elegir = (f) => { setFiltro((cur) => (cur === f ? 'todos' : f)); setAbierta(true); };
+  const chip = (f, clase, texto, title) => (
+    <button
+      type="button"
+      className={`status ${clase} repetidos-filtro${filtro === f ? ' activo' : ''}`}
+      title={`${title}${filtro === f ? ' — click para ver todos' : ' — click para filtrar'}`}
+      onClick={() => elegir(f)}
+    >{texto}</button>
+  );
+  const etiquetaFiltro = filtro === 'lotes' ? 'solo los que tienen lotes para revisar' : filtro === 'sinUnir' ? 'solo los que están sin unir' : '';
+  return (
+    <section className="repetidos-card">
+      <header>
+        <h3>
+          Fármacos repetidos {total ? chip('todos', 'error', total, 'Total de casos de fármacos repetidos') : <span className="status listo">0</span>}
+          {repetidos.sinUnir ? chip('sinUnir', 'en_proceso', `${repetidos.sinUnir} sin unir`, 'Mismo fármaco con dos códigos, todavía sin unir en Códigos equivalentes') : null}
+          {alertas ? chip('lotes', 'en_proceso', `⚠ ${alertas} lote(s) para revisar`, 'El mismo lote figura con stock en los dos códigos o sectores: puede estar contado dos veces') : null}
+          {fechaStock ? <small style={{ fontWeight: 400, color: '#5b6b76' }}>stock al {fmtFechaAr(String(fechaStock).slice(0, 10))}</small> : null}
+        </h3>
+        <button type="button" className="ghost small" onClick={() => setAbierta(!abierta)}>{abierta ? 'Ocultar' : 'Ver detalle'}</button>
+      </header>
+      {!total ? <p className="repetidos-vacio">No hay fármacos repetidos en esta descarga.</p> : null}
+      {total && abierta ? (
+        <div className="repetidos-explica">
+          <p>
+            <b>¿Qué es esto?</b> En el Stock Actual de Farmacia MS hay fármacos que aparecen <b>más de una vez</b>: el mismo producto
+            cargado con dos códigos, o el mismo código en dos sectores. Mientras no se unan, el stock y el consumo quedan
+            <b> partidos en dos renglones</b> y el requerimiento puede mostrar faltantes que no existen o pedir de más.
+          </p>
+          <ul>
+            <li><b>{total} repetidos</b>: todos los casos detectados, separados en los 3 grupos de abajo.</li>
+            <li><b>Sin unir</b>: mismo fármaco con dos códigos que todavía no se unió (ni se marcó como distinto) en <i>Códigos equivalentes</i>. Hasta que se una, sus datos no se suman.</li>
+            <li><b>⚠ Lotes para revisar</b>: el <b>mismo número de lote</b> tiene stock en los dos códigos o sectores. Un lote entra una sola vez, así que probablemente el mismo ingreso se cargó dos veces y el stock está <b>contado doble</b>. Hay que revisarlo y corregirlo en Farmacia MS.</li>
+            <li><b>De dónde salió</b>: cruza los Ingresos Detallados de Farmacia MS (tipo de ingreso y origen) con las O.C. cargadas en el sistema, para ver por dónde entró cada código.</li>
+          </ul>
+          <p className="repetidos-tip">Tocá los chips de arriba (<b>sin unir</b> / <b>lotes para revisar</b>) para filtrar la lista; tocándolos de nuevo se ve todo.</p>
+          {repetidos.conIngresos === false ? <p>Todavía no hay Ingresos Detallados bajados: se cargan con la próxima descarga de stock.</p> : null}
+          {repetidos.errorOrigen ? <p>No se pudo rastrear el origen: {repetidos.errorOrigen}</p> : null}
+        </div>
+      ) : null}
+      {abierta && total && filtro !== 'todos' ? (
+        <p className="repetidos-filtrando">
+          Mostrando {etiquetaFiltro} ({grupos.reduce((a, g) => a + g.lista.length, 0)} de {total}).{' '}
+          <button type="button" className="link-codigo" style={{ fontFamily: 'inherit' }} onClick={() => setFiltro('todos')}>Ver todos</button>
+        </p>
+      ) : null}
+      {abierta && total ? grupos.map((g, idx) => (g.lista.length ? (
+        <div key={g.key} className="repetidos-grupo">
+          <h4>{idx + 1}. {g.titulo} <small>({g.lista.length})</small></h4>
+          <table className="compact">
+            <thead>
+              <tr><th>Fármaco</th><th>Sector</th><th>Código</th><th style={{ textAlign: 'right' }}>Stock</th><th>De dónde salió</th></tr>
+            </thead>
+            <tbody>
+              {g.lista.map((grupo) => {
+                const claveGrupo = `${g.key}-${grupo.items.map((i) => `${i.sector}-${i.codigo}`).join('-')}`;
+                const filas = grupo.items.length + (grupo.alertas?.length ? 1 : 0);
+                return (
+                  <React.Fragment key={claveGrupo}>
+                    {grupo.items.map((it, i) => (
+                      <tr key={`${it.sector}-${it.codigo}`} className={i === 0 ? 'grupo-inicio' : ''}>
+                        {i === 0 ? (
+                          <td rowSpan={filas} className="repetidos-farmaco">
+                            {grupo.items.map((x) => (
+                              <div key={`${x.sector}-${x.codigo}`}><strong>{x.nombre}</strong> {[x.concentracion, x.presentacion, x.forma].filter(Boolean).join(' · ')}</div>
+                            ))}
+                            {grupo.equivalencia === 'unido' ? <span className="status listo" title="Ya están unidos en Códigos equivalentes: sus datos se suman">✓ unidos</span> : null}
+                            {grupo.equivalencia === 'pendiente' ? <span className="status en_proceso" title="Todavía no están unidos en Códigos equivalentes">sin unir</span> : null}
+                            {grupo.equivalencia === 'distinto' ? <span className="status" title="Marcados como productos distintos">marcados distintos</span> : null}
+                          </td>
+                        ) : null}
+                        <td>{it.sector}</td>
+                        <td><button type="button" className="link-codigo" title="Ver en la tabla" onClick={() => onBuscar(it.codigo)}>{it.codigo}</button></td>
+                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmtCantidad(it.stock)}</td>
+                        <td><OrigenCodigo origen={it.origen} /></td>
+                      </tr>
+                    ))}
+                    {grupo.alertas?.length ? (
+                      <tr>
+                        <td colSpan="4" className="repetidos-alerta">{grupo.alertas.map((a) => <div key={a}>⚠ {a}</div>)}</td>
+                      </tr>
+                    ) : null}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null)) : null}
+    </section>
   );
 }
 
@@ -7738,6 +9194,7 @@ function ConsumoMsPage({ token }) {
       <section className="page-title">
         <h2>Consumo Mensual (Farmacia MS)</h2>
       </section>
+      <AyudaPagina id="consumoms" />
 
       <section className="toolbar" style={{ flexWrap: 'wrap', alignItems: 'center', fontSize: 14 }}>
         <span style={{ fontWeight: 700 }}>Carpeta de los Excel: {data.dir || 'D:\\FARMACIA\\CONSUMO MENSUAL'}</span>
@@ -7935,6 +9392,7 @@ function PendientesMsPage({ token }) {
       <section className="page-title">
         <h2>Pendientes de Ingreso (Farmacia MS)</h2>
       </section>
+      <AyudaPagina id="pendientesms" />
 
       <section className="toolbar" style={{ flexWrap: 'wrap', alignItems: 'center', fontSize: 14 }}>
         <span style={{ fontWeight: 700 }}>N° de O.C.:</span>
@@ -8110,6 +9568,7 @@ function VencidosPage({ token }) {
       <section className="page-title">
         <h2>Vencimientos (Farmacia MS)</h2>
       </section>
+      <AyudaPagina id="vencidos" />
 
       <section className="toolbar" style={{ flexWrap: 'wrap', alignItems: 'center', fontSize: 14 }}>
         <span style={{ fontWeight: 700 }}>Carpeta de los Excel: {data.dir || 'D:\\FARMACIA\\VENCIDOS'}</span>
@@ -8273,6 +9732,7 @@ function UsersPage({ token, currentUserId }) {
       <section className="page-title">
         <h2>Usuarios y permisos</h2>
       </section>
+      <AyudaPagina id="usuarios" />
 
       <form className="user-form" onSubmit={crear}>
         <input placeholder="Usuario" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />

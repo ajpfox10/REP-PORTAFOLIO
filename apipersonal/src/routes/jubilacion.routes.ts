@@ -33,6 +33,7 @@ import { can, requireAny }            from '../middlewares/rbacCrud';
 import { env }                        from '../config/env';
 import { logger }                     from '../logging/logger';
 import { leerListadoANSES }           from '../services/ansesPdf.service';
+import { turnoJubilacionEn, reflejarEstadoEnTurno } from '../services/agendaTurnos';
 import {
   ITEMS_CHECKLIST, periodoVigente, alertaVencida, itemsFaltantes, fechaLocalISO,
   corteVigente, corteSugerido, opcionesCorte, corteEsPosteriorAlVigente,
@@ -94,7 +95,7 @@ const calculoSchema = z.object({
   fecha_calculo:           dateStr.optional().nullable(),
   servicios_anses:         z.array(servicioANSESSchema).max(20).default([]),
   servicios_externos:      z.array(servicioExternoSchema).max(20).default([]),
-  resoluciones_manuales:   z.record(z.string()).optional().default({}),
+  resoluciones_manuales:   z.record(z.string(), z.string()).optional().default({}),
   observaciones:           z.string().max(2000).optional().nullable(),
   // Tramos de la carrera elegidos para el cómputo IPS. Ausente = cálculo clásico
   // (ingreso → nombramiento = beca, nombramiento → hoy = nombrado).
@@ -2913,7 +2914,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
         tildado: z.boolean(),
         // Solo para los pasos con numero (IFGRA y los dos expedientes):
         // { <columna de posibles_jubilados>: '<numero>' }.
-        numeros: z.record(z.string().max(60)).optional().nullable(),
+        numeros: z.record(z.string(), z.string().max(60)).optional().nullable(),
       });
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.issues });
@@ -3208,6 +3209,10 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
         ) as any[];
         if (dup.length) return res.status(409).json({ ok: false, error: 'Ya existe una cita para ese agente en esa fecha y hora' });
 
+        // Que no pise un turno que un agente ya tomó por el enlace (Agenda de turnos conectada a jubilación)
+        const choque = await turnoJubilacionEn(sequelize, body.fecha_cita, normHora(body.hora_cita));
+        if (choque) return res.status(409).json({ ok: false, error: `Ese horario ya lo tomó ${choque.apellido} ${choque.nombre} (${choque.agenda}, ${choque.hora})` });
+
         const [insertResult] = await sequelize.query(
           `INSERT INTO jubilacion_citas
              (dni, apellido, nombre, ley_nombre, ocupacion_nombre,
@@ -3276,10 +3281,20 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
 
       try {
         await ensureCitasTable(sequelize);
+        if (body.fecha_cita !== undefined || body.hora_cita !== undefined) {
+          const act = (await sequelize.query<any>(
+            `SELECT DATE_FORMAT(fecha_cita, '%Y-%m-%d') AS f, TIME_FORMAT(hora_cita, '%H:%i') AS h FROM jubilacion_citas WHERE id = :id`,
+            { replacements: { id }, type: QueryTypes.SELECT }))[0];
+          if (act) {
+            const choque = await turnoJubilacionEn(sequelize, body.fecha_cita ?? act.f, body.hora_cita ? normHora(body.hora_cita) : act.h, id);
+            if (choque) return res.status(409).json({ ok: false, error: `Ese horario ya lo tomó ${choque.apellido} ${choque.nombre} (${choque.agenda}, ${choque.hora})` });
+          }
+        }
         await sequelize.query(
           `UPDATE jubilacion_citas SET ${sets.join(', ')} WHERE id = :id AND deleted_at IS NULL`,
           { replacements: repl, type: QueryTypes.UPDATE },
         );
+        if (body.estado) await reflejarEstadoEnTurno(sequelize, id, body.estado);
         return res.json({ ok: true });
       } catch (err: any) {
         logger.error({ msg: '[jubilacion_citas] patch error', err: err?.message });
@@ -3301,6 +3316,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           `UPDATE jubilacion_citas SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL`,
           { replacements: { id }, type: QueryTypes.UPDATE },
         );
+        await reflejarEstadoEnTurno(sequelize, id, 'CANCELADA');   // si vino de la Agenda de turnos, libera el horario
         return res.json({ ok: true });
       } catch (err: any) {
         logger.error({ msg: '[jubilacion_citas] delete error', err: err?.message });
@@ -3415,6 +3431,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
             type: QueryTypes.UPDATE,
           },
         );
+        await reflejarEstadoEnTurno(sequelize, id, 'ATENDIDA');
 
         return res.json({ ok: true, posible_jubilado_id: posibleId, ya_existia: yaExistia });
       } catch (err: any) {

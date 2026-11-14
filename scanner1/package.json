@@ -20,5 +20,9 @@
   },
   "dependencies": {
     "image-q": "^4.0.0"
+  },
+  "overrides": {
+    "zod": "^4.6.7",
+    "qs": "^6.16.2"
   }
 }

@@ -12,6 +12,12 @@ import { env } from '../config/env';
 import { logger } from '../logging/logger';
 import { cacheInvalidateTags } from '../infra/cache';
 import { extractTextFromImage } from '../services/ocr.service';
+import { ejecutarAhora, resolverScriptsDir } from '../services/robotsTareasWindows';
+import { execFile } from 'child_process';
+import {
+  datosNotaDesignacion, docxDesdeTexto, ensureNotaDesignacionTable, aplicarPlantilla, plantillaDeTanda,
+  PLANTILLA_NOTA_DEFAULT, MARCADORES_NOTA, NOTA_DESIG_SUBCARPETA,
+} from '../services/notaDesignacionGdeba';
 
 const dynamicImport: (s: string) => Promise<any> = new Function('s', 'return import(s)') as any;
 
@@ -1640,9 +1646,12 @@ async function listTandaAgentes(sequelize: Sequelize, tanda?: string | null) {
     `
       SELECT
         t.id, t.tanda, t.dni, t.estado, t.creado_at AS creadoAt, t.origen, t.anio,
+        t.ley_14783 AS ley14783,
+        t.ley_10592 AS ley10592,
         TRIM(CONCAT(COALESCE(p.apellido, ''), ', ', COALESCE(p.nombre, ''))) AS apellidoNombre,
         DATE_FORMAT(a.fecha_ingreso, '%Y-%m-%d') AS fechaIngreso,
         oc.nombre AS ocupacionNombre,
+        COALESCE(nagr.nombre, oc.agrupamiento) AS ocupacionAgrupamiento,
         CASE
           WHEN ocl.nombre LIKE '%10471%' THEN '10471'
           WHEN ocl.nombre LIKE '%10430%' THEN '10430'
@@ -1679,6 +1688,7 @@ async function listTandaAgentes(sequelize: Sequelize, tanda?: string | null) {
       LEFT JOIN plantas pl ON pl.id = a.planta_id AND pl.deleted_at IS NULL
       LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
       LEFT JOIN ley ocl ON ocl.id = oc.ley_id AND ocl.deleted_at IS NULL
+      LEFT JOIN nomenclador_agrupamientos nagr ON nagr.id = oc.agrupamiento_id
       WHERE 1 = 1 ${whereTanda}
       ORDER BY t.tanda ASC, apellidoNombre ASC
     `,
@@ -1766,6 +1776,16 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       }
       if (!have.has('anio')) {
         await sequelize.query(`ALTER TABLE tramites_tanda_interinos ADD COLUMN anio SMALLINT NULL`);
+      }
+      // ley_14783 = 1: el agente entra por la Ley 14783 → se le pide el Anexo 1 y
+      // el certificado de nacimiento que lo acompaña (tilde en la pestaña Trámites).
+      if (!have.has('ley_14783')) {
+        await sequelize.query(`ALTER TABLE tramites_tanda_interinos ADD COLUMN ley_14783 TINYINT(1) NOT NULL DEFAULT 0`);
+      }
+      // ley_10592 = 1: entra por la Ley 10592 (discapacidad, PBA) → se le pide el
+      // Certificado de discapacidad (mig 130).
+      if (!have.has('ley_10592')) {
+        await sequelize.query(`ALTER TABLE tramites_tanda_interinos ADD COLUMN ley_10592 TINYINT(1) NOT NULL DEFAULT 0`);
       }
     } catch (e: any) {
       logger.error({ msg: 'tramites_tanda_interinos: error creando tabla', error: e?.message });
@@ -2851,6 +2871,37 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // Pase a planta: copia documentos de DOCU a PASE_A_PLANTA_DIR\<HTAL|UPA 18|UPA 4>\<APELLIDO NOMBRE>,
+  // siempre en JPG (antecedentes nacionales/provinciales y planilla de compatibilidad). Lo hace
+  // scripts/pase_planta.py (el mismo que corre el robot del mail cada 2 min): así el botón y el robot
+  // siguen las mismas reglas. Body: { tanda, ejecutar } — ejecutar=false (default) = vista previa.
+  router.post('/tandas/pase-planta', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.body?.tanda);
+      const ejecutar = req.body?.ejecutar === true;
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+      const args = ['pase_planta.py', '--json', '--tanda', tanda, ...(ejecutar ? [] : ['--dry-run'])];
+      const salida = await new Promise<string>((resolve, reject) => {
+        // execFile sin shell: la tanda va como argumento, no se interpreta.
+        execFile('python', args, {
+          cwd: resolverScriptsDir(), timeout: 10 * 60 * 1000, windowsHide: true, maxBuffer: 20 * 1024 * 1024,
+          env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+        }, (err, out, stderr) => {
+          const txt = String(out || '').trim();
+          if (txt.startsWith('{')) return resolve(txt);
+          reject(new Error(String(stderr || err?.message || 'pase_planta.py no devolvió nada').slice(-500)));
+        });
+      });
+      const r = JSON.parse(salida);
+      if (!r.ok) return res.status(400).json({ ok: false, error: r.error || 'Error' });
+      if (ejecutar) logger.info({ msg: '[tramites] pase-planta copiado', tanda, ...r.data?.totales });
+      return res.json({ ok: true, data: { tanda, ...r.data } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] pase-planta error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
   // Estado de un agente en una tanda: { tanda, dni, estado } (pendiente|hecho|aprobado).
   router.post('/tandas/estado', async (req: Request, res: Response) => {
     try {
@@ -2868,6 +2919,40 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       return res.json({ ok: true, data: { tanda, dni, estado } });
     } catch (err: any) {
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al actualizar estado' });
+    }
+  });
+
+  // Tilde "Ley 14783" del agente en la tanda. Body: { tanda, dni, valor: boolean }.
+  router.post('/tandas/ley-14783', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.body?.tanda);
+      const dni = parseDni(req.body?.dni);
+      if (!tanda || !dni) return res.status(400).json({ ok: false, error: 'Falta tanda o dni' });
+      const valor = req.body?.valor === true || req.body?.valor === 1 || req.body?.valor === 'true' ? 1 : 0;
+      await sequelize.query(
+        'UPDATE tramites_tanda_interinos SET ley_14783 = :valor WHERE tanda = :tanda AND dni = :dni',
+        { replacements: { valor, tanda, dni }, type: QueryTypes.UPDATE }
+      );
+      return res.json({ ok: true, data: { tanda, dni, ley14783: valor } });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al guardar Ley 14783' });
+    }
+  });
+
+  // Tilde "Ley 10592" (discapacidad) del agente en la tanda. Body: { tanda, dni, valor: boolean }.
+  router.post('/tandas/ley-10592', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.body?.tanda);
+      const dni = parseDni(req.body?.dni);
+      if (!tanda || !dni) return res.status(400).json({ ok: false, error: 'Falta tanda o dni' });
+      const valor = req.body?.valor === true || req.body?.valor === 1 || req.body?.valor === 'true' ? 1 : 0;
+      await sequelize.query(
+        'UPDATE tramites_tanda_interinos SET ley_10592 = :valor WHERE tanda = :tanda AND dni = :dni',
+        { replacements: { valor, tanda, dni }, type: QueryTypes.UPDATE }
+      );
+      return res.json({ ok: true, data: { tanda, dni, ley10592: valor } });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al guardar Ley 10592' });
     }
   });
 
@@ -3102,6 +3187,50 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       const docsPorLey = new Map<string, string[]>();
       for (const d of docsRows) { const a = docsPorLey.get(d.ley) || []; a.push(d.documento); docsPorLey.set(d.ley, a); }
 
+      // Documentos "(Solo chofer/choferes)": solo se le piden a quien es chofer —
+      // por ocupación (nombre con "chofer") o porque en el Google Form de
+      // designación respondió que lo designan como chofer (es_chofer = 1).
+      const DOC_SOLO_CHOFER = /\(\s*solo\s+chofer(es)?\s*\)/i;
+      const dnisTanda = agentes.map((a) => Number(a.dni)).filter(Boolean);
+      const choferPorForm = new Set<number>();
+      if (dnisTanda.length) {
+        const fr = await sequelize.query<{ dni: number }>(
+          `SELECT dni FROM designacion_form_datos WHERE es_chofer = 1 AND dni IN (:dnis)`,
+          { replacements: { dnis: dnisTanda }, type: QueryTypes.SELECT }
+        );
+        for (const r of fr) choferPorForm.add(Number(r.dni));
+      }
+
+      // Documentos "(Solo Extranjeros)": solo a extranjeros. Extranjero = DNI de
+      // 90 millones o más, o nacionalidad (personal) / país de nacimiento (legajo)
+      // cargado y distinto de Argentina. Sin dato y DNI < 90M → argentino.
+      // La Carta de ciudadanía no lo dice en el nombre, pero también es solo para extranjeros.
+      const DOC_SOLO_EXTRANJERO = /\(\s*solo\s+extranjer[oa]s?\s*\)|carta\s+de\s+ciudadan/i;
+      const DOC_ETICO = /^\s*[eé]tico\b/i;
+      // Anexo 1 Ley 14783 y el certificado de nacimiento que lo acompaña: solo si
+      // en la tanda se tildó que el agente entra por la Ley 14783.
+      const DOC_LEY_14783 = /14783|acompa[nñ]a\s+anexo\s*1/i;
+      // Matrícula: misma regla que el Ético (en la 10430 solo técnicos y profesionales).
+      const DOC_MATRICULA = /^\s*matr[ií]cula\b/i;
+      // Certificado de discapacidad: solo si entra por la Ley 10592 (tilde en la tanda).
+      const DOC_LEY_10592 = /discapacidad|10592/i;
+      const extranjeros = new Set<number>(dnisTanda.filter((d) => d >= 90_000_000));
+      if (dnisTanda.length) {
+        const nr = await sequelize.query<{ dni: number; nacionalidad: string | null; nac_pais: string | null }>(
+          `SELECT p.dni, p.nacionalidad, l.nac_pais
+             FROM personal p
+             LEFT JOIN legajo_datos_personales l ON l.dni = p.dni
+            WHERE p.dni IN (:dnis) AND p.deleted_at IS NULL`,
+          { replacements: { dnis: dnisTanda }, type: QueryTypes.SELECT }
+        );
+        // Solo cuenta un valor con letras que no sea Argentina (descarta basura tipo "23213" o "Si").
+        const esOtroPais = (v: string | null) => {
+          const s = String(v || '').trim();
+          return /^[a-záéíóúñ ]{3,}$/i.test(s) && !/^argentin/i.test(s) && !/^(si|sí|no)$/i.test(s);
+        };
+        for (const r of nr) if (esOtroPais(r.nacionalidad) || esOtroPais(r.nac_pais)) extranjeros.add(Number(r.dni));
+      }
+
       const incompletos: Array<{ dni: number; nombre: string; ley: string; sinCarpeta: boolean; faltan: string[]; completos: number; total: number }> = [];
       const sinLey: Array<{ dni: number; nombre: string }> = [];
 
@@ -3110,7 +3239,19 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
         const nombre = String(a.apellidoNombre || `DNI ${dni}`);
         const ley = a.ocupacionLey === '10471' ? '10471' : a.ocupacionLey === '10430' ? '10430' : null;
         if (!ley || !docsPorLey.has(ley)) { sinLey.push({ dni, nombre }); continue; }
-        const docs = docsPorLey.get(ley)!;
+        const esChofer = /chofer/i.test(String(a.ocupacionNombre || '')) || choferPorForm.has(dni);
+        const esExtranjero = extranjeros.has(dni);
+        // Ético en la 10430: solo a técnicos y profesionales. A administrativos,
+        // obreros y servicio no. Sin agrupamiento conocido se sigue pidiendo.
+        // (En la 10471 se le pide a todos: ahí el documento es "Etico" a secas.)
+        const agrup = String(a.ocupacionAgrupamiento || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+        const pideEtico = ley !== '10430' || !agrup || /TECNIC|PROFESION/.test(agrup);
+        const docs = docsPorLey.get(ley)!.filter((d) =>
+          (esChofer || !DOC_SOLO_CHOFER.test(d))
+          && (esExtranjero || !DOC_SOLO_EXTRANJERO.test(d))
+          && (pideEtico || (!DOC_ETICO.test(d) && !DOC_MATRICULA.test(d)))
+          && (Number(a.ley14783) === 1 || !DOC_LEY_14783.test(d))
+          && (Number(a.ley10592) === 1 || !DOC_LEY_10592.test(d)));
         const dir = resolveDocuAgentDir(dni);
         if (!fs.existsSync(dir)) {
           incompletos.push({ dni, nombre, ley, sinCarpeta: true, faltan: [...docs], completos: 0, total: docs.length });
@@ -3242,6 +3383,267 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     } catch (err: any) {
       logger.error({ msg: '[tramites] abrir-carpeta error', error: err?.message });
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'No se pudo preparar la carpeta' });
+    }
+  });
+
+  // ── Nota de designación para GDEBA ─────────────────────────────────────────
+  // Texto = plantilla de la tanda (tramites_nota_designacion_plantilla, o el modelo
+  // original) con los datos del agente; se puede retocar por agente (texto_editado = 1,
+  // que "Generar" respeta). Estados: GENERADA → ENVIADA_FIRMA (robot o a mano) →
+  // FIRMADA (con número IF) / ERROR.
+  const NOTA_ESTADOS = ['GENERADA', 'ENVIADA_FIRMA', 'FIRMADA', 'ERROR'] as const;
+  const actorDe = (req: Request) =>
+    (req as any).auth?.principalType === 'user' ? Number((req as any).auth.principalId) || null : null;
+
+  /** Escribe el .docx de la nota en DOCU\<dni>\Nota designacion GDEBA\ y devuelve la ruta relativa. */
+  async function guardarDocxNota(dni: number, texto: string): Promise<string> {
+    const dir = path.join(resolveDocuAgentDir(dni), NOTA_DESIG_SUBCARPETA);
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `NOTA DESIGNACION GDEBA_${dni}.docx`);
+    fs.writeFileSync(file, await docxDesdeTexto(texto));
+    return `${NOTA_DESIG_SUBCARPETA}/${path.basename(file)}`;
+  }
+
+  // GET: vista previa de la tanda (datos + texto que va a llevar + estado de la nota).
+  router.get('/tandas/nota-designacion', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.query.tanda);
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+      await ensureNotaDesignacionTable(sequelize);
+      const { plantilla } = await plantillaDeTanda(sequelize, tanda);
+      const agentes = (await listTandaAgentes(sequelize, tanda)) as any[];
+      const previas = await sequelize.query<any>(
+        `SELECT dni, estado, archivo, texto, texto_editado AS textoEditado,
+                gdeba_numero AS gdebaNumero, gdeba_error AS gdebaError,
+                DATE_FORMAT(generada_at, '%Y-%m-%d %H:%i') AS generadaAt,
+                DATE_FORMAT(enviada_at, '%Y-%m-%d %H:%i') AS enviadaAt,
+                DATE_FORMAT(firmada_at, '%Y-%m-%d %H:%i') AS firmadaAt,
+                DATE_FORMAT(estado_at, '%Y-%m-%d %H:%i') AS estadoAt
+           FROM tramites_nota_designacion WHERE tanda = :tanda`,
+        { replacements: { tanda }, type: QueryTypes.SELECT },
+      );
+      const porDni = new Map(previas.map((r: any) => [Number(r.dni), r]));
+      const data = [];
+      for (const a of agentes) {
+        const d = await datosNotaDesignacion(sequelize, Number(a.dni), a.dependenciaNombre);
+        const nota = porDni.get(Number(a.dni)) || null;
+        if (nota) nota.textoEditado = !!Number(nota.textoEditado);
+        data.push({ ...d, textoPlantilla: d.faltan.length ? null : aplicarPlantilla(plantilla, d), nota });
+      }
+      return res.json({ ok: true, data });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] nota-designacion preview error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al armar las notas' });
+    }
+  });
+
+  // POST: genera la nota de los DNI elegidos (o de toda la tanda): texto desde la
+  // plantilla de la tanda + .docx en DOCU. Respeta el texto retocado a mano
+  // (texto_editado = 1: solo rehace el .docx). No toca las ENVIADA_FIRMA / FIRMADA.
+  router.post('/tandas/nota-designacion', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.body?.tanda);
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+      const pedidos: number[] | null = Array.isArray(req.body?.dnis)
+        ? req.body.dnis.map((v: any) => parseDni(v)).filter((v: number | null): v is number => !!v)
+        : null;
+      await ensureNotaDesignacionTable(sequelize);
+      const actor = actorDe(req);
+      const { plantilla } = await plantillaDeTanda(sequelize, tanda);
+
+      const agentes = ((await listTandaAgentes(sequelize, tanda)) as any[])
+        .filter((a) => !pedidos || pedidos.includes(Number(a.dni)));
+      if (!agentes.length) return res.status(404).json({ ok: false, error: 'No hay agentes para generar' });
+
+      const generadas: Array<{ dni: number; archivo: string; editada: boolean }> = [];
+      const salteadas: Array<{ dni: number; nombre: string; motivo: string }> = [];
+      for (const a of agentes) {
+        const dni = Number(a.dni);
+        const nombre = String(a.apellidoNombre || `DNI ${dni}`);
+        const d = await datosNotaDesignacion(sequelize, dni, a.dependenciaNombre);
+        if (d.faltan.length) { salteadas.push({ dni, nombre, motivo: `Falta: ${d.faltan.join(', ')}` }); continue; }
+        const [prev] = await sequelize.query<any>(
+          'SELECT estado, texto, texto_editado FROM tramites_nota_designacion WHERE tanda = :tanda AND dni = :dni',
+          { replacements: { tanda, dni }, type: QueryTypes.SELECT },
+        );
+        if (prev?.estado === 'ENVIADA_FIRMA' || prev?.estado === 'FIRMADA') {
+          salteadas.push({ dni, nombre, motivo: prev.estado === 'FIRMADA' ? 'Ya está firmada' : 'Ya se envió a firmar' });
+          continue;
+        }
+        const editada = !!Number(prev?.texto_editado);
+        const texto = editada ? String(prev.texto) : aplicarPlantilla(plantilla, d);
+        const rel = await guardarDocxNota(dni, texto);
+
+        await sequelize.query(
+          `INSERT INTO tramites_nota_designacion
+             (tanda, dni, tratamiento, apellido_nombre, establecimiento, ley, horas, cargo, agrupamiento, categoria,
+              texto, texto_editado, archivo, estado, gdeba_error, generada_at, generada_por)
+           VALUES (:tanda, :dni, :tratamiento, :apellidoNombre, :establecimiento, :ley, :horas, :cargo, :agrupamiento, :categoria,
+              :texto, 0, :archivo, 'GENERADA', NULL, NOW(), :actor)
+           ON DUPLICATE KEY UPDATE
+             tratamiento = VALUES(tratamiento), apellido_nombre = VALUES(apellido_nombre),
+             establecimiento = VALUES(establecimiento), ley = VALUES(ley), horas = VALUES(horas),
+             cargo = VALUES(cargo), agrupamiento = VALUES(agrupamiento), categoria = VALUES(categoria),
+             texto = VALUES(texto), archivo = VALUES(archivo), estado = 'GENERADA', gdeba_error = NULL,
+             generada_at = NOW(), generada_por = VALUES(generada_por)`,
+          {
+            replacements: {
+              tanda, dni, tratamiento: d.tratamiento, apellidoNombre: d.apellidoNombre,
+              establecimiento: d.establecimiento, ley: d.ley, horas: d.horas, cargo: d.cargo,
+              agrupamiento: d.agrupamiento, categoria: d.categoria, texto, archivo: rel, actor,
+            },
+          },
+        );
+        generadas.push({ dni, archivo: rel, editada });
+      }
+      return res.json({ ok: true, data: { tanda, generadas, salteadas } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] nota-designacion generar error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al generar las notas' });
+    }
+  });
+
+  // GET/PUT: plantilla (texto modelo con marcadores) de la tanda. PUT con plantilla
+  // vacía/null vuelve al modelo original. No regenera: eso lo hace "Generar".
+  router.get('/tandas/nota-designacion/plantilla', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.query.tanda);
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+      const { plantilla, propia } = await plantillaDeTanda(sequelize, tanda);
+      return res.json({ ok: true, data: { plantilla, propia, modelo: PLANTILLA_NOTA_DEFAULT, marcadores: MARCADORES_NOTA } });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al leer la plantilla' });
+    }
+  });
+
+  router.put('/tandas/nota-designacion/plantilla', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.body?.tanda);
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+      await ensureNotaDesignacionTable(sequelize);
+      const plantilla = String(req.body?.plantilla ?? '').replace(/\r\n/g, '\n').trim();
+      if (!plantilla) {
+        await sequelize.query('DELETE FROM tramites_nota_designacion_plantilla WHERE tanda = :tanda', { replacements: { tanda } });
+        return res.json({ ok: true, data: { propia: false } });
+      }
+      if (plantilla.length > 20000) return res.status(400).json({ ok: false, error: 'La plantilla es demasiado larga' });
+      const desconocidos = [...new Set((plantilla.match(/\{[A-Z_]+\}/g) || [])
+        .filter((m) => !MARCADORES_NOTA.some((k) => k.clave === m)))];
+      if (desconocidos.length) return res.status(400).json({ ok: false, error: `Marcadores que no existen: ${desconocidos.join(', ')}` });
+      await sequelize.query(
+        `INSERT INTO tramites_nota_designacion_plantilla (tanda, plantilla, updated_by) VALUES (:tanda, :plantilla, :u)
+         ON DUPLICATE KEY UPDATE plantilla = VALUES(plantilla), updated_by = VALUES(updated_by)`,
+        { replacements: { tanda, plantilla, u: actorDe(req) } },
+      );
+      return res.json({ ok: true, data: { propia: true } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] nota-designacion plantilla error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al guardar la plantilla' });
+    }
+  });
+
+  // PUT: retoca el texto de UNA nota (queda texto_editado = 1 y se rehace el .docx).
+  // texto vacío/null = volver a la plantilla de la tanda. No se edita una ya enviada/firmada.
+  router.put('/tandas/nota-designacion/texto', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.body?.tanda);
+      const dni = parseDni(req.body?.dni);
+      if (!tanda || !dni) return res.status(400).json({ ok: false, error: 'Falta la tanda o el DNI' });
+      await ensureNotaDesignacionTable(sequelize);
+      const [nota] = await sequelize.query<any>(
+        'SELECT estado FROM tramites_nota_designacion WHERE tanda = :tanda AND dni = :dni',
+        { replacements: { tanda, dni }, type: QueryTypes.SELECT },
+      );
+      if (!nota) return res.status(404).json({ ok: false, error: 'Primero generá la nota de este agente' });
+      if (nota.estado === 'ENVIADA_FIRMA' || nota.estado === 'FIRMADA')
+        return res.status(409).json({ ok: false, error: 'La nota ya se envió a firmar: no se puede editar' });
+
+      let texto = String(req.body?.texto ?? '').replace(/\r\n/g, '\n').trim();
+      let editado = 1;
+      if (!texto) {
+        const [a] = ((await listTandaAgentes(sequelize, tanda)) as any[]).filter((x) => Number(x.dni) === dni);
+        const d = await datosNotaDesignacion(sequelize, dni, a?.dependenciaNombre);
+        texto = aplicarPlantilla((await plantillaDeTanda(sequelize, tanda)).plantilla, d);
+        editado = 0;
+      }
+      if (texto.length > 20000) return res.status(400).json({ ok: false, error: 'El texto es demasiado largo' });
+      const rel = await guardarDocxNota(dni, texto);
+      await sequelize.query(
+        `UPDATE tramites_nota_designacion SET texto = :texto, texto_editado = :editado, archivo = :rel,
+                estado = IF(estado = 'ERROR', 'GENERADA', estado), gdeba_error = NULL
+          WHERE tanda = :tanda AND dni = :dni`,
+        { replacements: { texto, editado, rel, tanda, dni } },
+      );
+      return res.json({ ok: true, data: { dni, textoEditado: !!editado, archivo: rel } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] nota-designacion texto error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al guardar el texto' });
+    }
+  });
+
+  // PUT: marca a mano el estado de una o varias notas (Enviada a firmar / Firmada con
+  // número IF / Generada para volver atrás / Error).
+  router.put('/tandas/nota-designacion/estado', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.body?.tanda);
+      const dnis: number[] = (Array.isArray(req.body?.dnis) ? req.body.dnis : [req.body?.dni])
+        .map((v: any) => parseDni(v)).filter((v: number | null): v is number => !!v);
+      const estado = String(req.body?.estado || '').toUpperCase();
+      if (!tanda || !dnis.length) return res.status(400).json({ ok: false, error: 'Falta la tanda o el DNI' });
+      if (!(NOTA_ESTADOS as readonly string[]).includes(estado)) return res.status(400).json({ ok: false, error: 'Estado inválido' });
+      const numero = String(req.body?.gdebaNumero ?? '').trim().toUpperCase() || null;
+      if (estado === 'FIRMADA' && numero && !/^[A-Z]{2,5}-\d{4}-\d{5,10}-GDEBA-[A-Z0-9]+$/.test(numero))
+        return res.status(400).json({ ok: false, error: 'Número inválido: tiene que ser como IF-2026-40518978-GDEBA-HPDIGAMSALGP' });
+      const error = estado === 'ERROR' ? String(req.body?.motivo ?? '').trim().slice(0, 500) || 'Marcado a mano' : null;
+      await ensureNotaDesignacionTable(sequelize);
+      const [, meta]: any = await sequelize.query(
+        `UPDATE tramites_nota_designacion
+            SET estado = :estado, estado_at = NOW(), estado_por = :u,
+                enviada_at = CASE WHEN :estado IN ('ENVIADA_FIRMA','FIRMADA') THEN COALESCE(enviada_at, NOW()) ELSE NULL END,
+                firmada_at = CASE WHEN :estado = 'FIRMADA' THEN COALESCE(firmada_at, NOW()) ELSE NULL END,
+                gdeba_numero = CASE WHEN :estado = 'FIRMADA' THEN COALESCE(:numero, gdeba_numero) ELSE gdeba_numero END,
+                gdeba_error = :error
+          WHERE tanda = :tanda AND dni IN (:dnis)`,
+        { replacements: { estado, u: actorDe(req), numero, error, tanda, dnis } },
+      );
+      return res.json({ ok: true, data: { actualizadas: Number(meta?.affectedRows ?? 0) } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] nota-designacion estado error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al cambiar el estado' });
+    }
+  });
+
+  // POST: dispara el robot que carga las notas en GDEBA y las envía a firmar
+  // (scripts/gdeba_nota_designacion.py vía run_robot). El pedido (tanda, prueba,
+  // dnis) queda en app_runtime_config porque run_robot no pasa parámetros.
+  // prueba = true (default): 1 nota, frena antes de "Enviar a firmar".
+  router.post('/tandas/nota-designacion/gdeba', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.body?.tanda);
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+      const prueba = req.body?.prueba !== false && req.body?.prueba !== 'false';
+      const dnis: number[] | undefined = Array.isArray(req.body?.dnis)
+        ? req.body.dnis.map((v: any) => parseDni(v)).filter((v: number | null): v is number => !!v)
+        : undefined;
+      await ensureNotaDesignacionTable(sequelize);
+      const [{ n }] = await sequelize.query<any>(
+        `SELECT COUNT(*) AS n FROM tramites_nota_designacion
+          WHERE tanda = :tanda AND estado IN ('GENERADA','ERROR') ${dnis?.length ? 'AND dni IN (:dnis)' : ''}`,
+        { replacements: { tanda, dnis: dnis?.length ? dnis : [0] }, type: QueryTypes.SELECT },
+      );
+      if (!Number(n)) return res.status(400).json({ ok: false, error: 'No hay notas generadas pendientes de cargar en GDEBA' });
+      const actor = (req as any).auth?.principalType === 'user' ? Number((req as any).auth.principalId) || null : null;
+      await sequelize.query(
+        `INSERT INTO app_runtime_config (config_key, config_json, updated_by, created_at, updated_at)
+         VALUES ('gdeba_nota_designacion_pedido', :j, :u, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE config_json = VALUES(config_json), updated_by = VALUES(updated_by), updated_at = NOW()`,
+        { replacements: { j: JSON.stringify({ tanda, prueba, ...(dnis?.length ? { dnis } : {}) }), u: actor } },
+      );
+      const como = await ejecutarAhora('gdeba_nota_designacion');
+      return res.json({ ok: true, data: { tanda, prueba, pendientes: Number(n), como } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] nota-designacion gdeba error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'No se pudo lanzar el robot de GDEBA' });
     }
   });
 

@@ -186,7 +186,7 @@ function CitacionesModal({ row, dnis, onClose, onCountChange }: CitacionesModalP
         padding: 16,
       }} onClick={onClose}>
         <div
-          className="card gp-card-14"
+          className="card gp-card-14 gp-modal-solido"
           style={{ maxWidth: 680, width: '100%', maxHeight: '88vh', display: 'flex', flexDirection: 'column', padding: '1.25rem' }}
           onClick={e => e.stopPropagation()}
         >

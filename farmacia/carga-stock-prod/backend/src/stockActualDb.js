@@ -42,6 +42,28 @@ async function ensureStockActualTables() {
       CONSTRAINT fk_stock_actual_items_descarga FOREIGN KEY (descarga_id) REFERENCES stock_actual_descargas(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+  // Ingresos Detallados de Farmacia MS (tipo de ingreso y origen), bajados junto con cada descarga de stock.
+  // Se usan para explicar de donde salio cada codigo repetido.
+  await query(`
+    CREATE TABLE IF NOT EXISTS stock_actual_ingresos (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      descarga_id INT NOT NULL,
+      sector VARCHAR(160) NOT NULL,
+      nro_ingreso VARCHAR(40) NULL,
+      tipo VARCHAR(120) NULL,
+      fecha DATE NULL,
+      codigo VARCHAR(40) NOT NULL,
+      descripcion VARCHAR(400) NULL,
+      lote VARCHAR(80) NULL,
+      laboratorio VARCHAR(160) NULL,
+      vencimiento VARCHAR(20) NULL,
+      cantidad DECIMAL(14,2) NULL,
+      usuario VARCHAR(80) NULL,
+      origen VARCHAR(400) NULL,
+      INDEX idx_stock_actual_ingresos_codigo (descarga_id, codigo),
+      CONSTRAINT fk_stock_actual_ingresos_descarga FOREIGN KEY (descarga_id) REFERENCES stock_actual_descargas(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
   // Carpeta donde el robot guarda los Excel, elegida desde la pagina (una sola fila)
   await query(`
     CREATE TABLE IF NOT EXISTS stock_actual_config (
@@ -100,6 +122,55 @@ function parseStockExcel(filePath) {
     });
   }
   return { titulo, fechaStock, items };
+}
+
+// Excel de Reportes > Ingresos Detallados: fila 0 titulo, fila 1 encabezado
+// (Nro Ingreso, Tipo Ingreso, Fecha Ingreso, Fecha Registro, Codigo, Descripcion, Lote, Descrip. Lote, Fecha Vto, Cantidad, Usuario, Origen)
+function parseIngresosExcel(filePath) {
+  const wb = XLSX.readFile(filePath);
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+  const fechaIso = (v) => {
+    if (typeof v === 'number') return XLSX.SSF.format('yyyy-mm-dd', v);
+    const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(v));
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+  };
+  const texto = (v, max) => (String(v ?? '').trim() || null)?.slice(0, max) ?? null;
+  const out = [];
+  for (const r of rows.slice(2)) {
+    const codigo = String(r[4] || '').trim();
+    if (!codigo) continue;
+    // "Establecimiento: HOSPITAL X" -> "HOSPITAL X"; "Sector: ..." y "Servicio: ..." quedan como vienen
+    const origen = String(r[11] || '').replace(/^Establecimiento:\s*/i, '').trim();
+    out.push({
+      nroIngreso: texto(r[0], 40),
+      tipo: texto(r[1], 120),
+      fecha: fechaIso(r[2]),
+      codigo,
+      descripcion: texto(r[5], 400),
+      lote: texto(r[6], 80),
+      laboratorio: texto(r[7], 160),
+      vencimiento: texto(r[8], 20),
+      cantidad: numeroOrNull(r[9]),
+      usuario: texto(r[10], 80),
+      origen: origen && origen !== '-' ? origen.slice(0, 400) : null
+    });
+  }
+  return out;
+}
+
+async function guardarIngresosSector(descargaId, sector, ingresos) {
+  await transaction(async (conn) => {
+    await conn.execute('DELETE FROM stock_actual_ingresos WHERE descarga_id = ? AND sector = ?', [descargaId, sector]);
+    for (const it of ingresos) {
+      await conn.execute(
+        `INSERT INTO stock_actual_ingresos
+          (descarga_id, sector, nro_ingreso, tipo, fecha, codigo, descripcion, lote, laboratorio, vencimiento, cantidad, usuario, origen)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [descargaId, sector, it.nroIngreso, it.tipo, it.fecha, it.codigo, it.descripcion, it.lote, it.laboratorio,
+          it.vencimiento, it.cantidad, it.usuario, it.origen]
+      );
+    }
+  });
 }
 
 async function crearDescarga(sectores, usuarioId) {
@@ -267,6 +338,8 @@ module.exports = {
   crearDescarga,
   actualizarDescarga,
   guardarItemsSector,
+  parseIngresosExcel,
+  guardarIngresosSector,
   descargaEnCurso,
   listarDescargas,
   itemsStockActual,

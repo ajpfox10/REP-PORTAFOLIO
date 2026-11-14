@@ -172,10 +172,30 @@ async function inspeccionarArchivo(valor) {
 // --- clientes: Planilla de Google (API de Sheets) o .xlsx (se baja, se modifica y se sube) ---
 async function abrirCliente(fileId) {
   const { drive } = google();
-  const meta = await drive.files.get({ fileId, fields: 'name,mimeType,headRevisionId', supportsAllDrives: true });
+  const meta = await drive.files.get({
+    fileId,
+    fields: 'name,mimeType,headRevisionId,modifiedTime,lastModifyingUser(me,emailAddress,displayName)',
+    supportsAllDrives: true
+  });
   if (meta.data.mimeType === SHEETS_MIME) return clienteSheets(fileId, meta.data.name);
   if (meta.data.mimeType !== XLSX_MIME) throw httpError(400, `El archivo "${meta.data.name}" no es una planilla ni un Excel (.xlsx)`);
-  return clienteExcel(fileId, meta.data.name, meta.data.headRevisionId);
+  const cliente = await clienteExcel(fileId, meta.data.name, meta.data.headRevisionId);
+  cliente.enUso = enUsoPorPersona(meta.data);
+  return cliente;
+}
+
+// Un .xlsx de Drive no se puede modificar por celdas: el robot sube el archivo entero. Si alguien lo
+// tiene abierto en Google Sheets (modo Office), esa pestaña queda con la version vieja y Google le
+// bloquea los cambios ("No se pueden sincronizar tus cambios"). Por eso, si una persona lo guardo hace
+// poco, se traen sus cambios a la base pero se espera para escribir el archivo.
+function enUsoPorPersona(meta) {
+  const u = meta.lastModifyingUser || {};
+  if (u.me || !meta.modifiedTime) return null;
+  const robot = emailRobot();
+  if (robot && u.emailAddress && u.emailAddress.toLowerCase() === robot.toLowerCase()) return null;
+  const hasta = new Date(meta.modifiedTime).getTime() + config.ordenesCompraDrive.esperaEdicionMs;
+  if (hasta <= Date.now()) return null;
+  return { quien: u.displayName || u.emailAddress || 'alguien', modificado: meta.modifiedTime, hasta: new Date(hasta).toISOString() };
 }
 
 function dirBackup() {
@@ -429,6 +449,7 @@ async function planificarPestana(api, hojas, pestana, ordenes, snaps, listaNueva
     nuevas: [],
     bloques: [],
     enBase: [],
+    trasEscribir: [],
     snapsNuevas: [],
     ultimaFila: 0,
     resumen: { pestana, crear: !props, agregadas: 0, vinculadas: 0, haciaPlanilla: 0, haciaBase: 0 }
@@ -497,7 +518,8 @@ async function planificarPestana(api, hojas, pestana, ordenes, snaps, listaNueva
       resumen.haciaBase += 1;
     } else {
       plan.escrituras.push(...CAMPOS.map((c) => ({ range: rango(pestana, `${LETRA[c]}${fila}`), values: [[base[c] ?? '']] })));
-      plan.enBase.push(() => guardarSnapshot(id, base));
+      // solo despues de escribir el archivo: si la escritura se posterga, el snapshot no se toca
+      plan.trasEscribir.push(() => guardarSnapshot(id, base));
       resumen.haciaPlanilla += 1;
     }
   }
@@ -610,7 +632,19 @@ async function sincronizarCon(api, destino, { usuarioId = null } = {}) {
   const total = { agregadas: 0, vinculadas: 0, haciaPlanilla: 0, haciaBase: 0, pestanas: planes.map((p) => p.resumen) };
   for (const p of planes) for (const k of ['agregadas', 'vinculadas', 'haciaPlanilla', 'haciaBase']) total[k] += p.resumen[k];
 
-  const escribe = planes.some((p) => p.escribe);
+  let escribe = planes.some((p) => p.escribe);
+  if (escribe && api.enUso) {
+    // alguien esta editando el archivo: se traen sus cambios, lo que va hacia el archivo queda para despues
+    escribe = false;
+    total.postergada = api.enUso;
+    total.haciaPlanilla = 0;
+    total.agregadas = 0;
+    total.vinculadas = 0;
+    for (const plan of planes) {
+      plan.trasEscribir = [];
+      plan.snapsNuevas = [];
+    }
+  }
   let backup = null;
   if (escribe) {
     backup = await api.respaldar();
@@ -626,13 +660,14 @@ async function sincronizarCon(api, destino, { usuarioId = null } = {}) {
   // recien con el archivo guardado se actualiza la base
   for (const plan of planes) {
     for (const fn of plan.enBase) await fn();
+    for (const fn of plan.trasEscribir) await fn();
     for (const [id, vals] of plan.snapsNuevas) await guardarSnapshot(id, vals);
   }
   if (backup) {
     await descartarBackup(destino.backup, backup, destino.fileId);
     await registrarBackup(backup);
   }
-  if (planes.some((p) => p.validacion)) {
+  if (escribe && planes.some((p) => p.validacion)) {
     await query('UPDATE oc_drive_config SET lista_completo = :lista WHERE id = 1', { lista: OPCIONES_COMPLETO.join(',') });
   }
   if (escribe || total.haciaBase) {

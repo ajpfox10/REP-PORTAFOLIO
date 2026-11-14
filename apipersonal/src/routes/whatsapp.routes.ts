@@ -81,7 +81,7 @@ export function buildWhatsappRouter(sequelize: Sequelize): Router {
   // POST /whatsapp — upsert por fecha
   router.post('/', perm, async (req: Request, res: Response) => {
     const parsed = bodySchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.errors });
+    if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.issues });
     try {
       const { fecha, cantidad } = parsed.data;
       await ensureColumnasAutomatico(sequelize);
@@ -105,7 +105,7 @@ export function buildWhatsappRouter(sequelize: Sequelize): Router {
   // PUT /whatsapp/:id
   router.put('/:id', perm, async (req: Request, res: Response) => {
     const parsed = updateSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.errors });
+    if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.issues });
     try {
       const { id } = req.params;
       const { fecha, cantidad } = parsed.data;

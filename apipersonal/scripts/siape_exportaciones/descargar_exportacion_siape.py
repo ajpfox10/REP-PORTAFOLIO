@@ -532,17 +532,32 @@ def _abrir_gestor_por_teclado(timeout=20):
     return F._jab_wait_frame("Gestor de Exportaciones", timeout=timeout)
 
 
-def fila_consulta(nombre_consulta, nro=None, timeout=20):
+# El panel GLOSARIO (derecha, x ~745) y otros hijos fuera de la grilla no se recorren.
+GRILLA_X_MAX = 730
+
+
+def _podar_fuera_grilla(info):
+    x = (info.get("bounds") or {}).get("x")
+    return x is not None and x >= GRILLA_X_MAX
+
+
+def fila_consulta(nombre_consulta, nro=None, timeout=40, root=None, podar=True):
     """Busca la fila por "NOMBRE DE LA CONSULTA" y devuelve (elemento, info, aviso). OJO: en la
     grilla el NAME JAB de cada celda es el titulo de la columna; el valor esta en el
     texto. El NRO solo se usa como CONFIRMACION: el 05/10 JAB devolvio los numeros
     corridos una fila y buscar por nro abrio "Novedades Rechazadas" (79) en vez de
-    "Novedades Por Periodo" (4). Si no coincide se avisa, pero manda el nombre."""
+    "Novedades Por Periodo" (4). Si no coincide se avisa, pero manda el nombre.
+    13/11: con SiAPe lento el walk desde la raiz de 10s se cortaba a ~300 nodos sin
+    llegar a la grilla (4 corridas fallidas). Ahora se recorre desde el frame del
+    Gestor (root), sin el panel del glosario y con 25s por vuelta."""
     objetivo = _norm(nombre_consulta)
     limite = time.time() + timeout
     while time.time() < limite:
         fila, el_fila, nros = None, None, []
-        for el, _depth, info in F._jab_walk(max_depth=24, max_segundos=10):
+        restante = max(5, limite - time.time())
+        for el, _depth, info in F._jab_walk(max_depth=24, root=root, max_nodes=8000,
+                                            max_segundos=min(restante, 25),
+                                            podar=_podar_fuera_grilla if podar else None):
             if info.get("role") != "text":
                 continue
             b = info.get("bounds") or {}
@@ -628,10 +643,13 @@ def cancelar_modal():
         pass
 
 
-def boton_exportar_en(y, tol=6, timeout=10):
-    """(elemento JAB, bounds) del boton Exportar a la altura de la fila."""
+def boton_exportar_en(y, tol=6, timeout=25, root=None):
+    """(elemento JAB, bounds) del boton Exportar a la altura de la fila. Se busca
+    dentro del Gestor (root) y solo en la banda de la fila (13/11: desde la raiz
+    tambien se cortaba por tiempo con SiAPe lento)."""
     el, info = F._jab_buscar(nombre="Exportar", role="push button", timeout=timeout,
-                             y_min=y - tol, y_max=y + tol)
+                             y_min=y - tol, y_max=y + tol, root=root,
+                             banda_y=(y - tol - 20, y + tol + 20))
     return (el, info.get("bounds")) if info else (None, None)
 
 
@@ -851,7 +869,10 @@ def descargar_una(nombre, args, ya_bajados, registrar_error=True):
         if not frame:
             raise RuntimeError("No pude abrir Gestor de Exportaciones.")
 
-        el_fila, info_fila, aviso_nro = fila_consulta(nombre, cfg.get("nro"))
+        el_fila, info_fila, aviso_nro = fila_consulta(nombre, cfg.get("nro"), root=frame)
+        if not info_fila:
+            F.log("AVISO: no vi la fila dentro del Gestor; pruebo desde la raiz.")
+            el_fila, info_fila, aviso_nro = fila_consulta(nombre, cfg.get("nro"), timeout=30, podar=False)
         if not info_fila:
             raise RuntimeError(f"No encontre la consulta '{nombre}' en la grilla.")
         F.log(f"Fila ubicada por nombre (y={(info_fila.get('bounds') or {}).get('y')}).")
@@ -865,7 +886,9 @@ def descargar_una(nombre, args, ya_bajados, registrar_error=True):
             raise RuntimeError(f"No pude seleccionar la fila '{nombre}' (Exportar exporta la fila seleccionada).")
 
         b_fila = info_fila.get("bounds") or {}
-        el_exportar, b_exportar = boton_exportar_en(b_fila["y"])
+        el_exportar, b_exportar = boton_exportar_en(b_fila["y"], root=frame)
+        if not b_exportar:
+            el_exportar, b_exportar = boton_exportar_en(b_fila["y"])
         if not b_exportar:
             raise RuntimeError("No encontre el boton Exportar de la fila.")
 

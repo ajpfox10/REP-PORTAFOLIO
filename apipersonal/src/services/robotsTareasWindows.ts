@@ -26,6 +26,17 @@ export function resolverScriptsDir(): string {
   return candidatos.find(d => fs.existsSync(path.join(d, 'run_robot.py'))) || candidatos[0];
 }
 
+/**
+ * Carpeta de las TAREAS PROGRAMADAS: siempre los scripts de PROD (leen el .env de prod =
+ * base personalv5), se guarde la programación desde la página Robots de prod o de dev.
+ * Antes usaba resolverScriptsDir() y guardar desde dev dejaba la tarea corriendo los
+ * scripts de dev (base personalv5_dev). Se puede cambiar con ROBOTS_TAREAS_DIR.
+ */
+export const SCRIPTS_PROD_DEFAULT = 'C:\\apps\\personalprod\\apipersonal-prod\\scripts';
+export function dirTareasProgramadas(): string {
+  return process.env.ROBOTS_TAREAS_DIR?.trim() || SCRIPTS_PROD_DEFAULT;
+}
+
 function ps(script: string, timeoutMs = 60000): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
@@ -52,8 +63,8 @@ export interface Programacion {
 export async function crearOActualizarTarea(script: string, descripcion: string, p: Programacion): Promise<void> {
   const nombre = nombreSeguro(script);
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.hora)) throw new Error('Hora inválida');
-  const dir = resolverScriptsDir();
-  if (!fs.existsSync(path.join(dir, 'run_robot.py'))) throw new Error(`No encuentro run_robot.py en ${dir}`);
+  const dir = dirTareasProgramadas();
+  if (!fs.existsSync(path.join(dir, 'run_robot.py'))) throw new Error(`No encuentro run_robot.py en ${dir} (scripts de prod)`);
   const dias = p.dias.map(d => DIA_PS[d]).filter(Boolean);
 
   // hora exacta HH:MM:00 (con '-At "HH:MM"' Windows le deja los segundos del momento)
@@ -67,7 +78,9 @@ export async function crearOActualizarTarea(script: string, descripcion: string,
   await ps(`
 $ErrorActionPreference = 'Stop'
 $py = (Get-Command python -ErrorAction Stop).Source
-$accion = New-ScheduledTaskAction -Execute $py -Argument 'run_robot.py ${nombre}' -WorkingDirectory '${dirPs}'
+# conhost --headless: consola invisible (python.exe y el cmd de run_robot no abren ventana negra
+# en cada corrida); las ventanas GUI de los robots (SIAPE, Chrome) se ven igual.
+$accion = New-ScheduledTaskAction -Execute "$env:SystemRoot\\System32\\conhost.exe" -Argument "--headless \`"$py\`" run_robot.py ${nombre}" -WorkingDirectory '${dirPs}'
 $disparo = ${trigger}
 $quien = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\\$env:USERNAME" -LogonType Interactive -RunLevel Highest
 $opc = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 8) -StartWhenAvailable

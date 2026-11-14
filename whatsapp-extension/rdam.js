@@ -51,7 +51,11 @@
     return filas().filter((x) => x.dni === String(dni));
   }
 
+  // Código que deja el gancho de Livewire del background (ver rdamGancho).
+  const codigoGancho = () => document.documentElement.dataset.hpwRdamCodigo || null;
+
   async function solicitar(p) {
+    delete document.documentElement.dataset.hpwRdamCodigo;
     const tipo = campo('tipoId');
     if (tipo && tipo.value !== '1') { poner(tipo, '1', 'Tipo de documento'); await sleep(1500); }
     poner(campo('nroId'), String(p.dni), 'Número de documento');
@@ -67,6 +71,7 @@
     let completoNombre = false;
     for (let i = 0; i < 40; i++) {
       await sleep(500);
+      if (codigoGancho()) return { ok: true, estado: 'ENVIADO', detalle: null, completoNombre, codigo: codigoGancho() };
       const ape = campo('apellido');
       const nom = campo('nombres');
       if (!completoNombre && visible(ape) && visible(nom) && !ape.value) {

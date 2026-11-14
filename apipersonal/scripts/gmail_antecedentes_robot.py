@@ -5,8 +5,12 @@ agentes y los deja en el legajo digital:
 
   D:\\G\\DOCU\\<dni>\\Certificado ant. Nacionales\\Antecedentes Nacionales <fecha>.pdf
   D:\\G\\DOCU\\<dni>\\Certificado ant. Provinciales\\Antecedentes Provinciales <fecha>.pdf
+  D:\\G\\DOCU\\<dni>\\Etico (si lo tuviere)\\Antecedentes Eticos <fecha>.pdf
+  D:\\G\\DOCU\\<dni>\\Matricula (si la tuviere)\\Matricula <fecha>.pdf
 
-(mismas subcarpetas que usa el clasificador de DOCU / Trámites).
+(mismas subcarpetas que usa el clasificador de DOCU / Trámites). Ético = certificado de
+ética / pronunciamiento ético del colegio; matrícula = RUPS / Fiscalización Sanitaria / colegio.
+Si el texto del certificado no alcanza, decide por el nombre del adjunto y después por el asunto.
 
 Por cada mail con PDF que no tenga etiqueta del robot:
   - tipo: por el texto del PDF (Reincidencia = nacional; Registro de Antecedentes de
@@ -52,9 +56,13 @@ ETIQ_REVISAR = "Robot/Sin identificar"
 CONSULTA = (f'in:anywhere has:attachment {{filename:pdf filename:png filename:jpg filename:jpeg}} '
             f'-label:"{ETIQ_OK}" -label:"{ETIQ_REVISAR}"')
 
+# tipo -> (carpeta del legajo, nombre del archivo, tipo en tblarchivos, etiqueta en script_run_items)
+# Carpetas = las mismas que usa el clasificador de DOCU.
 TIPOS = {
-    "nacional":   ("Certificado ant. Nacionales", "Antecedentes Nacionales"),
-    "provincial": ("Certificado ant. Provinciales", "Antecedentes Provinciales"),
+    "nacional":   ("Certificado ant. Nacionales", "Antecedentes Nacionales", "antecedentes_nacionales", "nacional"),
+    "provincial": ("Certificado ant. Provinciales", "Antecedentes Provinciales", "antecedentes_provinciales", "provincial"),
+    "etico":      ("Etico (si lo tuviere)", "Antecedentes Eticos", "pronunciamiento_etico", "ético"),
+    "matricula":  ("Matricula (si la tuviere)", "Matricula", "matricula", "matrícula"),
 }
 
 
@@ -68,8 +76,34 @@ def texto_pdf(datos):
         return ""
 
 
-def tipos_de(texto_pdf_norm, pistas_norm):
-    """['nacional'], ['provincial'], los dos (PDF con ambos certificados) o []."""
+_ETICO_TXT = r"\bETIC[AO]S?\b"
+_ETICO_CTX = r"TRIBUNAL|DISCIPLIN|SANCION|PRONUNCIAMIENTO|COLEGIO|CONSEJO|CERTIFIC|CONSTANCIA"
+_LIBRE_SANCION_TXT = r"LIBRE DE SANCION|NO OBRANDO EN NUESTROS REGISTROS SANCIONES"
+_MATRICULA_TXT = (r"REGISTRO UNICO DE PROFESIONES DE LA SALUD|FISCALIZACION SANITARIA|MATRICULA (VALIDA|PROFESIONAL|N\b|NRO|NUMERO)"
+                  r"|COLEGIO DE (MEDICOS|PSICOLOGOS|ENFERMER|FARMAC|KINESI|NUTRICI|TRABAJADORES|OBSTETR|ODONTOLOG|BIOQUIM)")
+
+
+def _tipo_por_pista(p):
+    """Tipo según un texto corto (nombre del adjunto o asunto+cuerpo). [] si no dice o es ambiguo."""
+    etico = bool(re.search(r"ETIC", p))
+    matric = bool(re.search(r"MATRIC|\bMATRI\b", p))
+    if etico and matric:
+        return []
+    if etico:
+        return ["etico"]
+    if matric:
+        return ["matricula"]
+    if re.search(r"PROVINCIAL|PCIAL|PROVINCIA", p):
+        return ["provincial"]
+    if re.search(r"NACIONAL|REINCIDENCIA", p):
+        return ["nacional"]
+    return []
+
+
+def tipos_de(texto_pdf_norm, pistas_norm, nombre_norm=""):
+    """Lista de tipos del adjunto ('nacional', 'provincial' — los dos si el PDF trae ambos —,
+    'etico', 'matricula') o []. Primero el texto del certificado; si no alcanza, el nombre
+    del adjunto y recién después asunto/cuerpo."""
     tipos = []
     if re.search(r"REINCIDENCIA", texto_pdf_norm):
         tipos.append("nacional")
@@ -77,11 +111,18 @@ def tipos_de(texto_pdf_norm, pistas_norm):
         tipos.append("provincial")
     if tipos:
         return tipos
-    if re.search(r"PROVINCIAL|PCIAL|PROVINCIA", pistas_norm):
-        return ["provincial"]
-    if re.search(r"NACIONAL|REINCIDENCIA", pistas_norm):
-        return ["nacional"]
-    return []
+    # el certificado de ética del colegio suele traer también el N° de matrícula: ético va primero
+    if re.search(_ETICO_TXT, texto_pdf_norm) and re.search(_ETICO_CTX, texto_pdf_norm):
+        return ["etico"]
+    # RUPS para técnicos sin colegio: "CERTIFICADO LIBRE DE SANCION ADMINISTRATIVA Y DE MATRICULACION
+    # VIGENTE" (no dice "ético" pero es el ético; Acuña 12/11/2026). Va antes que matrícula.
+    if re.search(_LIBRE_SANCION_TXT, texto_pdf_norm):
+        return ["etico"]
+    if re.search(_MATRICULA_TXT, texto_pdf_norm) or (
+            # credencial digital del RUPS: "MATRICULA ... VENCIMIENTO ... PARA VERIFICAR ESTA CREDENCIAL"
+            re.search(r"MATRICULA", texto_pdf_norm) and re.search(r"CREDENCIAL|VENCIMIENTO", texto_pdf_norm)):
+        return ["matricula"]
+    return _tipo_por_pista(nombre_norm) or _tipo_por_pista(pistas_norm)
 
 
 _NUM = r"(\d{1,2}\.?\d{3}\.?\d{3})"
@@ -250,9 +291,9 @@ def registrar_archivo(cn, dni, ruta, tipo, fecha, nombre_adjunto, remitente):
         cur.execute(
             "INSERT INTO tblarchivos (dni, ruta, nombre, tipo, tamanio, anio, fecha, descripcion_archivo, nombre_archivo_original) "
             "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-            (dni, rel, TIPOS[tipo][1], f"antecedentes_{tipo}es", f"{max(1, ruta.stat().st_size // 1024)} KB",
+            (dni, rel, TIPOS[tipo][1], TIPOS[tipo][2], f"{max(1, ruta.stat().st_size // 1024)} KB",
              fecha.year, fecha.date(),
-             f"Tipo: antecedentes_{tipo}es | Carpeta: {TIPOS[tipo][0]} | Origen: mail de {remitente}"[:255],
+             f"Tipo: {TIPOS[tipo][2]} | Carpeta: {TIPOS[tipo][0]} | Origen: mail de {remitente}"[:255],
              nombre_adjunto[:255]))
         cn.commit()
         return cur.lastrowid
@@ -296,7 +337,7 @@ def procesar_mail(svc, cn, msg_id, dry_run):
         if ocr:
             texto = texto_ocr(datos)
         pistas = f"{asunto}\n{cuerpo}\n{nombre}\n{remitente}"
-        tipos = tipos_de(MN.norm(texto), MN.norm(pistas))
+        tipos = tipos_de(MN.norm(texto), MN.norm(pistas), MN.norm(nombre))
         dni, agente, detalle = elegir_dni(cn, texto, pistas, ocr=ocr)
         if ocr:
             detalle += " · leído por OCR"
@@ -306,7 +347,7 @@ def procesar_mail(svc, cn, msg_id, dry_run):
             estado = "ok" if "no está en personal" not in detalle else "aviso"
         else:
             if dni and not tipos:
-                detalle += " · no pude saber si es nacional o provincial"
+                detalle += " · no pude saber qué certificado es (nacional, provincial, ético o matrícula)"
             destinos = [(SIN_IDENTIFICAR, limpio(f"{fecha:%Y-%m-%d %H%M} {remitente.split('<')[0].strip() or 'sin remitente'} - {Path(nombre).stem}"), None)]
             estado = "aviso"
 
@@ -326,10 +367,18 @@ def procesar_mail(svc, cn, msg_id, dry_run):
                 txt += " · sin fila en tblarchivos (no está en personal)"
             print(f"  [{estado}] {nombre}: {txt}")
             if not dry_run:
-                MN.registrar_item(SCRIPT_ID, dni=dni, nombre=agente, novedad=f"Antecedentes {tipo or '?'} · {formato}",
+                MN.registrar_item(SCRIPT_ID, dni=dni, nombre=agente, novedad=f"Antecedentes {TIPOS[tipo][3] if tipo else '?'} · {formato}",
                                   desde=f"{fecha:%Y-%m-%d}", estado=estado, detalle=txt)
         resultados.append(destinos[0][0] != SIN_IDENTIFICAR)
     return resultados
+
+
+def pasar_a_planta(dry_run, sin_mails):
+    """La copia a Pase a planta la hace ahora su propio robot (pase_planta, cada 2 min), 12/11/2026.
+    Acá solo queda el aviso: si no hubo mails, run_robot no registra la corrida (este robot también
+    corre cada 2 minutos: no llenar el historial de Robots)."""
+    if sin_mails:
+        print("[sin novedades]")
 
 
 def main():
@@ -349,6 +398,7 @@ def main():
             break
     print(f"Mails con PDF/foto sin procesar: {len(ids)}{' (dry-run)' if args.dry_run else ''}")
     if not ids:
+        pasar_a_planta(args.dry_run, sin_mails=True)
         return 0
 
     etiq_ok = etiq_rev = None
@@ -372,6 +422,7 @@ def main():
                     cuerpo["addLabelIds"].append("INBOX")
                 svc.users().messages().modify(userId="me", id=msg_id, body=cuerpo).execute()
     print(f"OK: {guardados} certificado(s) a DOCU, {revisar} sin identificar en {SIN_IDENTIFICAR}")
+    pasar_a_planta(args.dry_run, sin_mails=False)
     return 0
 
 

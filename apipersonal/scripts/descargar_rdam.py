@@ -137,8 +137,11 @@ def cartel(page):
 
 def pedir(page, r, redirects):
     """Completa el formulario y devuelve (codigo, aviso)."""
-    page.goto(URL_FORM, wait_until="networkidle", timeout=45000)
+    # No usar "networkidle": desde nov/2026 la página trae Google Analytics y nunca queda quieta.
+    page.goto(URL_FORM, wait_until="domcontentloaded", timeout=45000)
     tipo = page.locator('[wire\\:model="tipoId"]')
+    tipo.wait_for(state="visible", timeout=30000)
+    page.wait_for_timeout(1000)  # que Livewire termine de engancharse
     if tipo.input_value() != "1":
         tipo.select_option("1")
         page.wait_for_timeout(1500)
@@ -245,6 +248,8 @@ def main():
                     pass
         page.on("response", oir)
         page.route(re.compile(r".*/certificado-(?:libre-deuda|ver)-RDAM/.*"), lambda route: route.abort())
+        page.route(re.compile(r"https://(?:www\.)?(?:google-analytics|googletagmanager)\.com/.*"),
+                   lambda route: route.abort())
 
         for i, r in enumerate(pend):
             log(f"-> {r['dni']} {nombre_ag(r)}")

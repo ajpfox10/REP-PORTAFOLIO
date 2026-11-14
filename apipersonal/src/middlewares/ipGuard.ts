@@ -44,7 +44,14 @@ export const ipGuard = (req: Request, res: Response, next: NextFunction) => {
   const deny = parseList(env.IP_BLACKLIST).map(normalizeIp);
 
   if (deny.length && deny.includes(ip)) return res.status(403).json({ ok: false, error: "IP bloqueada" });
-  if (allow.length && !allow.includes(ip)) return res.status(403).json({ ok: false, error: "IP no permitida" });
+  if (allow.length && !allow.includes(ip)) {
+    // dev corre con NODE_ENV=production heredado del sistema: se distingue por la base
+    const esDev = /_dev$/i.test(String(process.env.DB_NAME || ""));
+    const error = esDev
+      ? "Esta es la API de desarrollo. Usá el sistema de producción: http://192.168.0.21:5173"
+      : "IP no permitida";
+    return res.status(403).json({ ok: false, error });
+  }
 
   next();
 };

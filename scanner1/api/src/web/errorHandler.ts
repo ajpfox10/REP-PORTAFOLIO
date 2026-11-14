@@ -13,6 +13,15 @@ export class ApiError extends Error {
 }
 
 export function errorHandler(err: any, req: Request, res: Response, _next: NextFunction) {
+  // Validacion (zod): es un dato mal enviado, no un error del servidor
+  if (err?.name === "ZodError" && Array.isArray(err?.issues)) {
+    return res.status(400).json({
+      error: "validation_error",
+      message: "validation_error",
+      request_id: (req as any).request_id,
+      details: err.issues,
+    })
+  }
   const status = err?.status || 500
   const code = err?.code || "internal_error"
   const message = err?.message || "internal_error"

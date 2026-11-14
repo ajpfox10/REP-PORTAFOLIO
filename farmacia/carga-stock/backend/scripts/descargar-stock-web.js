@@ -1,4 +1,5 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const config = require('../src/config');
 const { pool } = require('../src/db');
@@ -50,6 +51,59 @@ async function descargarSector(page, sector, destinoDir) {
   return destino;
 }
 
+// Ingresos Detallados del sector (tipo de ingreso y origen: O.C., otra institucion, otro sector...),
+// por semestres desde el 1/1 del anio anterior hasta hoy. Sirve para rastrear los codigos repetidos.
+const INGRESOS_URL = 'https://sistemas.ms.gba.gov.ar/farmaciams/reportes/ingresos/detalles';
+
+function tramosIngresos() {
+  const hoy = new Date();
+  const out = [];
+  for (let anio = hoy.getFullYear() - 1; anio <= hoy.getFullYear(); anio += 1) {
+    for (const [ini, fin] of [[[0, 1], [5, 30]], [[6, 1], [11, 31]]]) {
+      const desde = new Date(anio, ini[0], ini[1]);
+      if (desde > hoy) continue;
+      let hasta = new Date(anio, fin[0], fin[1]);
+      if (hasta > hoy) hasta = hoy;
+      out.push([desde, hasta]);
+    }
+  }
+  return out;
+}
+
+async function descargarIngresosSector(page, sector, destinoDir) {
+  const dd = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  const filas = [];
+  for (const [desde, hasta] of tramosIngresos()) {
+    await page.goto(INGRESOS_URL, { waitUntil: 'domcontentloaded' });
+    await page.locator('#form_sector').waitFor({ state: 'attached', timeout: 30000 });
+    const ok = await page.evaluate(({ buscado, d, h }) => {
+      const limpiar = (v) => v.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+      const sel = document.querySelector('#form_sector');
+      const op = [...sel.options].find((o) => o.value && limpiar(o.textContent) === limpiar(buscado));
+      if (!op) return false;
+      sel.value = op.value;
+      if (window.jQuery) window.jQuery(sel).trigger('change');
+      for (const [id, v] of [['#form_fechaDesde', d], ['#form_fechaHasta', h]]) {
+        const el = document.querySelector(id);
+        el.value = v;
+        if (window.jQuery) window.jQuery(el).trigger('change');
+      }
+      return true;
+    }, { buscado: sector, d: dd(desde), h: dd(hasta) });
+    if (!ok) throw new Error(`No existe el sector "${sector}" en Ingresos Detallados`);
+    await sleep(800);
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 600000 }),
+      page.click('#excel')
+    ]);
+    const archivo = path.join(destinoDir, `ingresos-${normalizar(sector).replace(/[^A-Z0-9]+/g, '_')}-${desde.getTime()}.xls`);
+    await download.saveAs(archivo);
+    filas.push(...stockActual.parseIngresosExcel(archivo));
+    fs.unlinkSync(archivo);
+  }
+  return filas;
+}
+
 async function main() {
   if (!config.farmacia.user || !config.farmacia.password) {
     throw new Error('Faltan FARMACIA_WEB_USER/FARMACIA_WEB_PASSWORD en el .env del ambiente');
@@ -86,9 +140,25 @@ async function main() {
       await sleep(500);
     }
 
+    // Ingresos Detallados (no frena la descarga de stock si falla)
+    let avisoIngresos = '';
+    const tmpIngresos = path.join(os.tmpdir(), `farmacia-ingresos-${descargaId}`);
+    fs.mkdirSync(tmpIngresos, { recursive: true });
+    for (const sector of sectores) {
+      try {
+        await stockActual.actualizarDescarga(descargaId, { mensaje: `Bajando ingresos de ${sector}` });
+        const ingresos = await descargarIngresosSector(page, sector, tmpIngresos);
+        await stockActual.guardarIngresosSector(descargaId, sector, ingresos);
+        console.log(`OK ingresos ${sector}: ${ingresos.length} filas`);
+      } catch (error) {
+        console.error(`No se pudieron bajar los ingresos de ${sector}: ${error.message}`);
+        avisoIngresos = ` (no se pudieron bajar los ingresos de ${sector})`;
+      }
+    }
+
     await stockActual.actualizarDescarga(descargaId, {
       estado: 'ok',
-      mensaje: `Descarga completa: ${totalItems} productos en ${archivos.length} sector(es).`,
+      mensaje: `Descarga completa: ${totalItems} productos en ${archivos.length} sector(es).${avisoIngresos}`,
       finished_at: new Date()
     });
   } catch (error) {

@@ -71,7 +71,7 @@
     return out;
   }
 
-  async function pegarYEnviar(texto, msCaja = 15000) {
+  async function pegarYEnviar(texto, msCaja = 15000, sinEnviar = false) {
     const caja = await esperar(composer, msCaja);
     if (!caja) return { ok: false, estado: 'ERROR', detalle: 'No apareció la caja de mensaje' };
     caja.focus();
@@ -87,6 +87,8 @@
       await sleep(400);
     }
     if (!norm(textoDe(caja))) return { ok: false, estado: 'ERROR', detalle: 'No se pudo escribir el mensaje' };
+    // Modo "dejar escrito": el Enviar lo toca la persona (Agenda de turnos)
+    if (sinEnviar) { caja.focus(); return { ok: true, estado: 'ESCRITO' }; }
 
     const btn = await esperar(() => {
       const ico = document.querySelector('#main footer [data-icon="send"], #main footer [data-icon="wds-ic-send-filled"], #main [data-icon="send"], #main [data-icon="wds-ic-send-filled"]');
@@ -178,9 +180,9 @@
     return cerrada ? { ok: true, estado: 'ENVIADO' } : { ok: false, estado: 'ERROR', detalle: 'La imagen quedó en la vista previa sin enviar' };
   }
 
-  const mandar = (texto, imagen, msCaja) => (imagen ? pegarImagenYEnviar(imagen, texto, msCaja) : pegarYEnviar(texto, msCaja));
+  const mandar = (texto, imagen, msCaja, sinEnviar) => (imagen ? pegarImagenYEnviar(imagen, texto, msCaja) : pegarYEnviar(texto, msCaja, sinEnviar));
 
-  async function porNombre({ buscar, palabras, texto, imagen }) {
+  async function porNombre({ buscar, palabras, texto, imagen, sinEnviar }) {
     const caja = await esperar(buscador, 5000);
     if (!caja) return { ok: false, estado: 'ERROR', detalle: 'No encontré el buscador de WhatsApp' };
     const pide = (palabras || []).map(norm).filter(Boolean);
@@ -210,7 +212,7 @@
         return h && norm(h.textContent).includes(norm(titulo));
       }, 6000);
       if (!abierto) return { ok: false, estado: 'ERROR', detalle: `No se abrió el chat de ${titulo}` };
-      const r = await mandar(texto, imagen, 6000);
+      const r = await mandar(texto, imagen, 6000, sinEnviar);
       return { ...r, destino: titulo };
     } finally {
       const c = buscador();
@@ -218,7 +220,7 @@
     }
   }
 
-  async function porLink({ texto, imagen }) {
+  async function porLink({ texto, imagen, sinEnviar }) {
     const res = await esperar(() => {
       const dlg = document.querySelector('[data-animate-modal-popup="true"], [role="dialog"]');
       const t = norm(dlg?.textContent);
@@ -233,7 +235,7 @@
     }, 60000, 400);
     if (!res) return { ok: false, estado: 'ERROR', detalle: 'No se abrió el chat del número' };
     if (res !== 'chat') return res;
-    return mandar(texto, imagen);
+    return mandar(texto, imagen, 15000, sinEnviar);
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

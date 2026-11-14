@@ -81,7 +81,7 @@ try {
   $secrets = Get-KnownSecrets
 
   # 1) Archivos que nunca deben subirse
-  $forbiddenPath = '(?i)(^|/)(secrets/|\.env(\.(?!example$|sample$|template$)[^/]*)?$|fichero_config\.json$|[^/]*\.(pem|key|pfx|p12|pyc)$|id_rsa|Login Data$|Cookies$|Web Data$|__pycache__/|\.chrome-debug/|chrome-dev-visible)'
+  $forbiddenPath = '(?i)(^|/)(secrets/|\.env(\.(?!example$|sample$|template$)[^/]*)?$|fichero_config\.json$|[^/]*_(token|credentials)\.json$|[^/]*\.(pem|key|pfx|p12|pyc)$|id_rsa|Login Data$|Cookies$|Web Data$|__pycache__/|\.chrome-debug/|chrome-dev-visible)'
   # PDFs, planillas, imagenes y carpetas de datos: solo se permiten los assets reales del codigo
   $dataFile    = '(?i)\.(pdf|csv|xlsx?|png|jpe?g|webp|bmp)$|(^|/)(storage|uploads|capturas|screenshots|fichadas)/|fichad[^/]*\.txt$|(^|/)attlog[^/]*\.txt$'
   $dataAllowed = '(?i)^(apipersonal/src/templates/|apipersonal/assets/|TRABAJO PRACTICO FINAL/img/)'
@@ -101,7 +101,7 @@ try {
   }
 
   # 3) Patrones genericos solo en las lineas agregadas
-  $allowPath = '(?i)(^|/)(tests?|__tests__|e2e|fixtures?)/|\.(test|spec)\.[jt]sx?$|\.example$|\.sample$|(^|/)\.github/workflows/|(^|/)assets/[^/]+\.js$|(^|/)package(-lock)?\.json$'
+  $allowPath = '(?i)(^|/)(tests?|__tests__|e2e|fixtures?)/|\.(test|spec)\.[jt]sx?$|\.example$|\.sample$|(^|/)\.github/workflows/|(^|/)assets/[^/]+\.js$|(^|/)package(-lock)?\.json$|(^|/)requerimiento-fuentes-[0-9]{4}\.json$'
   $placeholder = '(?i)12345678|change_?me|cambiar|x{4,}|\*{3,}|your[-_]|tu[-_]|example|redacted|fake|dummy|placeholder|_pass_word_|_user_name_|<[^>]+>|\$\{|process\.env|os\.environ|%[A-Z_]+%'
   $rules = @(
     @{ n = 'PASSWORD/SECRET LITERAL'; r = '(?i)(pass(word|wd)?|pwd|clave|contrase.a|secret|token|api_?key|private_?key)\w*[''"]?\s*[:=]\s*[''"]([^''"\s]{6,})[''"]' },

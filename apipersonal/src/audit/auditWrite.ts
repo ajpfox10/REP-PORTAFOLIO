@@ -1,10 +1,9 @@
 import { Sequelize } from "sequelize";
 import { Request } from "express";
+import { clientIp } from '../utils/clientIp';
 
 const getIp = (req: Request) => {
-  const xf = req.headers["x-forwarded-for"];
-  const ipFromHeader = Array.isArray(xf) ? xf[0] : xf;
-  return String(ipFromHeader || req.ip || req.socket.remoteAddress || "");
+  return clientIp(req);
 };
 
 const getRequestId = (req: Request) =>

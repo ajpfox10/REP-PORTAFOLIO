@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Sequelize } from "sequelize";
+import { clientIp } from '../utils/clientIp';
 
 function safeJson(v: any): any {
   if (v === undefined) return null;
@@ -45,9 +46,7 @@ export function auditAllApi(sequelize: Sequelize) {
 
         const route = String(req.originalUrl || req.baseUrl + req.path || "").slice(0, 255);
 
-        const xf = req.headers["x-forwarded-for"];
-        const ipFromHeader = Array.isArray(xf) ? xf[0] : xf;
-        const ip = String(ipFromHeader || req.ip || req.socket.remoteAddress || "").slice(0, 64);
+        const ip = clientIp(req).slice(0, 64);
 
         const userAgent = String(req.headers["user-agent"] || "").slice(0, 255);
 

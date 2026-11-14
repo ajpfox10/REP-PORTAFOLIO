@@ -44,7 +44,9 @@ function estadoDe(d: Dia): { txt: string; color: string } {
     case 'HOY':          return { txt: 'Turno en curso', color: CELESTE };
     default:             return d.justifica
                            ? { txt: d.justifica, color: AZUL }
-                           : { txt: noLeToca(d) ? 'No le toca (alterna)' : 'No le toca', color: GRIS };
+                           : d.feriado
+                             ? { txt: `Feriado · ${d.feriado}`, color: GRIS }
+                             : { txt: noLeToca(d) ? 'No le toca (alterna)' : 'No le toca', color: GRIS };
   }
 }
 
@@ -184,8 +186,16 @@ export function FichajesRecienteBlock({ dni }: { dni: string }) {
                 const e = estadoDe(d);
                 const toca = d.horario && !noLeToca(d);
                 return (
-                  <tr key={d.fecha} style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                    <td style={{ padding: '3px 4px', whiteSpace: 'nowrap', color: d.fecha === resp.hoy ? CELESTE : '#cbd5e1' }}>{fmtDia(d.fecha)}</td>
+                  <tr key={d.fecha} style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: d.feriado ? 'rgba(244,114,182,0.07)' : undefined }}>
+                    <td style={{ padding: '3px 4px', whiteSpace: 'nowrap', color: d.fecha === resp.hoy ? CELESTE : '#cbd5e1' }}>
+                      {fmtDia(d.fecha)}
+                      {d.feriado && (
+                        <span title={d.feriado} style={{
+                          marginLeft: 6, fontSize: '0.64rem', fontWeight: 700, padding: '0 5px', borderRadius: 99,
+                          color: '#f9a8d4', background: 'rgba(244,114,182,0.15)', border: '1px solid rgba(244,114,182,0.35)',
+                        }}>🎉 Feriado</span>
+                      )}
+                    </td>
                     <td style={{ padding: '3px 4px', fontFamily: 'monospace', whiteSpace: 'nowrap', color: toca ? '#e2e8f0' : '#475569' }}>
                       {toca ? d.horario : '—'}{toca && d.aprox && <span title="Horario actual: no hay foto del horario de ese día" style={{ color: GRIS }}> ≈</span>}
                     </td>

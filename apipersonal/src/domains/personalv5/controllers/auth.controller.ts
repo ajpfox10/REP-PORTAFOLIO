@@ -14,12 +14,10 @@ import {
 } from '../services/auth.service';
 import { revokeAllRefreshTokensForUser } from '../../../auth/refreshTokensRepo';
 import { logger } from '../../../logging/logger';
+import { clientIp } from '../../../utils/clientIp';
 
 function getClientIpFromReq(req: Request): string {
-  return String(
-    req.headers['x-forwarded-for']?.toString().split(',')[0].trim() ??
-    req.ip ?? 'unknown'
-  ).substring(0, 64);
+  return (clientIp(req) || 'unknown').substring(0, 64);
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────

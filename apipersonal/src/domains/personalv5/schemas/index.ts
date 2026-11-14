@@ -121,7 +121,7 @@ export const cerrarEventoSchema = z.object({
 export const certificadoSchema = z.object({
   dni:           z.number().int().positive(),
   tipo:          z.string().min(1),
-  datos_extra:   z.record(z.any()).optional(),
+  datos_extra:   z.record(z.string(), z.any()).optional(),
 });
 
 // ── CUMPLEAÑOS ────────────────────────────────────────────────────────────────

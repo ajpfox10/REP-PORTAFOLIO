@@ -20,6 +20,9 @@ if errorlevel 1 ( echo ERROR: build del frontend fallo. Ver %LOG% & pause & exit
 
 echo [2/4] Parando prod...
 call pm2 stop farmacia-backend farmacia-frontend >nul 2>&1
+REM En Windows "pm2 stop" a veces no mata el node: si queda alguno escuchando en 8310/8410
+REM el nuevo no puede levantar (EADDRINUSE) y prod sigue con el codigo viejo. Se matan aca.
+powershell -NoProfile -Command "Start-Sleep 2; Get-NetTCPConnection -LocalPort 8310,8410 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { $p = Get-Process -Id $_ -ErrorAction SilentlyContinue; if ($p -and $p.ProcessName -eq 'node') { Write-Output ('   Matando node colgado PID ' + $_); Stop-Process -Id $_ -Force } }" >> %LOG% 2>&1
 
 echo [3/4] Copiando archivos...
 robocopy "%SRC%\backend\src"     "%DST%\backend\src"     /MIR /R:1 /W:1 /NFL /NDL >> %LOG% 2>&1

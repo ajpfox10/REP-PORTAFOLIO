@@ -2342,13 +2342,70 @@ def tipo_seleccionado(frame):
     return None
 
 
-def _elegir_tipo_ausencia_jab(combo, combo_info, tipo):
+def _combo_muestra_texto(combo, combo_info):
     """
-    Deja el combo en `tipo`, verificando contra el estado real del control.
+    Control VISUAL del combo TIPO DE AUSENCIA: True si en el recuadro se ve texto,
+    False si esta en blanco, None si no se pudo mirar.
 
-    El metodo viejo (type-ahead "FRANCO" + 2 flechas abajo) era a ciegas: si la
-    lista cambiaba de orden cargaba otra cosa y no habia forma de saberlo. Aca
-    se mueve con las flechas y se relee la opcion marcada como 'seleccionado'.
+    La marca 'seleccionado' de las opciones NO alcanza: despues de desplegar la lista y
+    marcar el item por JAB, la opcion queda 'seleccionado' aunque el Enter no la haya
+    tomado y el combo siga vacio (07/11, CICARDI: "tipo elegido desplegando la lista" con
+    el combo en blanco -> paso a FECHA). Se miran solo las filas del medio y sin bordes ni
+    flecha, para que el rectangulo punteado del foco no cuente como texto.
+    """
+    try:
+        info = combo.get_element_information() or combo_info
+    except Exception:
+        info = combo_info
+    b = (info or {}).get("bounds") or (combo_info or {}).get("bounds") or {}
+    if not b.get("width") or not b.get("height"):
+        return None
+    try:
+        w = _buscar_ventana_siape()
+        if w:
+            _activar_ventana(w)
+        sx, sy, ox, oy = _click_transform()
+        x0 = int(ox + (b["x"] + 6) * sx)
+        x1 = int(ox + (b["x"] + b["width"] - 24) * sx)     # sin la flecha del combo
+        cy = oy + (b["y"] + b["height"] / 2) * sy
+        y0, y1 = int(cy - 5 * sy), int(cy + 5 * sy)
+        if x1 - x0 < 20 or y1 - y0 < 4:
+            return None
+        img = pyautogui.screenshot(region=(x0, y0, x1 - x0, y1 - y0)).convert("L")
+        oscuros = sum(1 for p in img.getdata() if p < 140)
+        log(f"   combo visual: {oscuros} pixeles de texto")
+        return oscuros >= 15
+    except Exception as e:
+        log(f"   AVISO: no pude mirar el combo en pantalla ({e})")
+        return None
+
+
+def _combo_desplegado(combo):
+    try:
+        estados = [e.lower() for e in (combo.get_element_information().get("states") or [])]
+    except Exception:
+        return False
+    return any(e in ("expandido", "expanded", "desplegado") for e in estados)
+
+
+def _cerrar_lista_combo(combo):
+    """Cierra la lista del combo si quedo abierta (sin Escape ni flechas: en Forms
+    pueden significar otra cosa con el registro nuevo)."""
+    if _combo_desplegado(combo):
+        try:
+            combo._do_accessible_action(action="togglepopup")
+            time.sleep(PAUSA_CORTA)
+        except Exception:
+            pass
+    cerrar_modales()
+
+
+def _elegir_tipo_ausencia_jab(combo, combo_info, tipo, vueltas=3):
+    """
+    Deja el combo en `tipo` y NO devuelve True hasta verlo elegido de verdad:
+    la opcion marcada por JAB tiene que ser `tipo` Y el combo tiene que mostrar
+    texto en pantalla. Si un metodo no queda, cierra la lista y prueba el
+    siguiente; hasta `vueltas` vueltas completas. Sin confirmar no se pasa a FECHA.
     """
     opciones = _opciones_tipo(combo, combo_info)
     nombres = [n for n, _ in opciones]
@@ -2359,20 +2416,51 @@ def _elegir_tipo_ausencia_jab(combo, combo_info, tipo):
     def _quedo():
         return next((n for n, sel in _opciones_tipo(combo, combo_info) if sel), None)
 
-    # A) seleccion por JAB (sin teclado ni mouse). Las flechas NO sirven despues del
-    #    `+` verde: con el registro nuevo vacio, "abajo" es "registro siguiente" en
-    #    Forms y salta "No puede dejar Datos en blanco" (visto 08/10, 2do dia).
-    try:
-        combo.select(tipo, simulate=False, wait_for_selection=False)
+    def _confirmado(metodo):
         time.sleep(PAUSA_MEDIA)
-        if _quedo() == tipo:
-            log("   tipo elegido por seleccion JAB")
-            return True
-        log(f"   seleccion JAB no quedo (quedo '{_quedo()}')")
-    except Exception as e:
-        log(f"   seleccion JAB fallo: {e}")
-    # B) desplegar la lista (accion JAB), elegir el item y Enter
-    try:
+        q = _quedo()
+        if q != tipo:
+            log(f"   {metodo}: no quedo (JAB marca '{q}')")
+            return False
+        visto = _combo_muestra_texto(combo, combo_info)
+        if visto is False:
+            log(f"   {metodo}: JAB marca '{tipo}' pero el combo se ve VACIO -> no lo tomo")
+            return False
+        if visto is None:
+            log(f"   {metodo}: sin control visual, me quedo con lo que dice JAB")
+        log(f"   tipo elegido ({metodo})")
+        return True
+
+    def _con_foco():
+        try:
+            return "enfocado" in (combo.get_element_information().get("states") or [])
+        except Exception:
+            return False
+
+    def _flechas_en_lista():
+        """Mueve la opcion marcada hasta `destino` SOLO con la lista desplegada
+        (con la lista cerrada, 'abajo' es 'registro siguiente' en Forms)."""
+        for _ in range(8):
+            if not _combo_desplegado(combo):
+                return False
+            ops = _opciones_tipo(combo, combo_info)
+            actual = next((k for k, (_n, sel) in enumerate(ops) if sel), None)
+            if actual == destino:
+                return True
+            if actual is None:
+                pyautogui.press("down")
+            else:
+                d = destino - actual
+                pyautogui.press("down" if d > 0 else "up", presses=abs(d), interval=0.06)
+            time.sleep(PAUSA_CORTA)
+        return False
+
+    # A) seleccion por JAB (sin teclado ni mouse)
+    def _m_select():
+        combo.select(tipo, simulate=False, wait_for_selection=False)
+
+    # B) desplegar la lista (accion JAB), marcar el item y Enter
+    def _m_lista():
         combo._request_focus()
         combo._do_accessible_action(action="togglepopup")
         time.sleep(PAUSA_MEDIA)
@@ -2381,51 +2469,56 @@ def _elegir_tipo_ausencia_jab(combo, combo_info, tipo):
         lista._add_accessible_selection_from_context(item.index_in_parent, lista.accessible_context)
         time.sleep(PAUSA_CORTA)
         pyautogui.press("enter")
-        time.sleep(PAUSA_MEDIA)
-        if _quedo() == tipo:
-            log("   tipo elegido desplegando la lista")
-            return True
-        log(f"   lista desplegada no quedo (quedo '{_quedo()}')")
-        cerrar_modales()
-    except Exception as e:
-        log(f"   desplegar la lista fallo: {e}")
-    # C) flechas (lo de antes): solo anda con la ficha recien abierta
 
-    # Foco en el combo SIN mouse: el click sobre el combo (sobre todo con la ficha
-    # reabierta) lo dejaba sin opcion ("quedo en 'None'"). Visto 08/10: cuando el
-    # combo ya tenia foco, las flechas andaban siempre.
-    def _con_foco():
-        try:
-            return "enfocado" in (combo.get_element_information().get("states") or [])
-        except Exception:
-            return False
-    if _con_foco():
-        log("   combo ya con foco")
-    else:
-        try:
+    # D) clic en el combo (abre la lista), type-ahead "FRANCO", acomodar con flechas
+    #    verificando la marca, Enter. Las flechas solo con la lista abierta.
+    def _m_click_tipeo():
+        _jab_click_bounds(combo_info)
+        time.sleep(PAUSA_MEDIA)
+        if not _combo_desplegado(combo):
+            combo._do_accessible_action(action="togglepopup")
+            time.sleep(PAUSA_MEDIA)
+        if not _combo_desplegado(combo):
+            raise RuntimeError("la lista no se desplego")
+        pyautogui.typewrite(tipo.split()[0], interval=0.05)
+        time.sleep(PAUSA_CORTA)
+        if not _flechas_en_lista():
+            raise RuntimeError("no pude llevar la marca hasta la opcion")
+        pyautogui.press("enter")
+
+    # C) flechas con la lista cerrada (lo de antes, ficha recien abierta). Con el combo
+    #    sin opcion NO se toca: 'abajo' seria 'registro siguiente' en Forms.
+    def _m_flechas():
+        if not _con_foco():
             combo._request_focus()
             time.sleep(PAUSA_MEDIA)
-        except Exception as e:
-            log(f"   request_focus del combo fallo ({e})")
-        if _con_foco():
-            log("   foco al combo por JAB")
-        else:
-            log("   AVISO: el combo no tomo foco por JAB; pruebo click")
-            _jab_click_bounds(combo_info)
-            time.sleep(PAUSA_CORTA)
-
-    for _intento in range(8):
-        opciones = _opciones_tipo(combo, combo_info)
-        actual = next((k for k, (_n, sel) in enumerate(opciones) if sel), None)
-        if actual == destino:
-            return True
+        if not _con_foco():
+            raise RuntimeError("el combo no tomo foco")
+        ops = _opciones_tipo(combo, combo_info)
+        actual = next((k for k, (_n, sel) in enumerate(ops) if sel), None)
         if actual is None:
-            pyautogui.press("down")
-            time.sleep(PAUSA_CORTA)
-            continue
-        delta = destino - actual
-        pyautogui.press("down" if delta > 0 else "up", presses=abs(delta), interval=0.06)
-        time.sleep(PAUSA_CORTA)
+            raise RuntimeError("combo sin opcion; las flechas pasarian de registro")
+        d = destino - actual
+        if d:
+            pyautogui.press("down" if d > 0 else "up", presses=abs(d), interval=0.06)
+
+    metodos = [("seleccion JAB", _m_select), ("lista desplegada", _m_lista),
+               ("clic + tipeo", _m_click_tipeo), ("flechas", _m_flechas)]
+    for vuelta in range(1, vueltas + 1):
+        for nombre, metodo in metodos:
+            try:
+                metodo()
+            except Exception as e:
+                log(f"   {nombre} fallo: {e}")
+                _cerrar_lista_combo(combo)
+                continue
+            if _confirmado(nombre):
+                return True
+            _cerrar_lista_combo(combo)
+        if vuelta < vueltas:
+            log(f"   combo TIPO DE AUSENCIA sin confirmar (vuelta {vuelta}/{vueltas}); reintento")
+            time.sleep(PAUSA_MEDIA)
+    log(f"   combo TIPO DE AUSENCIA sin confirmar despues de {vueltas} vueltas")
     return False
 
 
@@ -2497,6 +2590,18 @@ def _fecha_de_aviso(texto):
         return None
 
 
+def _rangos_de_aviso(texto):
+    """'... Desde: 26-OCT-2026 Hasta: 08-NOV-2026 ...' -> [(date, date), ...]"""
+    import re
+    out = []
+    for a, b in re.findall(r"Desde:\s*(\d{1,2}-[A-Za-z]{3}-\d{4})\s*Hasta:\s*(\d{1,2}-[A-Za-z]{3}-\d{4})",
+                           texto or ""):
+        d, h = _fecha_de_aviso(a), _fecha_de_aviso(b)
+        if d and h:
+            out.append((d, h))
+    return out
+
+
 def _resolver_avisos(dia):
     """
     Encadena los avisos que tira SiAPe despues de guardar.
@@ -2535,6 +2640,17 @@ def _resolver_avisos(dia):
                 return False, (f"{dia:%d/%m/%Y}: aviso de otro dia ({fecha_aviso:%d/%m/%Y}); "
                                "SiAPe quedo trabado, no se sabe si este dia existe")
             motivo = "ya existia una ausencia ese dia"
+        if "superpone" in t:
+            rangos = _rangos_de_aviso(limpio)
+            if rangos and not any(d <= dia <= h for d, h in rangos):
+                # 08/11: 09..12/11 rechazados "se superpone con ANUAL 26-OCT..08-NOV". Una
+                # ausencia de UN dia solo choca si el dia esta dentro del rango: si no, el
+                # registro que SiAPe valido NO tenia esta fecha (quedo uno viejo trabado).
+                # No gasta intento y fuerza reinicio de SiAPe (AVISO_VIEJO).
+                cerrar_modales()
+                r0 = ", ".join(f"{d:%d/%m/%Y}..{h:%d/%m/%Y}" for d, h in rangos)
+                return False, (f"{dia:%d/%m/%Y}: aviso de otro dia (superpone con {r0}, que no "
+                               "incluye este dia); SiAPe quedo con un registro viejo")
         cerrar_modales()
         return False, f"{dia:%d/%m/%Y}: {motivo}"
     return False, f"{dia:%d/%m/%Y}: no pude cerrar los avisos de SiAPe"
@@ -2647,7 +2763,17 @@ def cargar_dia_ausencia_agente(dia, dialogos=None):
                                                 banda_y=(195, 235), x_min=360, x_max=520)
     if not fecha_info:
         raise RuntimeError("No encuentro el campo FECHA de la ausencia.")
-    _jab_set_text_by_bounds(fecha_info, dia.strftime("%d/%m/%Y"))
+    quiero = dia.strftime("%d/%m/%Y")
+    for _intento in range(2):
+        _jab_set_text_by_bounds(fecha_info, quiero)
+        quedo = _fecha_ficha_arriba()
+        if quedo == quiero:
+            break
+        log(f"   FECHA quedo '{quedo}', no {quiero}: la vuelvo a escribir")
+    else:
+        # Guardar con otra fecha cargaba (o rechazaba) un dia que no es este.
+        volver_a_ficheros()
+        return False, f"{quiero}: no pude ingresar la fecha (quedo '{quedo}'); no guardo"
 
     _tildar_justificado()        # PARTIDO queda vacio, por regla
 

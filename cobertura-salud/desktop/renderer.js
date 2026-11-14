@@ -187,7 +187,7 @@ const FUENTES = [
     url: 'https://serviciossegsoc.afip.gob.ar/MisAportes/app/basica.aspx',
     campos: (p) => [["input[id*='txtCuil'], input[name*='txtCuil']", p.cuilDigits]],
     foco: null,
-    resultado: /incluido en declaraci|aportes de obra social|en el curso del ultimo|no se encontraron registros|no registra aportes/i
+    resultado: /incluido en declaraci|aportes de obra social|en el curso del [uú]ltimo|no se encontraron registros|no registra aportes|resumen de situaci[oó]n previsional|no est[aá] registrad[oa] en relaci[oó]n de dependencia/i
   },
   {
     codigo: 'anses', nombre: 'ANSES - CODEM',
@@ -258,6 +258,7 @@ let idx = -1
 let datos = { dni: '', cuil: '', cuilDigits: '' }
 let prefillIntentos = 0
 let monitoreando = false
+let registrando = false // true mientras registrar() lee la obra social (evita doble registro)
 let consultaEnviada = false // evita reenviar "Consultar" en la misma fuente
 let spaIniciado = false     // fuentes SPA (PUCO): flujo inyectado una sola vez
 let spaPoll = null          // intervalo que sondea el resultado de la SPA
@@ -464,8 +465,63 @@ function cargarActual() {
   msgEl.textContent = `${f.nombre}: resolve el captcha en el panel y presiona Consultar. Se registra y avanza solo. (O usa "Leer y siguiente" a mano.)`
   btnSiguiente.disabled = false
   btnSiguiente.textContent = idx === FUENTES.length - 1 ? 'Leer y finalizar' : 'Leer y siguiente'
-  webview.loadURL(f.url)
+  cargaFallida = false
+  const idxCarga = idx
+  // Prueba de registro caido: si la pagina no termina de cargar en 40 s, se marca caida.
+  watchdog = setTimeout(() => {
+    if (idx === idxCarga && !registrando) marcarCaido(f, 'la pagina no respondio en 40 segundos')
+  }, 40000)
+  webview.loadURL(f.url).catch(() => { /* lo informa did-fail-load */ })
 }
+
+// Errores de red que significan que el sitio de la fuente no esta disponible.
+// -3 (ERR_ABORTED) no cuenta: pasa cuando la propia pagina redirige o recargamos.
+const ERRORES_CAIDO = {
+  '-105': 'no existe la direccion del sitio (DNS)',
+  '-102': 'el servidor rechazo la conexion',
+  '-118': 'el servidor no respondio (tiempo agotado)',
+  '-7': 'tiempo de espera agotado',
+  '-109': 'el servidor no es alcanzable',
+  '-101': 'se corto la conexion',
+  '-100': 'el servidor cerro la conexion',
+  '-106': 'sin conexion a internet',
+  '-137': 'falla de DNS',
+  '-21': 'cambio la red'
+}
+
+let cargaFallida = false // true si la fuente actual fallo al cargar (registro caido)
+
+function marcarCaido(f, motivo) {
+  if (cargaFallida || registrando || FUENTES[idx] !== f) return
+  cargaFallida = true
+  clearTimeout(watchdog)
+  clearTimeout(prefillTimer)
+  clearInterval(spaPoll)
+  clearInterval(spaClickTimer)
+  console.log('REGISTRO CAIDO ' + f.codigo + ': ' + motivo)
+  msgEl.textContent = `${f.nombre}: REGISTRO CAÍDO (${motivo}). Se pasa a la siguiente fuente.`
+  registrar(`REGISTRO CAÍDO: ${f.nombre} no esta disponible (${motivo}). Fecha: ${new Date().toLocaleString('es-AR')}.`,
+    true, { v: 'REGISTRO CAÍDO', c: '#a78bfa' })
+}
+
+webview.addEventListener('did-fail-load', (ev) => {
+  if (!ev.isMainFrame || !webview.__cfg) return
+  const f = FUENTES[idx]
+  if (!f || webview.__cfg.fuente !== f) return
+  const code = String(ev.errorCode)
+  if (code === '-3') return
+  const motivo = ERRORES_CAIDO[code] || `error ${code} ${ev.errorDescription || ''}`.trim()
+  marcarCaido(f, motivo)
+})
+
+// Sitio que responde pero con error del servidor (5xx): tambien es registro caido.
+webview.addEventListener('did-navigate', (ev) => {
+  if (!webview.__cfg || !ev.httpResponseCode) return
+  const f = FUENTES[idx]
+  if (f && webview.__cfg.fuente === f && ev.httpResponseCode >= 500) {
+    marcarCaido(f, `el servidor respondio con error ${ev.httpResponseCode}`)
+  }
+})
 
 const avisoEl = document.getElementById('aviso')
 function evaluarCuil() {
@@ -584,6 +640,7 @@ function programarPrefill() {
 // En cada asentamiento de pagina: si ya prellenamos y aparece el resultado, se
 // registra y avanza solo. Si no, (re)programamos el prellenado.
 webview.addEventListener('did-stop-loading', async () => {
+  if (cargaFallida) return // registro caido: ya se marco y se avanzo
   clearTimeout(watchdog) // la pagina cargo: cancelamos el watchdog de "no carga"
   if (!webview.__cfg) { console.log('did-stop-loading sin cfg (idx=' + idx + ')'); return }
   const f = webview.__cfg.fuente
@@ -695,7 +752,7 @@ webview.addEventListener('did-stop-loading', async () => {
 })
 
 function clasificar(texto) {
-  if (/no se encuentra en el padr|estado afiliatorio: (baja|inactiv)|no hay datos|no se reportan datos|no registra|sin cobertura|no se encontr|no posee|no existen datos|sin pagos|no se reportan pagos|no arroj/i.test(texto)) {
+  if (/no se encuentra en el padr|estado afiliatorio: (baja|inactiv)|no hay datos|no se reportan datos|no registra|sin cobertura|no se encontr|no posee|no existen datos|sin pagos|no se reportan pagos|no arroj|no est[aá] registrad[oa] en relaci[oó]n de dependencia/i.test(texto)) {
     return { v: 'SIN cobertura', c: '#f87171' }
   }
   if (/estado afiliatorio: activo|obra social|os origen|os destino|beneficiario|incluido en declaraci|aportes de obra social|puco|periodo|importe|comprobante de empadron/i.test(texto)) {
@@ -704,10 +761,91 @@ function clasificar(texto) {
   return { v: 'Sin determinar', c: '#fbbf24' }
 }
 
-function registrar(texto, auto) {
+// Lee de la pagina de resultado el NOMBRE de la obra social (tablas con encabezado
+// o pares etiqueta/valor). Corre dentro del webview. Devuelve '' si no lo encuentra.
+function buildObraSocialJS(codigo) {
+  return `(function(){
+    var norm = function(s){ return (s || '').replace(/\\s+/g, ' ').trim(); };
+    var etiquetas = [
+      /^(nombre de la |c[oó]digo y nombre de la )?obra social( actual| informada)?\\s*:?$/i,
+      /^cobertura social\\s*:?$/i,
+      /^os destino\\s*:?$/i,
+      /^os origen\\s*:?$/i,
+      /^raz[oó]n social\\s*:?$/i
+    ];
+    // En PUCO "Denominacion" es el nombre de la PERSONA: no sirve.
+    if (${JSON.stringify(codigo)} !== 'puco') etiquetas.push(/^denominaci[oó]n( de la obra social)?\\s*:?$/i);
+    var esEtiqueta = function(t){ return /^(obra social|cobertura social|os destino|os origen|denominaci|raz[oó]n social|tipo ?doc|nro ?doc|sexo|cuil|fecha|estado|c[oó]digo|rnos|periodo|plan)/i.test(t); };
+    var valido = function(t){ t = norm(t).replace(/^[:\\-\\s]+/, ''); return t.length >= 2 && t.length <= 90 && !esEtiqueta(t) && !/^[\\d\\s\\-\\/.]+$/.test(t) ? t : ''; };
+    var mejor = {};
+    function anotar(p, v){ v = valido(v); if (v && mejor[p] === undefined) mejor[p] = v; }
+    function prio(t){ t = norm(t); for (var i = 0; i < etiquetas.length; i++) if (etiquetas[i].test(t)) return i; return -1; }
+    // 1) Tablas: encabezado en una fila, valor en la misma columna de las filas siguientes.
+    var tablas = document.querySelectorAll('table');
+    for (var a = 0; a < tablas.length; a++) {
+      var filas = tablas[a].rows;
+      for (var r = 0; r < filas.length; r++) {
+        var celdas = filas[r].cells;
+        for (var c = 0; c < celdas.length; c++) {
+          var p = prio(celdas[c].innerText);
+          if (p < 0) continue;
+          // valor a la derecha (par etiqueta | valor)
+          if (celdas[c + 1]) anotar(p, celdas[c + 1].innerText);
+          // valor debajo (encabezado de grilla)
+          for (var r2 = r + 1; r2 < filas.length; r2++) {
+            var cel = filas[r2].cells[c];
+            if (cel && norm(cel.innerText)) { anotar(p, cel.innerText); break; }
+          }
+        }
+      }
+    }
+    // 2) Pares etiqueta/valor fuera de tablas (label, span, b, dt, div...).
+    var els = document.querySelectorAll('label,span,b,strong,dt,th,td,div,p,li');
+    for (var e = 0; e < els.length && e < 6000; e++) {
+      var el = els[e];
+      var txt = norm(el.innerText);
+      if (!txt || txt.length > 120) continue;
+      var p2 = prio(txt);
+      if (p2 >= 0) {
+        var sig = el.nextElementSibling;
+        if (sig) anotar(p2, sig.innerText);
+        if (el.tagName === 'DT' && sig) anotar(p2, sig.innerText);
+        continue;
+      }
+      // "Obra Social: OSDE" en el mismo elemento
+      var m = txt.match(/^(obra social|cobertura social|os destino|os origen)\\s*:\\s*(.{2,90})$/i);
+      if (m) { var p3 = prio(m[1]); if (p3 >= 0) anotar(p3, m[2]); }
+    }
+    for (var k = 0; k < etiquetas.length; k++) if (mejor[k]) return mejor[k];
+    return '';
+  })();`
+}
+
+async function leerObraSocial(f, texto) {
+  let os = ''
+  try { os = await webview.executeJavaScript(buildObraSocialJS(f.codigo)) } catch (e) { console.log('obra social ERROR: ' + e.message) }
+  if (!os) {
+    // Respaldo sobre el texto plano: "Obra Social: XXXX" hasta la proxima etiqueta.
+    const m = texto.match(/(?:obra social|cobertura social|os destino)\s*:\s*(.{2,70}?)(?=\s+[A-ZÁÉÍÓÚ][\wáéíóú ]{1,25}:|$)/i)
+    if (m) os = m[1].trim()
+  }
+  if (!os && f.codigo === 'ioma') os = 'IOMA'
+  return (os || '').replace(/\s+/g, ' ').trim().slice(0, 90)
+}
+
+async function registrar(texto, auto, forzado) {
   clearTimeout(watchdog)
   const f = FUENTES[idx]
-  const cl = clasificar(texto)
+  if (registrando) return
+  registrando = true
+  monitoreando = false // que otro did-stop-loading no registre dos veces mientras leemos
+  const cl = forzado || clasificar(texto)
+  // Si tiene cobertura, mostrar CUAL obra social informa este sistema.
+  if (!forzado && cl.v.startsWith('CON')) {
+    const os = await leerObraSocial(f, texto)
+    console.log('obra social ' + f.codigo + ' -> "' + os + '"')
+    if (os) cl.v = `CON cobertura: ${os}`
+  }
   resultados.push({ codigo: f.codigo, nombre: f.nombre, veredicto: cl.v, texto })
   const div = document.createElement('div')
   div.className = 'res'
@@ -717,7 +855,7 @@ function registrar(texto, auto) {
   head.className = 'res-head'
   head.style.cursor = 'pointer'
   head.innerHTML = `<b>${f.nombre}</b> ${auto ? '<span style="color:#64748b;font-size:10px">(auto)</span>' : ''}` +
-    `<div class="v" style="color:${cl.c}">${cl.v} <span class="ver-mas">(ver detalle)</span></div>`
+    `<div class="v" style="color:${cl.c}">${cl.v.replace(/[<>&"]/g, (ch) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[ch]))} <span class="ver-mas">(ver detalle)</span></div>`
   const pre = document.createElement('pre')
   pre.textContent = texto.slice(0, 4000)
   pre.style.display = 'none'
@@ -728,9 +866,24 @@ function registrar(texto, auto) {
     if (vm) vm.textContent = oculto ? '(ocultar)' : '(ver detalle)'
   })
   div.appendChild(head)
+  // Registro caido: link para abrir la fuente en el navegador predeterminado de la PC.
+  if (forzado && /registro ca[ií]do/i.test(cl.v)) {
+    const link = document.createElement('a')
+    link.href = '#'
+    link.textContent = `Abrir ${f.nombre} en el navegador ↗`
+    link.title = f.url
+    link.style.cssText = 'display:inline-block;margin-top:4px;color:#93c5fd;font-size:12px;text-decoration:underline;cursor:pointer'
+    link.addEventListener('click', (ev) => {
+      ev.preventDefault()
+      ev.stopPropagation()
+      require('electron').shell.openExternal(f.url).catch((e) => console.log('openExternal ERROR: ' + e.message))
+    })
+    div.appendChild(link)
+  }
   div.appendChild(pre)
   resultadosEl.appendChild(div)
   monitoreando = false
+  registrando = false
   idx += 1
   console.log('registrado ' + f.codigo + ' -> ' + cl.v + ' | idx despues=' + idx)
   if (idx < FUENTES.length) {
@@ -788,6 +941,7 @@ function renderHistorial(lista) {
 document.getElementById('limpiarHist').addEventListener('click', cargarHistorialDocumento)
 
 function colorVeredicto(v) {
+  if (/registro ca[ií]do/i.test(v || '')) return '#a78bfa'
   if (/con cobertura|aportes/i.test(v || '')) return '#4ade80'
   if (/sin cobertura|no posee|no registra|sin pagos|no arroj/i.test(v || '')) return '#f87171'
   return '#fbbf24'
@@ -807,6 +961,18 @@ function mostrarResultadosPrevios(consulta) {
     div.className = 'res'
     div.innerHTML = `<b>${fu.fuente}</b>` +
       `<div class="v" style="color:${colorVeredicto(fu.resultado)}">${fu.resultado || fu.estado || '-'}</div>`
+    const fuenteDef = FUENTES.find((x) => x.nombre === fu.fuente || x.codigo === fu.fuente)
+    if (fuenteDef && /registro ca[ií]do/i.test(fu.resultado || '')) {
+      const link = document.createElement('a')
+      link.href = '#'
+      link.textContent = `Abrir ${fuenteDef.nombre} en el navegador ↗`
+      link.style.cssText = 'display:inline-block;margin-top:4px;color:#93c5fd;font-size:12px;text-decoration:underline;cursor:pointer'
+      link.addEventListener('click', (ev) => {
+        ev.preventDefault()
+        require('electron').shell.openExternal(fuenteDef.url).catch((e) => console.log('openExternal ERROR: ' + e.message))
+      })
+      div.appendChild(link)
+    }
     resultadosEl.appendChild(div)
   })
   const panelEl = document.getElementById('panel')
@@ -853,6 +1019,8 @@ async function terminarDni() {
 btnRecargar.addEventListener('click', () => {
   console.log('recargar/limpiar: reset completo para nueva consulta')
   // Frenar cualquier flujo en curso.
+  registrando = false
+  cargaFallida = false
   clearTimeout(prefillTimer)
   clearTimeout(watchdog)
   clearInterval(spaPoll)

@@ -186,6 +186,9 @@ def leer_grilla(fr):
     return contador, [filas[y] for y in sorted(filas) if filas[y].get("CODIGO")]
 
 
+CERO_MIN_SEG = 12
+
+
 def consultar(fr, dni):
     F._jab_click_element(_boton(fr, "BORRAR"))
     time.sleep(1.5)
@@ -204,12 +207,18 @@ def consultar(fr, dni):
     if F._jab_read_text(el).strip() != str(dni):
         raise RuntimeError(f"El filtro DOCUMENTO no quedo con {dni} (leido: {F._jab_read_text(el).strip()!r}).")
     F._jab_click_element(_boton(fr, "CONSULTAR"))
-    # espera a que la grilla muestre ese DNI o el contador quede en 0
-    limite = time.time() + 30
+    # espera a que la grilla muestre ese DNI o el contador quede en 0.
+    # 13/11: BORRAR deja el contador en "0" y a veces se leia ANTES de que CONSULTAR
+    # terminara -> "sin examenes" falso (BAEZ BALBUENA, PAJON con apto en SIAPE).
+    # El "0" solo vale si sigue en 0 pasados CERO_MIN_SEG desde el CONSULTAR.
+    t_consulta = time.time()
+    limite = t_consulta + 30
     while True:
         time.sleep(2)
         contador, filas = leer_grilla(fr)
-        if contador == "0" or any(f.get("DOCUMENTO") == str(dni) for f in filas):
+        if any(f.get("DOCUMENTO") == str(dni) for f in filas):
+            break
+        if contador == "0" and time.time() - t_consulta >= CERO_MIN_SEG:
             break
         if time.time() > limite:
             raise RuntimeError(f"CONSULTAR no trajo resultados de {dni} (contador={contador!r}).")
@@ -361,6 +370,11 @@ def procesar(fr, r, dry_run=False):
     r['objetivo']: codigo del apto nuevo que hay que bajar (ya tenia uno de SIAPE)."""
     dni = r["dni"]
     contador, filas = consultar(fr, dni)
+    if not filas and r.get("objetivo"):
+        # la tabla dice que hay un apto nuevo: un "0" es sospechoso, se consulta otra vez
+        log(f"   AVISO: la grilla vino vacia pero se esperaba {r['objetivo']}; consulto de nuevo.")
+        time.sleep(3)
+        contador, filas = consultar(fr, dni)
     guardar_grilla(filas, r)
     if not filas:
         return "sin_examen", "SIAPE no tiene examenes medicos para este DNI"

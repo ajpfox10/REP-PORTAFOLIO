@@ -35,14 +35,14 @@ export function signRefreshToken(userId: number) {
 
 export function verifyAccessToken(token: string): AccessTokenClaims {
   if (!env.JWT_ACCESS_SECRET) throw new Error("JWT_ACCESS_SECRET vacío");
-  const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as any;
+  const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET, { algorithms: ["HS256"] }) as any;
   if (decoded?.typ !== "access") throw new Error("Token no es access");
   return decoded as AccessTokenClaims;
 }
 
 export function verifyRefreshToken(token: string): RefreshTokenClaims {
   if (!env.JWT_REFRESH_SECRET) throw new Error("JWT_REFRESH_SECRET vacío");
-  const decoded = jwt.verify(token, env.JWT_REFRESH_SECRET) as any;
+  const decoded = jwt.verify(token, env.JWT_REFRESH_SECRET, { algorithms: ["HS256"] }) as any;
   if (decoded?.typ !== "refresh") throw new Error("Token no es refresh");
   return decoded as RefreshTokenClaims;
 }

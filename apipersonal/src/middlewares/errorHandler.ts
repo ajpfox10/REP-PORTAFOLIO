@@ -56,7 +56,7 @@ export function errorHandler(err: any, req: Request, res: Response, _next: NextF
 
   if (res.headersSent) return;
 
-  const details =
+  const details = status >= 500 ? undefined :
     err instanceof ZodError
       ? err.issues
       : err?.errors ||

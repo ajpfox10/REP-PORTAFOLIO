@@ -58,6 +58,8 @@ import { buildTareasLivianasRouter } from '../routes/tareasLivianas.routes';
 import { buildSaludLaboralHabilitacionesRouter } from '../routes/saludLaboralHabilitaciones.routes';
 import { buildBajasRouter } from '../routes/bajas.routes';
 import { buildJubilacionRouter } from '../routes/jubilacion.routes';
+import { buildAgendaTurnosRouter } from '../routes/agendaTurnos.routes';
+import { buildGpAvisosRouter } from '../routes/gpAvisos.routes';
 import { buildHerramientasRouter } from '../routes/herramientas.routes';
 import { buildComisionesRouter } from '../routes/comisiones.routes';
 import { buildVacacionesAdelantadasRouter } from '../routes/vacacionesAdelantadas.routes';
@@ -90,6 +92,7 @@ import { buildAlertasAgenteRouter } from '../routes/alertasAgente.routes';
 import { buildCumpleanosAlertasRouter } from '../routes/cumpleanosAlertas.routes';
 import { buildReclamosHaberesRouter } from '../routes/reclamosHaberes.routes';
 import { buildScriptRunsRouter } from '../routes/scriptRuns.routes';
+import { buildResolucionesSinArchivoRouter } from '../routes/resolucionesSinArchivo.routes';
 import { buildFeriadosRouter } from '../routes/feriados.routes';
 import { buildBecariosArtRouter }   from '../routes/becariosArt.routes';
 import { buildDashboardAlertsRouter } from '../routes/dashboardAlerts.routes';
@@ -107,6 +110,7 @@ import { env } from '../config/env';
 import { logger } from '../logging/logger';
 import { startArtAltaWorker } from '../services/artAltaQueue';
 import { pluginRegistry, PluginContext } from '../core/plugin';
+import { clientIp } from '../utils/clientIp';
 
 export interface GatewayOptions {
   sequelize: Sequelize;
@@ -133,12 +137,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
 
   // ── My-IP (público — usado por el frontend para detección de kiosco) ───────
   app.get(`${apiPrefix}/my-ip`, async (req, res) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const ip =
-      (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0].trim()
-      || req.socket.remoteAddress
-      || req.ip
-      || '';
+    const ip = clientIp(req);
 
     let hostname = '';
     if (ip) {
@@ -188,40 +187,73 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   // ── Rutas protegidas (todas requieren token JWT valido) ────────────────────
   const protect = [authContext(sequelize), requirePermission('api:access')];
 
+  // Permisos por router = los mismos que pide el front para entrar a la pantalla que lo usa
+  // (auditoría 08/11: estos routers solo pedían estar logueado).
+  const ADMIN = 'crud:*:*';
+  const GESTION = ['crud:agentexdni1:read', ADMIN];
+  /** GET/HEAD con `lectura`, el resto con `escritura`. */
+  const lecturaEscritura = (lectura: string[], escritura: string[]) => {
+    const l = requireAny(lectura), e = requireAny(escritura);
+    return (req: Request, res: Response, next: NextFunction) =>
+      (req.method === 'GET' || req.method === 'HEAD' ? l : e)(req, res, next);
+  };
+  /** Exige `perms` salvo en las rutas `libres` (las protege otra cosa, p.ej. x-api-key). */
+  const salvo = (perms: string[], libres: string[]) => {
+    const g = requireAny(perms);
+    return (req: Request, res: Response, next: NextFunction) =>
+      (libres.includes(req.path) ? next() : g(req, res, next));
+  };
+  /** Exige `perms` salvo en las rutas libres [metodo, regex] (las usa cualquier usuario logueado). */
+  const salvoRutas = (perms: string[], libres: Array<[string, RegExp]>) => {
+    const g = requireAny(perms);
+    return (req: Request, res: Response, next: NextFunction) =>
+      (libres.some(([m, re]) => req.method === m && re.test(req.path)) ? next() : g(req, res, next));
+  };
+  /** Exige `perms` solo en las rutas que matchean `re` (el prefijo se comparte con el CRUD genérico). */
+  const soloEn = (re: RegExp, perms: string[]) => {
+    const g = requireAny(perms);
+    return (req: Request, res: Response, next: NextFunction) =>
+      (re.test(req.path) ? g(req, res, next) : next());
+  };
+
   app.use(`${apiPrefix}/documents`, ...protect, buildDocumentsRouter(sequelize));
   app.use(`${apiPrefix}/documents`, ...protect, buildDocumentsUploadRouter(sequelize));
   app.use(`${apiPrefix}/personal`,  ...protect, buildPersonalRouter(sequelize));
-  app.use(`${apiPrefix}/agentes`,   ...protect, buildAgentesFotoRouter());
-  app.use(`${apiPrefix}/certificados`, ...protect, buildCertificadosRouter(sequelize));
+  app.use(`${apiPrefix}/agentes`,   ...protect, soloEn(/^\/[^/]+\/foto\/?$/, ['app:atencion:access', ...GESTION]), buildAgentesFotoRouter());
+  app.use(`${apiPrefix}/certificados`, ...protect, requireAny(GESTION), buildCertificadosRouter(sequelize));
   app.use(`${apiPrefix}/legajo`,       ...protect, buildLegajoRouter(sequelize));
   app.use(`${apiPrefix}/designaciones-form`, ...protect, buildDesignacionFormRouter(sequelize));
   app.use(`${apiPrefix}/guarderia-ddjj`, ...protect, buildGuarderiaDdjjRouter(sequelize));
   app.use(`${apiPrefix}/samo-ministerio`, ...protect, buildSamoMinisterioRouter(sequelize));
-  app.use(`${apiPrefix}/ultimas-licencias`, ...protect, buildUltimasLicenciasRouter(sequelize));
+  app.use(`${apiPrefix}/ultimas-licencias`, ...protect, requireAny(GESTION), buildUltimasLicenciasRouter(sequelize));
   app.use(`${apiPrefix}/eventos`,   ...protect, buildEventosRouter(sequelize));
   app.use(`${apiPrefix}/api-keys`,  ...protect, buildApiKeysRouter(sequelize));
   app.use(`${apiPrefix}/usuarios`,  ...protect, buildUsuariosRouter(sequelize));
   app.use(`${apiPrefix}/webhooks`,  ...protect, buildWebhooksRouter(sequelize));
-  app.use(`${apiPrefix}/asistencia`, ...protect, buildAsistenciaRouter(sequelize));
-  app.use(`${apiPrefix}/sin-salida`, ...protect, buildSinSalidaRouter(sequelize));
+  app.use(`${apiPrefix}/asistencia`, ...protect, requireAny(['crud:asistencia:read', 'app:residentes:access', ADMIN]), buildAsistenciaRouter(sequelize));
+  app.use(`${apiPrefix}/sin-salida`, ...protect, requireAny([ADMIN]), buildSinSalidaRouter(sequelize));
   app.use(`${apiPrefix}/ausentismo`, ...protect, buildAusentismoRouter(sequelize));
-  app.use(`${apiPrefix}/fichero`,          ...protect, buildFicheroRouter());
-  app.use(`${apiPrefix}/fichero-biometria-lab`, ...protect, buildFicheroBiometriaLabRouter(sequelize));
+  app.use(`${apiPrefix}/fichero`,          ...protect, requireAny([ADMIN]), buildFicheroRouter());
+  app.use(`${apiPrefix}/fichero-biometria-lab`, ...protect, requireAny([ADMIN]), buildFicheroBiometriaLabRouter(sequelize));
   app.use(`${apiPrefix}/examen-ingreso`,   ...protect, buildExamenIngresoRouter(sequelize));
   app.use(`${apiPrefix}/accidentes-punzo`, ...protect, buildAccidentesPunzoRouter(sequelize));
   app.use(`${apiPrefix}/casos-violencia`, ...protect, buildCasosViolenciaRouter(sequelize));
-  app.use(`${apiPrefix}/turnos-salud-laboral`, ...protect, buildTurnosSaludLaboralRouter(sequelize));
+  app.use(`${apiPrefix}/turnos-salud-laboral`, ...protect, requireAny(['app:jefe_servicio:access', ADMIN]), buildTurnosSaludLaboralRouter(sequelize));
   app.use(`${apiPrefix}/tareas-livianas`,  ...protect, buildTareasLivianasRouter(sequelize));
   app.use(`${apiPrefix}/salud-laboral-habilitaciones`, ...protect, buildSaludLaboralHabilitacionesRouter(sequelize));
   app.use(`${apiPrefix}/bajas-estructura`, ...protect, buildBajasRouter(sequelize));
   app.use(`${apiPrefix}/jubilacion`,       ...protect, buildJubilacionRouter(sequelize));
-  app.use(`${apiPrefix}/herramientas`,     ...protect, buildHerramientasRouter(sequelize));
+  // Agenda de turnos (oficina). La página pública del agente es otro proceso: publico/turnosPublicoServer.ts
+  app.use(`${apiPrefix}/agenda-turnos`,    ...protect, requireAny(GESTION), buildAgendaTurnosRouter(sequelize));
+  // avisos WhatsApp de usuarios confirmados en Gestiones Personales (card del dashboard)
+  app.use(`${apiPrefix}/gp-avisos`,        ...protect, requireAny(GESTION), buildGpAvisosRouter(sequelize));
+  app.use(`${apiPrefix}/herramientas`,     ...protect, requireAny([ADMIN]), buildHerramientasRouter(sequelize));
   app.use(`${apiPrefix}/comisiones`,       ...protect, buildComisionesRouter(sequelize));
   app.use(`${apiPrefix}/vacaciones-adelantadas`, ...protect, buildVacacionesAdelantadasRouter(sequelize));
   app.use(`${apiPrefix}/carga-horaria-ley`, ...protect, buildCargaHorariaLeyRouter(sequelize));
   app.use(`${apiPrefix}/whatsapp`,         ...protect, buildWhatsappRouter(sequelize));
   app.use(`${apiPrefix}/stress`,           ...protect, buildStressRouter(sequelize));
-  app.use(`${apiPrefix}/antiguedad`,       ...protect, buildAntiguedadRouter(sequelize));
+  app.use(`${apiPrefix}/antiguedad`,       ...protect, requireAny([ADMIN]), buildAntiguedadRouter(sequelize));
   app.use(`${apiPrefix}/licencias`,          ...protect, buildLicenciasRouter(sequelize));
   app.use(`${apiPrefix}/licencias-medicas-control`, ...protect, buildLicenciasMedicasControlRouter(sequelize));
   app.use(`${apiPrefix}/comparacion-siape`, ...protect, buildComparacionSiapeRouter(sequelize));
@@ -230,25 +262,27 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/licencias-consultorio`, ...protect, requireAny(['app:licencias-consultorio:access', 'crud:*:*']), buildLicenciasConsultorioRouter(sequelize));
   app.use(`${apiPrefix}/horarios-extendidos`, ...protect, requireAny(['app:horarios-extendidos:access', 'crud:*:*']), buildHorariosExtendidosRouter());
   app.use(`${apiPrefix}/plus-licencias`,    ...protect, requireAny(['app:normativa:access', 'crud:*:*']), buildPlusLicenciasRouter(sequelize));
-  // /reciente va antes del montaje restringido: lo usa la ficha de Gestión (cualquier usuario logueado)
-  app.use(`${apiPrefix}/fichajes-agentes/reciente`, ...protect, buildFichajesRecienteRouter(sequelize));
+  // /reciente va antes del montaje restringido: lo usa la ficha de Gestión (usuarios de Gestión + admin)
+  app.use(`${apiPrefix}/fichajes-agentes/reciente`, ...protect, requireAny(GESTION), buildFichajesRecienteRouter(sequelize));
   // Mensajes al reloj desde Gestión: mismos permisos que la pantalla (usuarios de Gestión + admin).
   app.use(`${apiPrefix}/mensajes-reloj`, ...protect, requireAny(['crud:agentexdni1:read', 'crud:*:*']), buildMensajesRelojRouter(sequelize));
   app.use(`${apiPrefix}/fichajes-agentes`, ...protect, requireAny(['crud:*:*']), buildFichajesAgentesRouter(sequelize));
   app.use(`${apiPrefix}/presentismo-sector`, ...protect, requireAny(['app:jefe_servicio:access', 'crud:*:*']), buildPresentismoSectorRouter(sequelize));
-  app.use(`${apiPrefix}/intranet`,          ...protect, buildIntranetRouter(sequelize));
-  app.use(`${apiPrefix}/residentes`,         ...protect, buildResidentesRouter(sequelize));
-  app.use(`${apiPrefix}/rotacion-siape`,     ...protect, buildRotacionSiapeRouter(sequelize));
-  app.use(`${apiPrefix}/residencias`,        ...protect, buildResidenciasRouter(sequelize));
+  // Solo admin: estas rutas lanzan scripts en el servidor (pantallas Carga SIAPE / Historial Estructura, ya solo admin en el front).
+  app.use(`${apiPrefix}/intranet`,          ...protect, requireAny(['crud:*:*']), buildIntranetRouter(sequelize));
+  app.use(`${apiPrefix}/residentes`,         ...protect, requireAny(['app:residentes:access', 'crud:residentes_rotacion:read', ADMIN]), buildResidentesRouter(sequelize));
+  app.use(`${apiPrefix}/rotacion-siape`,     ...protect, requireAny(['crud:residentes_rotacion:read', ADMIN]), buildRotacionSiapeRouter(sequelize));
+  app.use(`${apiPrefix}/residencias`,        ...protect, requireAny([ADMIN]), buildResidenciasRouter(sequelize));
   app.use(`${apiPrefix}/fc-cert-reemplazos`, ...protect, buildFcCertReemplazosRouter(sequelize));
-  app.use(`${apiPrefix}/nombramiento`,       ...protect, buildNombramientoRouter(sequelize));
-  app.use(`${apiPrefix}/tramites-documentales`, ...protect, buildTramitesDocumentalesRouter(sequelize));
+  app.use(`${apiPrefix}/nombramiento`,       ...protect, requireAny([ADMIN]), buildNombramientoRouter(sequelize));
+  app.use(`${apiPrefix}/tramites-documentales`, ...protect, requireAny(['documents:read', ADMIN]), buildTramitesDocumentalesRouter(sequelize));
   app.use(`${apiPrefix}/script-runs`,        ...protect, buildScriptRunsRouter(sequelize));
+  app.use(`${apiPrefix}/resoluciones-sin-archivo`, ...protect, requireAny(['crud:resoluciones:read', ADMIN]), buildResolucionesSinArchivoRouter(sequelize));
   app.use(`${apiPrefix}/feriados`,           ...protect, buildFeriadosRouter(sequelize));
 
   // ── Scanner API integration (recibe webhooks del scanner independiente) ───
   // Auth: acepta JWT del usuario (operador desde UI) o X-Api-Key (scanner microservicio)
-  app.use(`${apiPrefix}/scanner`, ...protect, buildScannerRouter(sequelize));
+  app.use(`${apiPrefix}/scanner`, ...protect, salvo(['crud:*:read', ADMIN], ['/document-ready']), buildScannerRouter(sequelize));
 
   // ── Audit reads (registra lecturas sensibles) ─────────────────────────────
   app.use(apiPrefix, authContext(sequelize), auditReadMiddleware(sequelize));
@@ -257,14 +291,14 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/user-scan-music`, authContext(sequelize), buildUserScanMusicRouter(sequelize));
 
   // ── Alertas por agente (RRHH interno) ────────────────────────────────────
-  app.use(`${apiPrefix}/alertas-agente`, ...protect, buildAlertasAgenteRouter(sequelize));
+  app.use(`${apiPrefix}/alertas-agente`, ...protect, salvoRutas(['crud:alertas_agente:read', ADMIN], [['GET', /^\/agente\/[^/]+\/?$/], ['POST', /^\/\d+\/(ver|cerrar)\/?$/]]), buildAlertasAgenteRouter(sequelize));
   app.use(`${apiPrefix}/alertas-cumpleanos`, ...protect, buildCumpleanosAlertasRouter(sequelize));
-  app.use(`${apiPrefix}/reclamos-haberes`, ...protect, buildReclamosHaberesRouter(sequelize));
+  app.use(`${apiPrefix}/reclamos-haberes`, ...protect, requireAny([ADMIN]), buildReclamosHaberesRouter(sequelize));
   app.use(`${apiPrefix}/dashboard-alerts`, ...protect, buildDashboardAlertsRouter(sequelize));
-  app.use(`${apiPrefix}/becarios-art`,   ...protect, buildBecariosArtRouter(sequelize));
+  app.use(`${apiPrefix}/becarios-art`,   ...protect, requireAny(['crud:becarios_art:read', ADMIN]), buildBecariosArtRouter(sequelize));
 
   // ── Jefaturas (custom: enriquece con nombre real desde personal) ─────────
-  app.use(`${apiPrefix}/jefaturas`, ...protect, buildJefaturasRouter(sequelize));
+  app.use(`${apiPrefix}/jefaturas`, ...protect, lecturaEscritura(['app:jefe_servicio:access', 'crud:jefedeptos:read', ADMIN], ['crud:jefedeptos:read', ADMIN]), buildJefaturasRouter(sequelize));
 
   // ── Catálogos (pestaña de Admin) ──────────────────────────────────────────
   // Mismo router CRUD montado bajo /catalogos, pero exigiendo 'admin:catalogos'.

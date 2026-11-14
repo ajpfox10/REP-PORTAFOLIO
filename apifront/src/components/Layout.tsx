@@ -4,6 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { useKiosk } from '../hooks/useKiosk';
 import { RobotsFallidosBanner } from './RobotsFallidosBanner';
+import { ResolucionesSinArchivoBanner } from './ResolucionesSinArchivoBanner';
 import { AlertasJubilacionBloqueo } from './AlertasJubilacionBloqueo';
 import { FelicitacionAutomatica } from '../pages/CumpleanosFelicitacionesPage/FelicitacionAutomatica';
 import { FeriadosBloqueo } from './FeriadosBloqueo';
@@ -149,6 +150,13 @@ export function Layout({ title, children, showBack, fluid }: {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap', flexShrink: 0 }}>
+            {/* Inicio en todas las páginas (activo solo en el panel: navLink lo marcaría en cualquier /app/...) */}
+            {!isKiosk && (
+              <Link className={`btn${loc.pathname.replace(/\/+$/, '') === '/app' ? ' active' : ''}`} to="/app"
+                style={{ fontSize: '0.82rem', padding: '7px 12px' }}>
+                🏠 Inicio
+              </Link>
+            )}
             {isKiosk ? null : isJefeConsultorio ? (
               <>
                 {navLink('/app/licencias-consultorio', '🩺 Licencias de Consultorio')}
@@ -272,6 +280,8 @@ export function Layout({ title, children, showBack, fluid }: {
                       {(hasPerm('crud:*:*') || hasPerm('personal:write') || hasPerm('crud:personal:update')) && navLink('/app/vacaciones-adelantadas', '🏖️ Vacaciones adelantadas')}
                       {hasPerm('app:director_ejecutivo:access') && navLink('/app/director', '🏛️ Dirección Ejecutiva')}
                       {navLink('/app/herramientas', '⚖️ Jubilación IPS')}
+                      {(hasPerm('crud:agentexdni1:read') || hasPerm('crud:*:*')) && navLink('/app/agenda-turnos', '📆 Agenda de turnos')}
+                      {(hasPerm('crud:agentexdni1:read') || isAdmin) && navLink('/app/gestiones-personales-avisos', '📲 Avisos Gestiones Personales')}
                       {canSeeJubilablesEstadistica && navLink('/app/jubilables-estadistica', '📈 Jubilables (estadística)')}
                       {canSeeNormativa && navLink('/app/normativa', '⚖️ Normativa (guardia y planta)')}
                       {isAdmin && navLink('/app/licencias-medicas-control', '🩺 Licencias médicas pend./deneg.')}
@@ -335,6 +345,7 @@ export function Layout({ title, children, showBack, fluid }: {
 
       {/* Solo en el dashboard (/app), no en cada página */}
       {hasPerm('crud:*:*') && loc.pathname.replace(/\/$/, '') === '/app' && <RobotsFallidosBanner />}
+      {(hasPerm('crud:resoluciones:read') || hasPerm('crud:*:*')) && loc.pathname.replace(/\/$/, '') === '/app' && <ResolucionesSinArchivoBanner modo="resumen" />}
 
       {/* Alertas de jubilación: bloquean toda la app hasta desactivarlas (mismo permiso que la página de alertas) */}
       {(hasPerm('crud:alertas_agente:read') || hasPerm('crud:*:*')) && <AlertasJubilacionBloqueo />}

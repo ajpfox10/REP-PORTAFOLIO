@@ -2,7 +2,8 @@
 REM Carga en lote de la cola ART con el script corregido (menú nuevo). Autónomo: no depende
 REM del worker de pm2. Pensado para tarea programada. Loguea a art_carga_batch.log.
 setlocal
-set "APPDIR=C:\apps\personaldev\apipersonal"
+REM APPDIR = carpeta de la API donde vive este script (dev o prod), asi lee SU .env
+for %%I in ("%~dp0..") do set "APPDIR=%%~fI"
 set "LOGFILE=%~dp0art_carga_batch.log"
 set "ART_HEADLESS=true"
 

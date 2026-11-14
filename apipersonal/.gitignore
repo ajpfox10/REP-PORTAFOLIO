@@ -47,3 +47,4 @@ server.log
 # Gmail antecedentes (OAuth)
 scripts/gmail_antecedentes_credentials.json
 scripts/gmail_antecedentes_token.json
+scripts/google_calendar_token.json

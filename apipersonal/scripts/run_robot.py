@@ -55,6 +55,12 @@ def recurso_de(cfg):
         return "robots_art"
     if grupo == "Gmail":                # API de Gmail: sin ventanas, no espera a nadie
         return "robots_gmail"
+    if grupo == "Google Calendar":      # API de Calendar (agenda de turnos): no espera a nadie
+        return "robots_gcal"
+    if grupo == "GDEBA":                # Chrome propio de GDEBA: no toca SiAPe ni la Intranet
+        return "robots_gdeba"
+    if grupo == "Archivos":             # solo copia carpetas (pase_planta): no espera a nadie
+        return "robots_archivos"
     if cfg.get("script") == "comparacion_siape_ministerio_v2":   # solo lee Excel + base
         return "robots_comparacion"
     return "robots_siape"
@@ -185,6 +191,11 @@ def main():
                          motivo=f"Termino (codigo {code}) sin registrar su resultado: {_resumen_salida(lineas)}",
                          archivo=str(log_path), duracion_seg=dur)
         return code or 1
+
+    # Robots que corren muy seguido (gmail_antecedentes, cada 2 min): si terminan OK diciendo
+    # "[sin novedades]" no se registra la corrida, para no llenar el historial de Robots.
+    if code == 0 and any(l.strip() == "[sin novedades]" for l in lineas[-5:]):
+        return code
 
     MN.registrar_run(script, cfg["descripcion"], "ok" if code == 0 else "error",
                      motivo=(_resumen_salida(lineas) if code == 0

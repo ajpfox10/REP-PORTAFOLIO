@@ -1,3 +1,4 @@
+import { escapeHtml } from "../../../utils/escapeHtml";
 /**
  * @file domains/personalv5/services/auth.service.ts
  * @description Logica de negocio de autenticacion, separada del HTTP layer.
@@ -30,6 +31,7 @@ import {
   getActiveSecurityBan,
 } from '../../../auth/loginGuardRepo';
 import { logger } from '../../../logging/logger';
+import { randomInt } from 'crypto';
 
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
 
@@ -193,7 +195,7 @@ export async function requestAccess(
 ): Promise<void> {
   const { nombre, email, cargo = '', motivo = '', ip = 'unknown', ua = '' } = dto;
   const emailLower = email.toLowerCase().trim();
-  const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+  const codigo = randomInt(100000, 1000000).toString();
   const expira = new Date(Date.now() + 24 * 3600 * 1000);
 
   await sequelize.query(
@@ -272,7 +274,7 @@ async function sendAccessEmails(data: {
     to: email,
     subject: 'Codigo de confirmacion - Solicitud de acceso',
     html: `<h2>Solicitud de acceso</h2>
-           <p>Hola <strong>${nombre}</strong>, tu codigo es:</p>
+           <p>Hola <strong>${escapeHtml(nombre)}</strong>, tu codigo es:</p>
            <h1 style="font-size:2.5rem;letter-spacing:0.4rem;color:#2563eb;">${codigo}</h1>
            <p>Vence: ${expira.toLocaleString('es-AR')}</p>`,
     text: `Hola ${nombre}, tu codigo es ${codigo}. Vence: ${expira.toLocaleString('es-AR')}`,
@@ -284,9 +286,9 @@ async function sendAccessEmails(data: {
       to: adminEmail,
       subject: `Solicitud de acceso: ${nombre} <${email}>`,
       html: `<h2>Nueva solicitud</h2>
-             <p><b>Nombre:</b> ${nombre}</p><p><b>Email:</b> ${email}</p>
-             <p><b>Cargo:</b> ${cargo || 'No indicado'}</p>
-             <p><b>Motivo:</b> ${motivo || 'No indicado'}</p>
+             <p><b>Nombre:</b> ${escapeHtml(nombre)}</p><p><b>Email:</b> ${escapeHtml(email)}</p>
+             <p><b>Cargo:</b> ${escapeHtml(cargo || 'No indicado')}</p>
+             <p><b>Motivo:</b> ${escapeHtml(motivo || 'No indicado')}</p>
              <p><b>Codigo:</b> ${codigo}</p>`,
       text: `Solicitud de ${nombre} (${email}). Codigo: ${codigo}`,
     }).catch(() => {});

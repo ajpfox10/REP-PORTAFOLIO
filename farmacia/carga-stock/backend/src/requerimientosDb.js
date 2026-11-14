@@ -5,6 +5,7 @@ const { query, transaction } = require('./db');
 const config = require('./config');
 const { audit } = require('./audit');
 const { parseRequerimientoPdf } = require('./requerimientoReportParser');
+const { expandirCodigos, familias, cargarPerfiles, perfil, comparar } = require('./codigosEquivDb');
 
 // Tablas del Analisis de Requerimiento Anual. Se crean al arrancar el backend (y en migrate.js).
 async function ensureRequerimientoTables() {
@@ -103,6 +104,29 @@ async function ensureRequerimientoTables() {
     await query('ALTER TABLE requerimiento_manual ADD COLUMN semestre TINYINT NOT NULL DEFAULT 1 AFTER anio');
     await query('ALTER TABLE requerimiento_manual DROP INDEX uq_requerimiento_manual, ADD UNIQUE KEY uq_requerimiento_manual (anio, semestre, codigo)');
   }
+  // Tilde de "controlado" por renglon (pasa a la pestaña Controlados)
+  const ctrlCol = await query(`
+    SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requerimiento_manual' AND COLUMN_NAME = 'controlado'
+  `);
+  if (!ctrlCol.length) {
+    await query('ALTER TABLE requerimiento_manual ADD COLUMN controlado TINYINT(1) NOT NULL DEFAULT 0 AFTER cantidad');
+  }
+  // Formularios de requerimiento / expedientes en papel (escaneados) donde figura cada codigo
+  await query(`
+    CREATE TABLE IF NOT EXISTS requerimiento_fuentes (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      anio INT NOT NULL,
+      clave VARCHAR(60) NOT NULL,
+      formulario VARCHAR(30) NULL,
+      expediente VARCHAR(40) NULL,
+      etiqueta VARCHAR(160) NULL,
+      hojas VARCHAR(80) NULL,
+      codigo VARCHAR(20) NOT NULL,
+      UNIQUE KEY uq_requerimiento_fuentes (anio, clave, codigo),
+      KEY idx_requerimiento_fuentes_codigo (anio, codigo)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 }
 
 // Catalogo de farmacos conocidos (stock actual, consumo MS, trimestral y requerimientos) para elegir en la carga manual
@@ -129,11 +153,49 @@ async function catalogoFarmacos() {
 }
 
 async function listarManual(anio) {
-  return query(
-    `SELECT id, anio, semestre, codigo, droga, descripcion, cantidad, created_at, updated_at
-     FROM requerimiento_manual WHERE anio = :anio ORDER BY semestre, droga, codigo`,
+  const filas = await query(
+    `SELECT m.id, m.anio, m.semestre, m.codigo, m.droga, m.descripcion, m.cantidad, m.controlado, m.created_at, m.updated_at
+     FROM requerimiento_manual m WHERE m.anio = :anio ORDER BY m.semestre, m.droga, m.codigo`,
     { anio }
   );
+  // Formularios / expedientes: los del codigo y los de sus codigos equivalentes
+  const fam = await familias();
+  const fuentes = new Map();
+  for (const f of await query('SELECT codigo, clave FROM requerimiento_fuentes WHERE anio = :anio ORDER BY clave', { anio })) {
+    if (!fuentes.has(f.codigo)) fuentes.set(f.codigo, []);
+    fuentes.get(f.codigo).push(f.clave);
+  }
+  return filas.map((m) => {
+    const grupo = fam.get(m.codigo) || [m.codigo];
+    const claves = Array.from(new Set(grupo.flatMap((c) => fuentes.get(c) || []))).sort();
+    return { ...m, fuentes: claves.length ? claves.join('|') : null, equivalentes: grupo.filter((c) => c !== m.codigo) };
+  });
+}
+
+// Formularios / expedientes del anio (para el filtro de la carga manual)
+async function gruposFuentes(anio) {
+  return query(
+    `SELECT clave, MAX(formulario) formulario, MAX(expediente) expediente, MAX(etiqueta) etiqueta, MAX(hojas) hojas, COUNT(*) codigos
+     FROM requerimiento_fuentes WHERE anio = :anio GROUP BY clave ORDER BY clave`,
+    { anio }
+  );
+}
+
+// Reemplaza los formularios/expedientes de un anio (grupos = [{clave, formulario, expediente, etiqueta, hojas, codigos: []}])
+async function cargarFuentes(anio, grupos) {
+  await query('DELETE FROM requerimiento_fuentes WHERE anio = :anio', { anio });
+  let n = 0;
+  for (const g of grupos) {
+    for (const codigo of new Set(g.codigos)) {
+      await query(
+        `INSERT INTO requerimiento_fuentes (anio, clave, formulario, expediente, etiqueta, hojas, codigo)
+         VALUES (:anio, :clave, :formulario, :expediente, :etiqueta, :hojas, :codigo)`,
+        { anio, clave: g.clave, formulario: g.formulario || null, expediente: g.expediente || null, etiqueta: g.etiqueta || null, hojas: g.hojas || null, codigo }
+      );
+      n += 1;
+    }
+  }
+  return n;
 }
 
 // Alta o cambio de cantidad (si el codigo ya estaba cargado para ese anio y semestre, se reemplaza la cantidad)
@@ -178,9 +240,14 @@ async function columnasManual(anio, semestre) {
   const out = {};
   for (const c of codigos) out[c] = {};
   if (!codigos.length) return { datos: out, meta: {} };
-  const inCod = codigos.map((_, i) => ':c' + i).join(', ');
-  const pc = Object.fromEntries(codigos.map((c, i) => ['c' + i, c]));
-  const set = (codigo, campo, valor) => { if (out[codigo]) out[codigo][campo] = valor; };
+  // Codigos equivalentes (cambios de codigo del Ministerio): los datos de toda la familia se suman
+  const { todos, destinos } = await expandirCodigos(codigos);
+  const inCod = todos.map((_, i) => ':c' + i).join(', ');
+  const pc = Object.fromEntries(todos.map((c, i) => ['c' + i, c]));
+  const dest = (codigo) => (destinos.get(codigo) || []).map((c) => out[c]).filter(Boolean);
+  const set = (codigo, campo, valor) => { for (const d of dest(codigo)) d[campo] = valor; };
+  const sumarA = (codigo, campo, valor) => { for (const d of dest(codigo)) d[campo] = (d[campo] || 0) + valor; };
+  const sumarMinMax = (codigo, campo, valor) => { if (valor == null) return; for (const d of dest(codigo)) d[campo] = (d[campo] || 0) + valor; };
   const trims = semestre === 1 ? [1, 2] : [3, 4];
   const desde = `${anio}-${semestre === 1 ? '01-01' : '07-01'}`;
   const hasta = `${anio}-${semestre === 1 ? '06-30' : '12-31'}`;
@@ -201,11 +268,9 @@ async function columnasManual(anio, semestre) {
   `, { ...pc, a0: anio - 1, a1: anio + 1 });
   for (const r of cons) {
     const q = Number(r.cantidad || 0);
-    const d = out[r.codigo];
-    if (!d) continue;
-    if (r.anio === anio && trims.includes(r.trimestre)) d.consumoSem = (d.consumoSem || 0) + q;
-    if (r.anio === anio - 1 && trims.includes(r.trimestre)) d.consumoSemAnt = (d.consumoSemAnt || 0) + q;
-    if (r.anio === anio + 1) d.consumoAnioSig = (d.consumoAnioSig || 0) + q;
+    if (r.anio === anio && trims.includes(r.trimestre)) sumarA(r.codigo, 'consumoSem', q);
+    if (r.anio === anio - 1 && trims.includes(r.trimestre)) sumarA(r.codigo, 'consumoSemAnt', q);
+    if (r.anio === anio + 1) sumarA(r.codigo, 'consumoAnioSig', q);
   }
   // Meses con datos en el semestre (para el promedio mensual)
   const [tri] = await query(`
@@ -215,14 +280,18 @@ async function columnasManual(anio, semestre) {
 
   // Requerimientos de PDF de los anios siguientes (por anio del periodo de consumo)
   const reqs = await query(`
-    SELECT ri.codigo, YEAR(i.periodo_desde) anio, SUM(ri.cantidad) cantidad
+    SELECT ri.codigo, YEAR(i.periodo_desde) anio, IF(MONTH(i.periodo_desde) <= 6, 1, 2) sem, SUM(ri.cantidad) cantidad
     FROM requerimiento_items ri JOIN requerimiento_importaciones i ON i.id = ri.importacion_id
     WHERE ri.codigo IN (${inCod}) AND i.periodo_desde IS NOT NULL
-    GROUP BY ri.codigo, YEAR(i.periodo_desde)
+    GROUP BY ri.codigo, YEAR(i.periodo_desde), IF(MONTH(i.periodo_desde) <= 6, 1, 2)
   `, pc);
   for (const r of reqs) {
-    if (r.anio === anio + 1) set(r.codigo, 'reqAnioSig', Number(r.cantidad));
-    if (r.anio === anio + 2) set(r.codigo, 'reqAnioSig2', Number(r.cantidad));
+    const q = Number(r.cantidad);
+    if (r.anio === anio + 1) {
+      sumarA(r.codigo, 'reqAnioSig', q);
+      sumarA(r.codigo, Number(r.sem) === 1 ? 'reqSigSem1' : 'reqSigSem2', q);
+    }
+    if (r.anio === anio + 2) sumarA(r.codigo, 'reqAnioSig2', q);
   }
   // Justiprecio: el del requerimiento mas reciente que lo tenga
   const precios = await query(`
@@ -231,7 +300,7 @@ async function columnasManual(anio, semestre) {
     WHERE ri.codigo IN (${inCod}) AND ri.justiprecio IS NOT NULL
     ORDER BY i.periodo_desde DESC, i.id DESC
   `, pc);
-  for (const r of precios) if (out[r.codigo] && out[r.codigo].justiprecio == null) out[r.codigo].justiprecio = Number(r.justiprecio);
+  for (const r of precios) for (const d of dest(r.codigo)) if (d.justiprecio == null) d.justiprecio = Number(r.justiprecio);
 
   // Stock actual (ultima descarga ok, suma de sectores)
   const [stk] = await query("SELECT id, fecha_stock FROM stock_actual_descargas WHERE estado = 'ok' ORDER BY id DESC LIMIT 1");
@@ -241,9 +310,9 @@ async function columnasManual(anio, semestre) {
       FROM stock_actual_items WHERE descarga_id = :id AND codigo IN (${inCod}) GROUP BY codigo
     `, { id: stk.id, ...pc });
     for (const r of rows) {
-      set(r.codigo, 'stockActual', Number(r.stock || 0));
-      set(r.codigo, 'minMs', r.minimo == null ? null : Number(r.minimo));
-      set(r.codigo, 'maxMs', r.maximo == null ? null : Number(r.maximo));
+      sumarA(r.codigo, 'stockActual', Number(r.stock || 0));
+      sumarMinMax(r.codigo, 'minMs', r.minimo == null ? null : Number(r.minimo));
+      sumarMinMax(r.codigo, 'maxMs', r.maximo == null ? null : Number(r.maximo));
     }
   }
   // Min/max sugerido
@@ -263,9 +332,9 @@ async function columnasManual(anio, semestre) {
       GROUP BY codigo, vencimiento ORDER BY vencimiento
     `, { id: ven.id, ...pc });
     for (const r of rows) {
-      if (out[r.codigo] && !out[r.codigo].proxVto) {
-        out[r.codigo].proxVto = r.vto;
-        out[r.codigo].proxVtoCant = Number(r.cantidad || 0);
+      for (const d of dest(r.codigo)) {
+        if (!d.proxVto) { d.proxVto = r.vto; d.proxVtoCant = 0; }
+        if (d.proxVto === r.vto) d.proxVtoCant += Number(r.cantidad || 0);
       }
     }
   }
@@ -276,8 +345,8 @@ async function columnasManual(anio, semestre) {
     FROM oc_historial WHERE anio = :anio AND semestre = :semestre AND codigo IN (${inCod}) GROUP BY codigo
   `, { anio, semestre, ...pc });
   for (const r of ocs) {
-    set(r.codigo, 'ocPedida', Number(r.pedida || 0));
-    set(r.codigo, 'ocEntregada', Number(r.entregada || 0));
+    sumarA(r.codigo, 'ocPedida', Number(r.pedida || 0));
+    sumarA(r.codigo, 'ocEntregada', Number(r.entregada || 0));
   }
 
   // Bajas del semestre (descarte / vencimiento)
@@ -285,9 +354,116 @@ async function columnasManual(anio, semestre) {
     SELECT codigo, SUM(cantidad) cantidad FROM bajas_ms
     WHERE codigo IN (${inCod}) AND fecha BETWEEN :desde AND :hasta GROUP BY codigo
   `, { ...pc, desde, hasta });
-  for (const r of bajas) set(r.codigo, 'bajasSem', Number(r.cantidad || 0));
+  for (const r of bajas) sumarA(r.codigo, 'bajasSem', Number(r.cantidad || 0));
 
   return { datos: out, meta: { mesesSem, stockFecha: stk?.fecha_stock || null } };
+}
+
+// ---------------- Comparacion carga manual (anio) vs PDF de requerimiento del mismo semestre del anio siguiente ----------------
+// Para cada renglon que difiere entre los dos anios dice el motivo probable:
+//  soloEste (pedido en anio y no en anio+1):
+//   cambioCodigo  = el mismo producto esta en el PDF con otro codigo (no es una diferencia real)
+//   minNo         = el Ministerio dijo NO comprar ese codigo
+//   minNoNuevo    = el Ministerio dijo NO comprar el mismo producto con otro codigo
+//   otraConc      = en el PDF esta la misma droga en otra concentracion / presentacion
+//   sinNada       = no hay nada de esa droga en el PDF ni en la comunicacion del Ministerio
+//  soloSig (pedido en anio+1 y en 0 en anio):
+//   reemplaza     = es el codigo nuevo de un producto que en anio se pidio con el codigo viejo
+//   minNoPedido   = esta en el PDF aunque el Ministerio dijo NO comprar
+//   otraConcSig   = en anio se pidio la misma droga en otra concentracion / presentacion
+//   nuevo         = no se pedia en anio
+async function comparacionManual(anio, semestre) {
+  const sig = anio + 1;
+  const desde = `${sig}-${semestre === 1 ? '01-01' : '07-01'}`;
+  const hasta = `${sig}-${semestre === 1 ? '06-30' : '12-31'}`;
+  const manual = await query('SELECT codigo, droga, descripcion, cantidad FROM requerimiento_manual WHERE anio = :anio AND semestre = :semestre', { anio, semestre });
+  const pdf = await query(`
+    SELECT ri.codigo, MAX(ri.droga) droga, MAX(LEFT(ri.descripcion, 500)) descripcion, SUM(ri.cantidad) cantidad
+    FROM requerimiento_items ri JOIN requerimiento_importaciones i ON i.id = ri.importacion_id
+    WHERE i.periodo_desde BETWEEN :desde AND :hasta GROUP BY ri.codigo
+  `, { desde, hasta });
+  const [com] = await query(
+    'SELECT id, archivo_nombre, periodo_texto FROM ministerio_comunicaciones WHERE anio = :sig AND semestre = :semestre ORDER BY id DESC LIMIT 1',
+    { sig, semestre }
+  );
+  const minItems = com ? await query('SELECT codigo, medicamento, habilitado, decision FROM ministerio_items WHERE comunicacion_id = :id', { id: com.id }) : [];
+  const fam = await familias();
+  const grupo = (c) => fam.get(c) || [c];
+  // Pares marcados «No es» en Codigos equivalentes: nunca se toman como el mismo producto
+  const noEs = new Set((await query("SELECT codigo_a, codigo_b FROM codigo_equivalencias WHERE estado = 'distinto'"))
+    .flatMap((r) => [`${r.codigo_a}|${r.codigo_b}`, `${r.codigo_b}|${r.codigo_a}`]));
+  const marcadoNoEs = (c1, c2) => grupo(c1).some((x) => grupo(c2).some((y) => noEs.has(`${x}|${y}`)));
+  const qPdf = new Map(pdf.map((p) => [p.codigo, Number(p.cantidad || 0)]));
+  const qPdfFam = (c) => grupo(c).reduce((s, x) => s + (qPdf.get(x) || 0), 0);
+  const minPorCod = new Map(minItems.map((m) => [m.codigo, m]));
+  const minFam = (c) => grupo(c).map((x) => minPorCod.get(x)).find(Boolean) || null;
+
+  const perfiles = await cargarPerfiles(manual);
+  const drogasSolas = perfiles.values().next().value?.drogasSolas || new Set();
+  const pf = (codigo, droga, descripcion) => perfiles.get(codigo) || perfil({ codigo, droga: droga || '', descripcion: descripcion || '' }, drogasSolas);
+  // La comunicacion del Ministerio solo trae el texto: la droga es lo de antes del primer numero, mas las "+ OTRA" de las combinaciones
+  const drogaMin = (t) => {
+    const s = String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    return [s.split(/\d/)[0], ...Array.from(s.matchAll(/\+\s*([A-Z][A-Z ]*)/g), (x) => x[1])].join(' + ');
+  };
+  const pfMin = (m) => perfil({ codigo: m.codigo, droga: drogaMin(m.medicamento), descripcion: m.medicamento || '' }, drogasSolas);
+  const mismoProducto = (r) => r.droga === 'si' && r.ok && (r.concentracion === 'si' || r.nivel === 'alta');
+  // Misma droga y misma cantidad pedida: es el mismo producto si la forma farmaceutica no es distinta
+  // (comprimido vs inyectable si cuenta; el volumen o la concentracion no, porque la descripcion vieja suele tener errores)
+  const LIQ = new Set(['jarabe', 'suspensión oral', 'solución oral', 'gotas']);
+  const CAPS = new Set(['cápsula', 'comprimido']);
+  const mismaForma = (pa, pb) => !pa.forma || !pb.forma || pa.forma === pb.forma || (LIQ.has(pa.forma) && LIQ.has(pb.forma)) || (CAPS.has(pa.forma) && CAPS.has(pb.forma));
+  const mismaCantidad = (pa, pb, q1, q2) => Number(q1) > 0 && Number(q1) === Number(q2) && mismaForma(pa, pb);
+  const fmt = (n) => Number(n || 0).toLocaleString('es-AR');
+  const desc = (x) => String(x.descripcion || x.droga || '').slice(0, 90);
+
+  const soloEste = manual.filter((f) => Number(f.cantidad) > 0 && qPdfFam(f.codigo) === 0);
+  const soloSig = manual.filter((f) => Number(f.cantidad) === 0 && qPdfFam(f.codigo) > 0);
+  const out = {};
+
+  for (const f of soloEste) {
+    const a = pf(f.codigo, f.droga, f.descripcion);
+    const enFam = new Set(grupo(f.codigo));
+    const mi = minFam(f.codigo);
+    // Candidatos del PDF del anio siguiente con la misma droga
+    const cands = pdf.filter((p) => !enFam.has(p.codigo) && Number(p.cantidad) > 0).map((p) => { const b = pf(p.codigo, p.droga, p.descripcion); return { p, b, r: comparar(a, b) }; })
+      .filter((x) => x.r.droga === 'si');
+    const mismos = cands.filter((x) => !marcadoNoEs(f.codigo, x.p.codigo) && (mismoProducto(x.r) || mismaCantidad(a, x.b, x.p.cantidad, f.cantidad)));
+    let motivo; let rel = '';
+    if (mi && mi.decision === 'no') { motivo = 'minNo'; rel = `Ministerio: «${mi.habilitado}» (${mi.codigo})`; }
+    else if (mismos.length) {
+      motivo = 'cambioCodigo';
+      rel = mismos.map((x) => `${x.p.codigo} ${desc(x.p)} (${sig}: ${fmt(x.p.cantidad)})`).join(' · ');
+    } else {
+      const minMismos = minItems.filter((m) => m.decision === 'no' && !enFam.has(m.codigo)).map((m) => ({ m, r: comparar(a, pfMin(m)) })).filter((x) => mismoProducto(x.r));
+      if (minMismos.length) { motivo = 'minNoNuevo'; rel = minMismos.map((x) => `${x.m.codigo} ${x.m.medicamento} → Ministerio: «${x.m.habilitado}»`).join(' · '); }
+      else if (cands.length) { motivo = 'otraConc'; rel = cands.map((x) => `${x.p.codigo} ${desc(x.p)} (${sig}: ${fmt(x.p.cantidad)})`).join(' · '); }
+      else {
+        motivo = 'sinNada';
+        const minDroga = minItems.map((m) => ({ m, r: comparar(a, pfMin(m)) })).filter((x) => x.r.droga === 'si');
+        if (minDroga.length) rel = `Ministerio menciona otra presentación: ${minDroga.map((x) => `${x.m.codigo} ${x.m.medicamento} «${x.m.habilitado}»`).join(' · ')}`;
+      }
+    }
+    out[f.codigo] = { lado: 'soloEste', motivo, rel };
+  }
+
+  for (const f of soloSig) {
+    const a = pf(f.codigo, f.droga, f.descripcion);
+    const enFam = new Set(grupo(f.codigo));
+    const mi = minFam(f.codigo);
+    const q = qPdfFam(f.codigo);
+    const cands = manual.filter((m) => !enFam.has(m.codigo) && Number(m.cantidad) > 0).map((m) => { const b = pf(m.codigo, m.droga, m.descripcion); return { m, b, r: comparar(a, b) }; })
+      .filter((x) => x.r.droga === 'si');
+    // El codigo viejo tiene que haber quedado sin pedir en el anio siguiente
+    const mismos = cands.filter((x) => qPdfFam(x.m.codigo) === 0 && !marcadoNoEs(f.codigo, x.m.codigo) && (mismoProducto(x.r) || mismaCantidad(a, x.b, x.m.cantidad, q)));
+    let motivo; let rel = '';
+    if (mismos.length) { motivo = 'reemplaza'; rel = `Código nuevo de: ${mismos.map((x) => `${x.m.codigo} ${desc(x.m)} (${anio}: ${fmt(x.m.cantidad)})`).join(' · ')}`; }
+    else if (mi && mi.decision === 'no') { motivo = 'minNoPedido'; rel = `Ministerio: «${mi.habilitado}» (${mi.codigo}) pero está en el PDF`; }
+    else if (cands.length) { motivo = 'otraConcSig'; rel = `En ${anio} se pidió: ${cands.map((x) => `${x.m.codigo} ${desc(x.m)} (${fmt(x.m.cantidad)})`).join(' · ')}`; }
+    else motivo = 'nuevo';
+    out[f.codigo] = { lado: 'soloSig', motivo, rel };
+  }
+  return { porCodigo: out, ministerio: com ? { archivo: com.archivo_nombre, periodo: com.periodo_texto, items: minItems.length } : null };
 }
 
 // Columnas elegibles del Analisis de Requerimiento: datos por codigo abiertos por semestre ('YYYY-S')
@@ -297,13 +473,16 @@ async function columnasPorCodigos(codigosEntrada) {
   for (const c of codigos) out[c] = { consumo: {}, manual: {}, req: {}, ocPedida: {}, ocEntregada: {}, bajas: {} };
   const meta = { mesesConsumo: {}, ciclosConsumo: [], ciclosManual: [], ciclosReq: [], ciclosOc: [], ciclosBajas: [], stockFecha: null };
   if (!codigos.length) return { datos: out, meta };
-  const inCod = codigos.map((_, i) => ':c' + i).join(', ');
-  const pc = Object.fromEntries(codigos.map((c, i) => ['c' + i, c]));
-  const set = (codigo, campo, valor) => { if (out[codigo]) out[codigo][campo] = valor; };
+  // Codigos equivalentes (cambios de codigo del Ministerio): los datos de toda la familia se suman
+  const { todos, destinos } = await expandirCodigos(codigos);
+  const inCod = todos.map((_, i) => ':c' + i).join(', ');
+  const pc = Object.fromEntries(todos.map((c, i) => ['c' + i, c]));
+  const dest = (codigo) => (destinos.get(codigo) || []).map((c) => out[c]).filter(Boolean);
+  const set = (codigo, campo, valor) => { for (const d of dest(codigo)) d[campo] = valor; };
+  const sumarA = (codigo, campo, valor) => { for (const d of dest(codigo)) d[campo] = (d[campo] || 0) + valor; };
+  const sumarMinMax = (codigo, campo, valor) => { if (valor == null) return; for (const d of dest(codigo)) d[campo] = (d[campo] || 0) + valor; };
   const sumar = (codigo, campo, ciclo, valor) => {
-    const d = out[codigo];
-    if (!d) return;
-    d[campo][ciclo] = (d[campo][ciclo] || 0) + valor;
+    for (const d of dest(codigo)) d[campo][ciclo] = (d[campo][ciclo] || 0) + valor;
   };
   const orden = (s) => Array.from(s).sort();
 
@@ -352,9 +531,9 @@ async function columnasPorCodigos(codigosEntrada) {
       FROM stock_actual_items WHERE descarga_id = :id AND codigo IN (${inCod}) GROUP BY codigo
     `, { id: stk.id, ...pc });
     for (const r of rows) {
-      set(r.codigo, 'stockActual', Number(r.stock || 0));
-      set(r.codigo, 'minMs', r.minimo == null ? null : Number(r.minimo));
-      set(r.codigo, 'maxMs', r.maximo == null ? null : Number(r.maximo));
+      sumarA(r.codigo, 'stockActual', Number(r.stock || 0));
+      sumarMinMax(r.codigo, 'minMs', r.minimo == null ? null : Number(r.minimo));
+      sumarMinMax(r.codigo, 'maxMs', r.maximo == null ? null : Number(r.maximo));
     }
   }
   const sug = await query(`SELECT codigo_articulo codigo, stock_minimo, stock_maximo FROM stock_sugeridos WHERE codigo_articulo IN (${inCod})`, pc);
@@ -373,9 +552,9 @@ async function columnasPorCodigos(codigosEntrada) {
       GROUP BY codigo, vencimiento ORDER BY vencimiento
     `, { id: ven.id, ...pc });
     for (const r of rows) {
-      if (out[r.codigo] && !out[r.codigo].proxVto) {
-        out[r.codigo].proxVto = r.vto;
-        out[r.codigo].proxVtoCant = Number(r.cantidad || 0);
+      for (const d of dest(r.codigo)) {
+        if (!d.proxVto) { d.proxVto = r.vto; d.proxVtoCant = 0; }
+        if (d.proxVto === r.vto) d.proxVtoCant += Number(r.cantidad || 0);
       }
     }
   }
@@ -406,6 +585,12 @@ async function columnasPorCodigos(codigosEntrada) {
   meta.ciclosBajas = orden(ciclosBajas);
 
   return { datos: out, meta };
+}
+
+async function marcarControladoManual(id, controlado, usuarioId) {
+  const result = await query('UPDATE requerimiento_manual SET controlado = :controlado WHERE id = :id', { id, controlado: controlado ? 1 : 0 });
+  if (result.affectedRows) await audit(usuarioId, 'controlado_requerimiento_manual', 'requerimiento_manual', id, { controlado: !!controlado });
+  return result.affectedRows;
 }
 
 async function eliminarManual(id, usuarioId) {
@@ -644,7 +829,11 @@ module.exports = {
   listarManual,
   guardarManual,
   eliminarManual,
+  gruposFuentes,
+  cargarFuentes,
+  marcarControladoManual,
   columnasManual,
+  comparacionManual,
   columnasPorCodigos,
   copiarDesdeRequerimientoNuevo
 };

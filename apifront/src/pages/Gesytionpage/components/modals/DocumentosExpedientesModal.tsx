@@ -53,9 +53,25 @@ export function DocumentosExpedientesModal({
     if (!dnisConsulta.length) return;
     setLoading(true);
     try {
-      const data = await fetchRowsByDnis('/tblarchivos', dnisConsulta, { limit: 200 });
-      setArchivos(data);
-      onArchivosCountChange(data.length);
+      const [data, resos] = await Promise.all([
+        fetchRowsByDnis('/tblarchivos', dnisConsulta, { limit: 200 }),
+        fetchRowsByDnis('/resoluciones', dnisConsulta, { limit: 200 }).catch(() => [] as any[]),
+      ]);
+      // Resoluciones del agente cuyo PDF está en "RESOLUCIONES Y VARIOS" (tblarchivos con dni=1, vía archivo_id):
+      // no salen por ?dni= y se suman acá, marcadas con _reso (solo lectura: el archivo es general).
+      const propios = new Set(data.map((a: any) => Number(a.id)));
+      const pendientes = resos.filter((r: any) => r?.archivo_id && !r.deleted_at && !propios.has(Number(r.archivo_id)));
+      const deResos = (await Promise.all(pendientes.map(async (r: any) => {
+        try {
+          const res = await apiFetch<any>(`/tblarchivos/${r.archivo_id}`);
+          const a = res?.data ?? res;
+          return a?.id ? { ...a, _reso: r } : null;
+        } catch { return null; }
+      }))).filter(Boolean) as any[];
+      const vistos = new Set<number>();
+      const todos = [...data, ...deResos].filter((a: any) => !vistos.has(Number(a.id)) && vistos.add(Number(a.id)));
+      setArchivos(todos);
+      onArchivosCountChange(todos.length);
     } catch {
       setArchivos([]);
     } finally {
@@ -66,8 +82,8 @@ export function DocumentosExpedientesModal({
   useEffect(() => { cargar(); }, [cargar]);
 
   const archivosOrdenados = [...archivos].sort((a, b) => {
-    const fa = a?.fecha ? String(a.fecha).slice(0, 10) : '';
-    const fb = b?.fecha ? String(b.fecha).slice(0, 10) : '';
+    const fa = String(a?._reso?.fecha || a?.fecha || '').slice(0, 10);
+    const fb = String(b?._reso?.fecha || b?.fecha || '').slice(0, 10);
     if (fa !== fb) return fb.localeCompare(fa);
     return (b?.id || 0) - (a?.id || 0);
   });
@@ -298,17 +314,23 @@ export function DocumentosExpedientesModal({
                               {a.nombre || a.nombre_archivo_original || '—'}
                             </span>
                           </td>
-                          <td style={td}>{a.tipo || '—'}</td>
-                          <td style={{ ...td, fontFamily: 'monospace' }}>{a.numero || '—'}</td>
-                          <td style={td}>{a.anio || '—'}</td>
-                          <td style={td}>{fmtFecha(a.fecha)}</td>
-                          <td style={{ ...td, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.descripcion_archivo || '—'}</td>
+                          <td style={td}>
+                            {a._reso
+                              ? <span title="PDF en RESOLUCIONES Y VARIOS" style={{ color: '#fbbf24', fontWeight: 600 }}>📜 resolución</span>
+                              : (a.tipo || '—')}
+                          </td>
+                          <td style={{ ...td, fontFamily: 'monospace' }}>{a._reso?.numero || a.numero || '—'}</td>
+                          <td style={td}>{a.anio || (a._reso?.fecha ? String(a._reso.fecha).slice(0, 4) : '—')}</td>
+                          <td style={td}>{fmtFecha(a._reso?.fecha || a.fecha)}</td>
+                          <td style={{ ...td, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {a._reso ? (a._reso.motivo || a._reso.observaciones || '—') : (a.descripcion_archivo || '—')}
+                          </td>
                           <td style={td}>
                             <div style={{ display: 'flex', gap: 4 }}>
                               <button type="button" className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px' }}
                                 onClick={() => abrirArchivo(a.id)}>Abrir</button>
-                              <button type="button" className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px' }}
-                                onClick={() => iniciarEdicion(a)} title="Editar datos">✏️</button>
+                              {!a._reso && <button type="button" className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                                onClick={() => iniciarEdicion(a)} title="Editar datos">✏️</button>}
                             </div>
                           </td>
                         </tr>

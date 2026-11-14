@@ -710,3 +710,120 @@ a.oc-link { display: inline-flex; align-items: center; gap: 8px; border-radius: 
 .paginador button { min-width: 32px; justify-content: center; }
 .paginador select { padding: 4px 6px; font-size: 13px; }
 .paginador-abajo .paginador { justify-content: flex-end; margin: 8px 0 0; }
+
+/* Card de farmacos repetidos (Stock Actual) */
+.repetidos-card { background: #fff; border: 1px solid #f0c9c9; border-left: 5px solid #c0392b; border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+.repetidos-card header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.repetidos-card h3 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+.repetidos-grupo { margin-top: 12px; overflow-x: auto; }
+.repetidos-grupo h4 { margin: 0 0 6px; font-size: 14px; color: #33414c; }
+.repetidos-grupo h4 small { color: #66717c; font-weight: 400; }
+.repetidos-grupo table { width: 100%; }
+.repetidos-grupo td { vertical-align: top; }
+.repetidos-vacio { margin: 8px 0 0; color: #5b6b76; }
+.repetidos-filtro { border: 2px solid transparent; font: inherit; font-size: 14px; cursor: pointer; }
+.repetidos-filtro:hover { filter: brightness(0.95); border-color: rgba(0,0,0,0.15); }
+.repetidos-filtro.activo { border-color: #7b4a00; box-shadow: 0 0 0 2px rgba(123,74,0,0.15); }
+.repetidos-explica { margin: 10px 0 0; padding: 10px 14px; background: #f7f9fb; border: 1px solid #e1e7ec; border-radius: 6px; color: #33414c; font-size: 14px; line-height: 1.45; }
+.repetidos-explica p { margin: 0 0 6px; }
+.repetidos-explica ul { margin: 0 0 6px; padding-left: 20px; }
+.repetidos-explica li { margin-bottom: 3px; }
+.repetidos-tip { color: #5b6b76; font-size: 13px; }
+.repetidos-filtrando { margin: 10px 0 0; padding: 6px 10px; background: #fff4e0; border-radius: 6px; color: #7b4a00; font-size: 14px; }
+.link-codigo { background: none; border: 0; padding: 0; color: #174e8d; font-family: monospace; font-weight: 700; cursor: pointer; text-decoration: underline; }
+.repetidos-grupo tr.grupo-inicio td { border-top: 2px solid #e2c4c4; }
+.repetidos-farmaco { max-width: 320px; }
+.origen-codigo { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.origen-chip { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; background: #eef1f4; color: #33414c; }
+.origen-chip.origen-oc { background: #dcecff; color: #174e8d; }
+.origen-chip.origen-hospital { background: #fde2c8; color: #8a4300; font-weight: 700; }
+.origen-chip.origen-sector { background: #e4e1ff; color: #3d3188; }
+.origen-chip.origen-manual { background: #fff3cc; color: #7b5600; }
+.origen-chip.origen-sin { background: #eef1f4; color: #66717c; }
+.link-detalle { background: none; border: 0; padding: 0; color: #5b6b76; font-size: 12px; cursor: pointer; text-decoration: underline; }
+.origen-detalle { width: 100%; margin: 4px 0 0; padding-left: 18px; font-size: 12px; color: #4a5763; }
+.repetidos-alerta { background: #fff4e0; color: #7b4a00; font-size: 13px; }
+
+/* Carga Requerimiento manual: tabla mas angosta */
+table.carga-manual { min-width: 0; }
+table.carga-manual th, table.carga-manual td { padding: 6px 7px; font-size: 13.5px; line-height: 1.3; }
+table.carga-manual th { font-size: 12.5px; }
+table.carga-manual td:nth-child(2) { white-space: nowrap; }
+.ayuda-carga { margin-top: 8px; background: #f4f8fa; border: 1px solid #dbe3e8; border-radius: 6px; padding: 8px 14px; font-size: 13.5px; line-height: 1.5; }
+.ayuda-carga summary { cursor: pointer; font-weight: 700; color: #174e8d; }
+.ayuda-carga ul { margin: 6px 0 2px; padding-left: 20px; }
+.ayuda-carga li { margin: 3px 0; }
+.tag-pdf { display: inline-block; margin-top: 3px; padding: 1px 6px; border-radius: 10px; background: #fdead7; color: #b54708; font-size: 11px; font-weight: 700; white-space: nowrap; }
+
+/* Cuadros de motivos de la comparacion entre años */
+.motivos-panel { margin-top: 8px; background: #fff; border: 1px solid #dbe3e8; border-radius: 8px; padding: 10px 14px; }
+.motivos-titulo { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin-bottom: 8px; }
+.motivos-titulo span { color: #5b6b76; font-size: 13px; }
+.motivos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.motivo-card { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 8px 10px; border: 2px solid #dbe3e8; border-radius: 8px; background: #f8fafb; color: #1d2a33; cursor: pointer; font: inherit; }
+.motivo-card:hover:not(:disabled) { filter: brightness(0.97); }
+.motivo-card.activo { box-shadow: 0 0 0 2px #174e8d; }
+.motivo-card:disabled { cursor: wait; opacity: 0.7; }
+.motivo-n { font-size: 24px; font-weight: 800; line-height: 1.1; }
+.motivo-label { font-size: 13px; font-weight: 700; line-height: 1.25; }
+.motivo-corto { font-size: 12px; font-weight: 600; }
+.motivos-explica { margin-top: 8px; font-size: 13.5px; line-height: 1.45; color: #1d2a33; }
+.motivos-fuente { margin-top: 6px; font-size: 12px; color: #5b6b76; }
+.motivo-tag { display: inline-block; padding: 1px 7px; border: 1px solid; border-radius: 10px; font-weight: 700; font-size: 11.5px; white-space: nowrap; }
+
+/* Recuadro "¿Que es esta pagina?" (ayudas.jsx) */
+.ayuda-pagina {
+  margin: 10px 0 12px;
+  border: 1px solid #b9d3ec;
+  border-left: 4px solid #1d5fa8;
+  border-radius: 8px;
+  background: #f2f8fd;
+  color: #17324d;
+  font-size: 14px;
+}
+.ayuda-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ayuda-titulo:hover { background: #e6f1fb; }
+.ayuda-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #1d5fa8;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  flex: none;
+}
+.ayuda-accion {
+  margin-left: auto;
+  color: #1d5fa8;
+  font-size: 13px;
+  text-decoration: underline;
+}
+.ayuda-cuerpo { padding: 0 14px 10px 40px; line-height: 1.45; }
+.ayuda-cuerpo p { margin: 0 0 6px; }
+.ayuda-cuerpo ul { margin: 4px 0 6px; padding-left: 20px; }
+.ayuda-cuerpo li { margin: 2px 0; }
+.ayuda-sub {
+  margin-top: 8px !important;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px dashed #9cc0e3;
+}
+.ayuda-sub-corto { padding: 0 14px 8px 40px; font-size: 13px; color: #34506b; }
+@media print { .ayuda-pagina { display: none; } }

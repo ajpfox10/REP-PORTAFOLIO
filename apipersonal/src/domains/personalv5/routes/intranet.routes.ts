@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import * as XLSX from 'xlsx';
@@ -72,13 +72,45 @@ function historialPaths(depKey: string) {
   };
 }
 
+// Caracteres que cmd.exe interpreta (comillas, operadores, variables, saltos de línea).
+// `start ... cmd /k` vuelve a parsear la línea, así que NINGÚN dato puede traerlos.
+const CMD_PELIGROSO = /["&|<>^%!\r\n]/;
+
 function lanzarCMD(titulo: string, scriptPath: string, args: string[]) {
   if (!fs.existsSync(scriptPath)) {
     throw new Error(`Script intranet no encontrado: ${scriptPath}`);
   }
-  const argStr = args.map(a => `"${a}"`).join(' ');
-  const cmd = `start "${titulo}" cmd /k ${PYTHON} "${scriptPath}" ${argStr}`;
-  exec(cmd, { shell: 'cmd.exe', env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+  for (const v of [titulo, scriptPath, ...args]) {
+    if (CMD_PELIGROSO.test(String(v))) {
+      logger.warn({ msg: 'intranet: argumento rechazado (caracteres de cmd)', valor: String(v).slice(0, 200) });
+      throw Object.assign(new Error('Parámetro inválido'), { status: 400 });
+    }
+  }
+  const child = spawn('cmd.exe', ['/c', 'start', `"${titulo}"`, 'cmd', '/k', PYTHON, `"${scriptPath}"`, ...args.map(a => `"${a}"`)], {
+    env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+    windowsVerbatimArguments: true,
+    detached: true,
+    stdio: 'ignore',
+  });
+  child.unref();
+}
+
+/** Dependencia del body → 'HOSPITAL' | 'UPA 4' | 'UPA 18', o null si no es una de esas. */
+function dependenciaValida(raw: any): string | null {
+  const dep = normalizarDependencia(raw);
+  return dep in SUFIJOS_EXCEL ? dep : null;
+}
+
+/** Entero positivo opcional: undefined si no vino, null si vino mal. */
+function enteroOpcional(raw: any): number | undefined | null {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return undefined;
+  const s = String(raw).trim();
+  return /^\d{1,9}$/.test(s) && Number(s) > 0 ? Number(s) : null;
+}
+
+/** Respuesta de error de lanzarCMD respetando el 400 de parámetro inválido. */
+function errorLanzar(res: Response, e: any) {
+  res.status(e?.status === 400 ? 400 : 500).json({ ok: false, error: e?.message });
 }
 
 // "07/08/2025" (Intranet) → "2025-08-07" | null
@@ -255,8 +287,8 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
     const excelDir = process.env.LICENCIAS_PDF_DIR;
     if (!excelDir) { res.status(500).json({ error: 'LICENCIAS_PDF_DIR no configurado' }); return; }
 
-    const dependencia = (req.body?.dependencia ?? 'HOSPITAL').toUpperCase().trim();
-    const depKey = dependencia.replace('UPA4', 'UPA 4').replace('UPA18', 'UPA 18');
+    const depKey = dependenciaValida(req.body?.dependencia);
+    if (!depKey) { res.status(400).json({ error: 'Dependencia inválida: HOSPITAL / UPA 4 / UPA 18' }); return; }
     const sufijo = SUFIJOS_EXCEL[depKey] ?? '';
     const excelPath = path.join(excelDir, `errores_siape${sufijo}.xlsx`);
     const lPath    = logPath(depKey);
@@ -272,7 +304,7 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
       lanzarCMD(`Carga ${depKey}`, SCRIPT_PATH, ['--excel', excelPath, '--dependencia', depKey, '--log', lPath]);
       res.json({ ok: true, msg: `Script iniciado para ${depKey}`, script: SCRIPT_PATH });
     } catch (e: any) {
-      res.status(500).json({ ok: false, error: e?.message });
+      errorLanzar(res, e);
     }
   });
 
@@ -313,7 +345,7 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
         ['--excel', excelPath, '--dependencia', depKey, '--log', lPath]);
       res.json({ ok: true, msg: `Segunda pasada iniciada (${depKey}, ${filas.length} filas visibles)`, script: SCRIPT_SEGUNDA_PATH, excel: excelPath, log: lPath });
     } catch (e: any) {
-      res.status(500).json({ ok: false, error: e?.message });
+      errorLanzar(res, e);
     }
   });
 
@@ -337,17 +369,20 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
     if (!user) { res.status(500).json({ error: 'SIAPE_USER no configurado' }); return; }
     if (!pass) { res.status(500).json({ error: 'SIAPE_PASS no configurado' }); return; }
 
+    const id = enteroOpcional(req.body?.id);
+    const limit = enteroOpcional(req.body?.limit);
+    if (id === null || limit === null) {
+      res.status(400).json({ error: 'id y limit tienen que ser números enteros positivos' }); return;
+    }
     const args: string[] = [];
-    const id = req.body?.id;
-    const limit = req.body?.limit;
-    if (id !== undefined && id !== null && String(id).trim()) args.push('--id', String(id));
-    if (limit !== undefined && limit !== null && String(limit).trim()) args.push('--limit', String(limit));
+    if (id !== undefined) args.push('--id', String(id));
+    if (limit !== undefined) args.push('--limit', String(limit));
 
     try {
       lanzarCMD('Carga Francos SiAPe', SCRIPT_FRANCOS_SIAPE_PATH, args);
       res.json({ ok: true, msg: 'Carga de francos en SiAPe iniciada', script: SCRIPT_FRANCOS_SIAPE_PATH });
     } catch (e: any) {
-      res.status(500).json({ ok: false, error: e?.message });
+      errorLanzar(res, e);
     }
   });
 
@@ -427,7 +462,7 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
       lanzarCMD(`Carga Ausentes ${depKey}`, SCRIPT_AUSENTES_PATH, args);
       res.json({ ok: true, msg: `Script de ausentes iniciado para ${depKey}`, script: SCRIPT_AUSENTES_PATH });
     } catch (e: any) {
-      res.status(500).json({ ok: false, error: e?.message });
+      errorLanzar(res, e);
     }
   });
 
@@ -437,8 +472,8 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
     if (!pass) { res.status(500).json({ error: 'INTRANET_PASS no configurado' }); return; }
     if (!sequelize) { res.status(500).json({ error: 'DB no disponible' }); return; }
 
-    const dependencia = (req.body?.dependencia ?? 'HOSPITAL').toUpperCase().trim();
-    const depKey = dependencia.replace('UPA4', 'UPA 4').replace('UPA18', 'UPA 18');
+    const depKey = dependenciaValida(req.body?.dependencia);
+    if (!depKey) { res.status(400).json({ error: 'Dependencia inválida: HOSPITAL / UPA 4 / UPA 18' }); return; }
     const { listado, salida } = historialPaths(depKey);
 
     try {
@@ -498,7 +533,7 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
       res.json({ ok: true, msg: `Script iniciado para ${depKey} (${filas.length} DNIs: ${activos} activos, ${inactivos} inactivos)`, total: filas.length });
     } catch (e: any) {
       logger.error({ msg: '[intranet] historial-estructura generar error', err: e?.message });
-      res.status(500).json({ ok: false, error: e?.message });
+      errorLanzar(res, e);
     }
   });
 

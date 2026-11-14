@@ -19,7 +19,10 @@ const { leerPdfsCarpeta, ordenNombres, leerCargaManual, construirExcel } = requi
 const ordenesCompra = require('./ordenesCompraDb');
 const ordenesCompraDrive = require('./ordenesCompraDrive');
 const requerimientos = require('./requerimientosDb');
+const codigosEquiv = require('./codigosEquivDb');
 const stockActual = require('./stockActualDb');
+const { detectarRepetidos } = require('./stockRepetidos');
+const { analizarOrigen } = require('./stockRepetidosOrigen');
 const ocHistorial = require('./ocHistorialDb');
 const ministerio = require('./ministerioDb');
 const consumoMs = require('./consumoMsDb');
@@ -27,6 +30,7 @@ const vencidos = require('./vencidosDb');
 const ocPendientesMs = require('./ocPendientesMs');
 const ocPdf = require('./ocPdf');
 const bajas = require('./bajasDb');
+const reqAjustes = require('./requerimientoAjustesDb');
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
@@ -321,7 +325,22 @@ app.get('/api/stock-actual', requireAuth, requireAdmin, async (req, res, next) =
       stockActual.descargaEnCurso(),
       stockActual.carpetaDescarga()
     ]);
-    res.json({ dir, sectores: config.stockActual.sectores, enCurso, descargas, ...actual });
+    // Farmacos repetidos + de donde salio cada codigo (si el rastreo falla, la card muestra solo los repetidos)
+    const repetidos = detectarRepetidos(actual.items);
+    await analizarOrigen(repetidos, actual.descargaId).catch((err) => { repetidos.errorOrigen = err.message; });
+    res.json({ dir, sectores: config.stockActual.sectores, enCurso, descargas, ...actual, repetidos });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Solo los farmacos repetidos del ultimo stock (con origen y estado de equivalencia), para el requerimiento
+app.get('/api/stock-actual/repetidos', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    const actual = await stockActual.itemsStockActual(0);
+    const repetidos = detectarRepetidos(actual.items);
+    await analizarOrigen(repetidos, actual.descargaId);
+    res.json({ descargaId: actual.descargaId, fechaStock: actual.items[0]?.fecha_stock || null, repetidos });
   } catch (error) {
     next(error);
   }
@@ -340,29 +359,42 @@ app.put('/api/stock-actual/carpeta', requireAuth, requireAdmin, async (req, res,
   }
 });
 
+// Lanza el robot de Consulta de Stock en segundo plano. usuarioId null = disparo automatico diario.
+async function lanzarDescargaStockActual(usuarioId, origen = 'manual') {
+  const enCurso = await stockActual.descargaEnCurso();
+  if (enCurso) {
+    const e = new Error(`Ya hay una descarga en curso (#${enCurso.id})`);
+    e.status = 409;
+    throw e;
+  }
+  if (!config.farmacia.user || !config.farmacia.password) {
+    const e = new Error('Faltan FARMACIA_WEB_USER/FARMACIA_WEB_PASSWORD en el .env');
+    e.status = 400;
+    throw e;
+  }
+  const descargaId = await stockActual.crearDescarga(config.stockActual.sectores, usuarioId);
+  const logDir = path.resolve(__dirname, '../../logs');
+  fs.mkdirSync(logDir, { recursive: true });
+  const out = fs.openSync(path.join(logDir, `stock-descarga-${descargaId}.log`), 'a');
+  const err = fs.openSync(path.join(logDir, `stock-descarga-${descargaId}.err.log`), 'a');
+  const child = spawn(process.execPath, [path.resolve(__dirname, '../scripts/descargar-stock-web.js')], {
+    cwd: path.resolve(__dirname, '..'),
+    env: { ...process.env, NODE_ENV: config.envName, STOCK_DESCARGA_ID: String(descargaId) },
+    detached: true,
+    stdio: ['ignore', out, err],
+    windowsHide: true
+  });
+  child.unref();
+  await audit(usuarioId, 'descargar_stock_actual', 'stock_actual_descargas', descargaId, { sectores: config.stockActual.sectores, origen });
+  return descargaId;
+}
+
 app.post('/api/stock-actual/descargar', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const enCurso = await stockActual.descargaEnCurso();
-    if (enCurso) return res.status(409).json({ error: `Ya hay una descarga en curso (#${enCurso.id})` });
-    if (!config.farmacia.user || !config.farmacia.password) {
-      return res.status(400).json({ error: 'Faltan FARMACIA_WEB_USER/FARMACIA_WEB_PASSWORD en el .env' });
-    }
-    const descargaId = await stockActual.crearDescarga(config.stockActual.sectores, req.user.sub);
-    const logDir = path.resolve(__dirname, '../../logs');
-    fs.mkdirSync(logDir, { recursive: true });
-    const out = fs.openSync(path.join(logDir, `stock-descarga-${descargaId}.log`), 'a');
-    const err = fs.openSync(path.join(logDir, `stock-descarga-${descargaId}.err.log`), 'a');
-    const child = spawn(process.execPath, [path.resolve(__dirname, '../scripts/descargar-stock-web.js')], {
-      cwd: path.resolve(__dirname, '..'),
-      env: { ...process.env, NODE_ENV: config.envName, STOCK_DESCARGA_ID: String(descargaId) },
-      detached: true,
-      stdio: ['ignore', out, err],
-      windowsHide: true
-    });
-    child.unref();
-    await audit(req.user.sub, 'descargar_stock_actual', 'stock_actual_descargas', descargaId, { sectores: config.stockActual.sectores });
+    const descargaId = await lanzarDescargaStockActual(req.user.sub, 'manual');
     res.status(202).json({ ok: true, descargaId });
   } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
     next(error);
   }
 });
@@ -644,6 +676,44 @@ app.get('/api/requerimientos/analisis', requireAuth, requireAdmin, async (_req, 
   }
 });
 
+// --- Correcciones del requerimiento (valor corregido a mano; el original del PDF se conserva) ---
+// Cualquier usuario logueado puede corregir.
+const usuarioDe = (req) => ({ id: req.user?.sub || null, nombre: req.user?.username || null });
+app.get('/api/requerimientos/ajustes', requireAuth, async (req, res, next) => {
+  try {
+    res.json({ data: await reqAjustes.listar(req.query.ciclo ? String(req.query.ciclo) : null) });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+app.get('/api/requerimientos/ajustes/historial', requireAuth, async (req, res, next) => {
+  try {
+    res.json({ data: await reqAjustes.historial(req.query.ciclo ? String(req.query.ciclo) : null, req.query.codigo ? String(req.query.codigo) : null) });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+app.post('/api/requerimientos/ajustes', requireAuth, async (req, res, next) => {
+  try {
+    const { codigo, ciclo, cantidad, motivo } = req.body || {};
+    res.json(await reqAjustes.guardar({ codigo, ciclo, cantidad, motivo }, usuarioDe(req)));
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+app.post('/api/requerimientos/ajustes/volver', requireAuth, async (req, res, next) => {
+  try {
+    const { codigo, ciclo, motivo } = req.body || {};
+    res.json(await reqAjustes.volver({ codigo, ciclo, motivo }, usuarioDe(req)));
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+
 // --- Carga manual del requerimiento (por anio, sin PDF) ---
 app.get('/api/requerimientos/manual/catalogo', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
@@ -657,7 +727,7 @@ app.get('/api/requerimientos/manual', requireAuth, requireAdmin, async (req, res
   try {
     const anio = Number(req.query.anio);
     if (!Number.isInteger(anio) || anio < 2000 || anio > 2100) return res.status(400).json({ error: 'Año inválido' });
-    res.json({ data: await requerimientos.listarManual(anio) });
+    res.json({ data: await requerimientos.listarManual(anio), grupos: await requerimientos.gruposFuentes(anio) });
   } catch (error) {
     next(error);
   }
@@ -680,6 +750,19 @@ app.get('/api/requerimientos/manual/columnas', requireAuth, requireAdmin, async 
     if (!Number.isInteger(anio) || anio < 2000 || anio > 2100) return res.status(400).json({ error: 'Año inválido' });
     if (semestre !== 1 && semestre !== 2) return res.status(400).json({ error: 'Semestre inválido' });
     res.json(await requerimientos.columnasManual(anio, semestre));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Motivo probable de cada diferencia entre lo cargado a mano y el PDF del mismo semestre del anio siguiente
+app.get('/api/requerimientos/manual/comparacion', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const anio = Number(req.query.anio);
+    const semestre = Number(req.query.semestre);
+    if (!Number.isInteger(anio) || anio < 2000 || anio > 2100) return res.status(400).json({ error: 'Año inválido' });
+    if (semestre !== 1 && semestre !== 2) return res.status(400).json({ error: 'Semestre inválido' });
+    res.json(await requerimientos.comparacionManual(anio, semestre));
   } catch (error) {
     next(error);
   }
@@ -714,6 +797,96 @@ app.post('/api/requerimientos/manual', requireAuth, requireAdmin, async (req, re
     await requerimientos.guardarManual({ anio, semestre, codigo, droga: droga.slice(0, 255), descripcion, cantidad }, req.user.sub);
     res.status(201).json({ ok: true });
   } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/requerimientos/manual/:id/controlado', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const n = await requerimientos.marcarControladoManual(Number(req.params.id), !!req.body?.controlado, req.user.sub);
+    if (!n) return res.status(404).json({ error: 'Renglón no encontrado' });
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// --- Historial de cambios de codigo (codigos equivalentes del Ministerio) ---
+const anioSemOk = (anio, semestre) => Number.isInteger(anio) && anio >= 2000 && anio <= 2100 && (semestre === 1 || semestre === 2);
+app.get('/api/codigos-equiv/sugerencias', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const anio = Number(req.query.anio);
+    const semestre = Number(req.query.semestre);
+    if (!anioSemOk(anio, semestre)) return res.status(400).json({ error: 'Año o semestre inválido' });
+    res.json(await codigosEquiv.sugerencias(anio, semestre));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/codigos-equiv/huellas', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const codigos = (Array.isArray(req.body?.codigos) ? req.body.codigos : []).map((c) => String(c || '').trim()).filter(Boolean).slice(0, 50);
+    res.json(await codigosEquiv.huellas(codigos));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/codigos-equiv/comparar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    res.json({ comparacion: await codigosEquiv.compararCodigos(String(req.body?.codigo || '').trim(), String(req.body?.con || '').trim()) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/codigos-equiv/auditoria', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    res.json({ data: await codigosEquiv.auditar() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/codigos-equiv', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    res.json({ data: await codigosEquiv.historial() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/codigos-equiv/unificar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const anio = Number(req.body?.anio);
+    const semestre = Number(req.body?.semestre);
+    if (!anioSemOk(anio, semestre)) return res.status(400).json({ error: 'Año o semestre inválido' });
+    const { codigo, con, queda } = req.body || {};
+    const nota = String(req.body?.nota || '').trim().slice(0, 255);
+    res.json(await codigosEquiv.unificar({ codigo, con, queda, anio, semestre, nota, forzar: req.body?.forzar === true }, req.user.sub));
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message, comparacion: error.comparacion });
+    next(error);
+  }
+});
+
+app.post('/api/codigos-equiv/descartar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    await codigosEquiv.descartar({ codigo: req.body?.codigo, con: req.body?.con }, req.user.sub);
+    res.json({ ok: true });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+
+app.delete('/api/codigos-equiv/:id', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    await codigosEquiv.deshacer(Number(req.params.id), req.user.sub);
+    res.json({ ok: true });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
     next(error);
   }
 });
@@ -2494,6 +2667,46 @@ function iniciarSondeoCritico() {
   setInterval(sondearCritico, intervalMs);
 }
 
+// --- Descarga automatica diaria del stock actual ---
+// Una vez por dia, a partir de STOCK_ACTUAL_AUTO_HORA (default 07:00). Si el backend estaba apagado a esa hora,
+// la dispara al levantar. Si la corrida del dia falla, reintenta (hasta STOCK_ACTUAL_AUTO_REINTENTOS por dia).
+let stockAutoEnCurso = false;
+
+async function revisarStockActualDiario() {
+  if (stockAutoEnCurso) return;
+  stockAutoEnCurso = true;
+  try {
+    const { hora, minuto, reintentos } = config.stockActualAuto;
+    const desde = new Date();
+    desde.setHours(hora, minuto, 0, 0);
+    if (Date.now() < desde.getTime()) return; // todavia no es la hora de hoy
+    const [row] = await query(
+      `SELECT SUM(estado IN ('ok','en_proceso')) AS buenas, COUNT(*) AS total
+       FROM stock_actual_descargas WHERE started_at >= :desde`,
+      { desde }
+    );
+    if (Number(row?.buenas || 0) > 0) return; // ya hay una descarga hoy (manual o automatica)
+    if (Number(row?.total || 0) >= reintentos) return; // se agotaron los intentos del dia
+    const descargaId = await lanzarDescargaStockActual(null, 'automatica_diaria');
+    console.log(`[stock-actual-auto] descarga diaria lanzada #${descargaId}`);
+  } catch (err) {
+    if (err.status !== 409) console.error('[stock-actual-auto] error:', err.message);
+  } finally {
+    stockAutoEnCurso = false;
+  }
+}
+
+function iniciarStockActualDiario() {
+  const { enabled, hora, minuto } = config.stockActualAuto;
+  if (!enabled) {
+    console.log('[stock-actual-auto] deshabilitado (STOCK_ACTUAL_AUTO=off)');
+    return;
+  }
+  console.log(`[stock-actual-auto] activo. Descarga diaria desde las ${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`);
+  setTimeout(revisarStockActualDiario, 15000);
+  setInterval(revisarStockActualDiario, 10 * 60 * 1000);
+}
+
 app.listen(config.port, () => {
   console.log(`${config.appName} backend ${config.envName} escuchando en ${config.port}`);
   iniciarSondeoTrimestre();
@@ -2510,7 +2723,12 @@ app.listen(config.port, () => {
     .then(() => ocHistorial.iniciarImportacionHistorial())
     .catch((err) => console.error('[oc-historial] no se pudieron crear las tablas:', err.message));
   stockActual.ensureStockActualTables()
+    .then(() => iniciarStockActualDiario())
     .catch((err) => console.error('[stock-actual] no se pudieron crear las tablas:', err.message));
+  codigosEquiv.ensureEquivTables()
+    .catch((err) => console.error('[codigos-equiv] no se pudo crear la tabla:', err.message));
+  reqAjustes.ensureAjustesTables()
+    .catch((err) => console.error('[requerimiento-ajustes] no se pudieron crear las tablas:', err.message));
   requerimientos.ensureRequerimientoTables()
     .then(() => requerimientos.iniciarSondeoRequerimientos())
     .catch((err) => console.error('[requerimientos] no se pudieron crear las tablas:', err.message));

@@ -5,7 +5,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../../api/http';
 
-type Estado = 'ACTIVO_SIAPE' | 'BAJA_SIAPE' | 'ALTA_PENDIENTE';
+type Estado = 'ACTIVO_SIAPE' | 'BAJA_SIAPE' | 'ALTA_PENDIENTE' | 'NO_CORRESPONDE';
 
 type Row = {
   dni: number;
@@ -21,6 +21,7 @@ type Row = {
   estado: Estado;
   ultima_vez_en_siape: string | null;
   ausente_desde: string | null;
+  motivo?: string | null;
   presencia: (0 | 1 | null)[];
 };
 
@@ -28,7 +29,7 @@ type Data = {
   foto: { fecha: string; archivo: string; filas: number; procesado_en: string } | null;
   columnas: string[];
   syncError: string | null;
-  totals: { controlados: number; residentes: number; exResidentes: number; activos: number; bajaSiape: number; altaPendiente: number };
+  totals: { controlados: number; residentes: number; exResidentes: number; activos: number; bajaSiape: number; altaPendiente: number; noCorresponde?: number };
   rows: Row[];
 };
 
@@ -36,6 +37,7 @@ const ESTADOS: Record<Estado, { label: string; color: string; bg: string }> = {
   BAJA_SIAPE: { label: 'SIAPE lo dio de baja', color: '#fca5a5', bg: 'rgba(239,68,68,0.14)' },
   ALTA_PENDIENTE: { label: 'Alta pendiente en SIAPE', color: '#fdba74', bg: 'rgba(249,115,22,0.14)' },
   ACTIVO_SIAPE: { label: 'Activo en SIAPE', color: '#86efac', bg: 'rgba(34,197,94,0.12)' },
+  NO_CORRESPONDE: { label: 'No corresponde alta', color: '#cbd5e1', bg: 'rgba(148,163,184,0.14)' },
 };
 
 function fmt(f?: string | null) {
@@ -69,7 +71,7 @@ export function ControlSiapeCard({ onSelectDni }: { onSelectDni?: (dni: number) 
 
   const rows = useMemo(() => {
     if (!data) return [];
-    return filtro === 'TODOS' ? data.rows : data.rows.filter((r) => r.estado !== 'ACTIVO_SIAPE');
+    return filtro === 'TODOS' ? data.rows : data.rows.filter((r) => r.estado === 'BAJA_SIAPE' || r.estado === 'ALTA_PENDIENTE');
   }, [data, filtro]);
 
   const th: React.CSSProperties = { textAlign: 'left', padding: '6px 8px', fontSize: '0.7rem', color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', whiteSpace: 'nowrap' };
@@ -164,6 +166,9 @@ export function ControlSiapeCard({ onSelectDni }: { onSelectDni?: (dni: number) 
                             figuraba el {fmt(r.ultima_vez_en_siape)} · ya no el {fmt(r.ausente_desde)}
                           </div>
                         )}
+                        {r.estado === 'NO_CORRESPONDE' && r.motivo && (
+                          <div className="muted" style={{ fontSize: '0.7rem', marginTop: 3 }}>{r.motivo}</div>
+                        )}
                       </td>
                       <td style={td}>
                         <div style={{ display: 'flex', gap: 2 }}>
@@ -174,7 +179,7 @@ export function ControlSiapeCard({ onSelectDni }: { onSelectDni?: (dni: number) 
                                 style={{
                                   width: 12, height: 16, borderRadius: 3,
                                   background: v === 1 ? '#22c55e' : v === 0 ? '#ef4444' : 'rgba(255,255,255,0.1)',
-                                  opacity: v === 0 && r.estado === 'ALTA_PENDIENTE' ? 0.45 : 1,
+                                  opacity: v === 0 && (r.estado === 'ALTA_PENDIENTE' || r.estado === 'NO_CORRESPONDE') ? 0.45 : 1,
                                 }} />
                             );
                           })}

@@ -20,6 +20,7 @@ import { ReclamosHaberesDashboardBanner } from '../AlertasPage/ReclamosHaberesBa
 import { ConcursosFuncionesBanner } from '../ConcursosPage/ConcursosFuncionesExamenes';
 import { JubilacionCargaBanner } from '../HerramientasPage/JubilacionCargaBanner';
 import { DashboardAlertSlot, useDashboardAlertsConfig } from './components/DashboardAlertSlot';
+import { GpAvisosTile } from './components/GpAvisosTile';
 import type { DashboardAlertKey } from './components/DashboardAlertSlot';
 import './styles/DashboardPage.css';
 
@@ -572,13 +573,18 @@ export function DashboardPage() {
           {(hasPerm('crud:*:*') || hasPerm('personal:write') || hasPerm('crud:personal:update')) && (
             <Tile to="/app/comisiones" title="🧳 Comisiones" desc="Agentes en comisión: acto, destino, vencimientos y regreso al servicio. Gráficos por destino, pases por mes y vencimientos." accent="#3987e5" />
           )}
-          {(hasPerm('crud:*:*') || hasPerm('personal:write') || hasPerm('crud:personal:update')) && (
+          {/* Card de Vacaciones adelantadas oculta (la ruta /app/vacaciones-adelantadas sigue activa) */}
+          {false && (hasPerm('crud:*:*') || hasPerm('personal:write') || hasPerm('crud:personal:update')) && (
             <Tile to="/app/vacaciones-adelantadas" title="🏖️ Vacaciones adelantadas" desc="Adelantos de vacaciones: período, días y año imputado. Búsqueda por agente, DNI, servicio y dependencia, con quién cargó, editó o borró cada uno." accent="#0ea5e9" />
           )}
           {hasPerm('crud:*:*') && (
             <Tile to="/app/carga-horaria-ley" title="⏱️ Carga horaria por ley" desc="Horas semanales que salen en los certificados según la ley: base, insalubridad (por ocupación) y agotamiento prematuro (por servicio)." accent="#0d9488" />
           )}
           <Tile to="/app/herramientas" title="⚖️ Jubilación IPS" desc="Calculadora de jubilación IPS para Leyes 10471 y 10430. Servicio nombrado, becas, ANSES, insalubridad y prorrateo." accent="#7c3aed" />
+          {(hasPerm('crud:agentexdni1:read') || hasPerm('crud:*:*')) && (
+            <Tile to="/app/agenda-turnos" title="📆 Agenda de turnos" desc="Turnos que el agente elige solo desde un enlace por WhatsApp (uno por enlace). Agendas por sector, horarios, bloqueos y sincronización con Google Calendar." accent="#0e7490" />
+          )}
+          {(hasPerm('crud:agentexdni1:read') || hasPerm('crud:*:*')) && <GpAvisosTile />}
           <Tile to="/app/concursos" title="🏆 Concursos Ley 10471" desc="Concurso de ingreso por año, ley, servicio y agente. Concurso de funciones: Ley 10471 con más de 15 años de antigüedad. Exportación a Excel." accent="#6366f1" />
           <LegajoTile />
           <Tile to="/app/mi-cuenta" title="👤 Mi cuenta" desc="Perfil, permisos, tablas del sistema e información de acceso." accent="#0ea5e9" />

@@ -3,14 +3,19 @@ EXTENSIÓN "Personal - Asistente (WhatsApp y CUIL ANSES)"  (antes "Personal - Av
 
 Se instala UNA vez en cada PC (Chrome) que vaya a mandar los avisos o contar los mensajes recibidos.
 
-1. Bajarla desde la app: Reportes → pestaña WhatsApp → "Descargar extensión"
-   (ahí está la guía paso a paso). En Descargas: clic derecho → Extraer todo. No borrar la carpeta después.
-2. En Chrome ir a  chrome://extensions   (en Edge:  edge://extensions)
-3. Activar "Modo de desarrollador" (Chrome: arriba a la derecha · Edge: costado izquierdo).
-4. "Cargar descomprimida" (Edge: "Cargar desempaquetada") → elegir la carpeta.
+1. Desde la app: Reportes → pestaña WhatsApp → "⬇️ Bajar instalador" → abrir
+   Instalar-Extension-Personal.cmd (doble clic). Hace todo solo:
+   - baja la última versión del servidor;
+   - si la extensión YA está cargada en Chrome/Edge, actualiza esa misma carpeta (no hay que tocar Chrome);
+     si no, la deja en C:\ExtensionPersonal y copia esa ruta al portapapeles;
+   - crea la tarea de actualización automática (antes era instalar-actualizador.cmd);
+   - avisa si hay otra copia cargada (repetida): esa hay que QUITARLA en chrome://extensions.
+   Sirve también para arreglar una PC que "no se actualiza": se vuelve a correr y listo.
+2. Solo la primera vez en esa PC: chrome://extensions (Edge: edge://extensions) → "Modo de desarrollador"
+   → "Cargar descomprimida" (Edge: "Cargar desempaquetada") → pegar con Ctrl+V la ruta que dejó copiada.
    La app, WhatsApp Web y la extensión tienen que estar en el MISMO navegador.
-5. Doble clic en instalar-actualizador.cmd (una sola vez): desde ahí se actualiza sola.
-6. Recargar la página de la app. Tiene que decir "Extensión instalada".
+3. Recargar la página de la app. Tiene que decir "Extensión instalada".
+   (Sigue estando el .zip para instalar a mano + instalar-actualizador.cmd, como antes.)
 
 Actualización automática (desde v1.4.0):
 - instalar-actualizador.cmd crea una tarea de Windows del usuario (cada 2 horas) y un acceso en
@@ -31,7 +36,7 @@ Recibidos (v1.3.0): Reportes → WhatsApp → "📥 Recibidos por WhatsApp" cuen
 
 Para publicar una versión nueva (después de cambiar la extensión y subir "version" en manifest.json):
   powershell -ExecutionPolicy Bypass -File C:\apps\personaldev\whatsapp-extension\empaquetar.ps1
-  y deploy del front. Las PCs con el actualizador la toman solas en menos de 2 horas.
+  (también copia Instalar-Extension-Personal.cmd a apifront\public\extension-whatsapp) y deploy del front. Las PCs con el actualizador la toman solas en menos de 2 horas.
 
 CUIL de ANSES (desde v1.5.0):
   Trámites documentales → Trámites → elegir tanda → "Bajar CUIL de ANSES". La extensión abre la página
@@ -48,3 +53,6 @@ Certificado RDAM (desde v1.6.0):
   hay sesión iniciada en el RDAM, reusa el certificado de HOY de ese DNI. La app lo guarda en
   DOCU\<dni>\RDAM\Certificado RDAM aaaa-mm-dd.pdf (crea la carpeta). Archivo: rdam.js.
   Robot equivalente sin extensión: apipersonal\scripts\descargar_rdam.py.
+  v1.7.1 (12/11/2026): el RDAM pasó a entregar el PDF como descarga (attachment) y la pestaña ya no navega,
+  así que todo daba "El RDAM no generó el certificado". Ahora un gancho de Livewire (rdamGancho en
+  background.js) toma el código de la respuesta y anula la redirección.
