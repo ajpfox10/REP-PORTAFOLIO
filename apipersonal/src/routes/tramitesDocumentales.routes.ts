@@ -788,6 +788,67 @@ function targetFolderFor(dni: number, tramite: string, sub?: string): string {
   return target;
 }
 
+// Tabla del envío de combinados a GDEBA (misma DDL que la mig 131; se crea sola en prod).
+const ensuredCombinadoGdeba = new WeakSet<Sequelize>();
+async function ensureCombinadoGdebaTable(sequelize: Sequelize): Promise<void> {
+  if (ensuredCombinadoGdeba.has(sequelize)) return;
+  await sequelize.query(`CREATE TABLE IF NOT EXISTS tramites_combinado_gdeba (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  dni INT NOT NULL,
+  archivo VARCHAR(500) NOT NULL,
+  estado ENUM('PENDIENTE','ENVIADA_FIRMA','FIRMADA','ERROR') NOT NULL DEFAULT 'PENDIENTE',
+  firmante VARCHAR(60) NULL,
+  gdeba_numero VARCHAR(80) NULL,
+  gdeba_error VARCHAR(500) NULL,
+  enviada_at DATETIME NULL,
+  estado_at DATETIME NULL,
+  estado_por INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_comb_gdeba_archivo (archivo),
+  KEY ix_comb_gdeba_dni (dni),
+  KEY ix_comb_gdeba_estado (estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+  // mig 132: PDF firmado bajado de GDEBA
+  const cols = await sequelize.query<any>(`SHOW COLUMNS FROM tramites_combinado_gdeba`, { type: QueryTypes.SELECT });
+  const tiene = new Set(cols.map((c: any) => String(c.Field)));
+  if (!tiene.has('archivo_firmado')) {
+    await sequelize.query(`ALTER TABLE tramites_combinado_gdeba ADD COLUMN archivo_firmado VARCHAR(500) NULL AFTER gdeba_numero`);
+  }
+  if (!tiene.has('firmada_at')) {
+    await sequelize.query(`ALTER TABLE tramites_combinado_gdeba ADD COLUMN firmada_at DATETIME NULL AFTER enviada_at`);
+  }
+  ensuredCombinadoGdeba.add(sequelize);
+}
+
+// "<dni>/Tramite de nombramiento/<x>.pdf" → ruta absoluta validada (solo PDFs de esa subcarpeta).
+function resolverCombinado(archivo: string): string {
+  const partes = String(archivo || '').replace(/\\/g, '/').split('/').filter(Boolean);
+  if (partes.length !== 3 || !/^\d{6,9}$/.test(partes[0]) || partes[1] !== COMBINAR_NOMBRE_SALIDA
+      || !partes[2].toLowerCase().endsWith('.pdf') || partes[2].includes('..')) {
+    throw Object.assign(new Error('Archivo de combinado inválido'), { status: 400 });
+  }
+  const base = path.resolve(getDocuBaseDir());
+  const full = path.resolve(base, partes[0], partes[1], partes[2]);
+  const rel = path.relative(base, full);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) throw Object.assign(new Error('Ruta insegura'), { status: 400 });
+  if (!fs.existsSync(full)) throw Object.assign(new Error('El PDF ya no existe'), { status: 404 });
+  return full;
+}
+// Anota un combinado en la tabla (PENDIENTE) si no estaba. Si ya estaba y se vuelve a
+// guardar (mismo nombre = se pisó el PDF), un ERROR vuelve a PENDIENTE para reintentar.
+async function registrarCombinado(sequelize: Sequelize, dni: number, archivo: string): Promise<void> {
+  await ensureCombinadoGdebaTable(sequelize);
+  await sequelize.query(
+    `INSERT INTO tramites_combinado_gdeba (dni, archivo, estado) VALUES (:dni, :archivo, 'PENDIENTE')
+     ON DUPLICATE KEY UPDATE estado = IF(estado = 'ERROR', 'PENDIENTE', estado)`,
+    { replacements: { dni, archivo } },
+  );
+}
+function archivoRelCombinado(fullPath: string): string {
+  return path.relative(path.resolve(getDocuBaseDir()), fullPath).replace(/\\/g, '/');
+}
+
 // Subcarpeta fija por año en curso donde se guarda el combinado, p.ej. "DESIGNACION INTERINO 2026".
 function subcarpetaCombinado(): string {
   return `DESIGNACION INTERINO ${new Date().getFullYear()}`;
@@ -2557,6 +2618,56 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // Antecedentes recibidos por mail (robot gmail_antecedentes) con la tanda de cada agente
+  // y si es extranjero (misma regla que Faltantes: DNI >= 90M, o nacionalidad / país de
+  // nacimiento cargado y distinto de Argentina). Todos los ítems; el front filtra por año del mail.
+  router.get('/antecedentes-recibidos', async (_req: Request, res: Response) => {
+    try {
+      const items = await sequelize.query<any>(
+        `SELECT i.id, i.dni, i.nombre, i.novedad, i.estado, i.detalle, i.creado_at
+           FROM script_run_items i
+          WHERE i.script = 'gmail_antecedentes'
+          ORDER BY i.id DESC
+          LIMIT 20000`,
+        { type: QueryTypes.SELECT },
+      );
+      const dnis = Array.from(new Set(items.map((r: any) => Number(String(r.dni || '').replace(/\D/g, ''))).filter((d) => d > 0)));
+      const tandasPorDni = new Map<number, string[]>();
+      const extranjeros = new Set<number>(dnis.filter((d) => d >= 90_000_000));
+      if (dnis.length) {
+        const tr = await sequelize.query<{ dni: number; tanda: string }>(
+          `SELECT dni, tanda FROM tramites_tanda_interinos WHERE dni IN (:dnis) ORDER BY tanda`,
+          { replacements: { dnis }, type: QueryTypes.SELECT },
+        );
+        for (const r of tr) {
+          const k = Number(r.dni);
+          if (!tandasPorDni.has(k)) tandasPorDni.set(k, []);
+          tandasPorDni.get(k)!.push(r.tanda);
+        }
+        const nr = await sequelize.query<{ dni: number; nacionalidad: string | null; nac_pais: string | null }>(
+          `SELECT p.dni, p.nacionalidad, l.nac_pais
+             FROM personal p
+             LEFT JOIN legajo_datos_personales l ON l.dni = p.dni
+            WHERE p.dni IN (:dnis) AND p.deleted_at IS NULL`,
+          { replacements: { dnis }, type: QueryTypes.SELECT },
+        );
+        const esOtroPais = (v: string | null) => {
+          const s = String(v || '').trim();
+          return /^[a-záéíóúñ ]{3,}$/i.test(s) && !/^argentin/i.test(s) && !/^(si|sí|no)$/i.test(s);
+        };
+        for (const r of nr) if (esOtroPais(r.nacionalidad) || esOtroPais(r.nac_pais)) extranjeros.add(Number(r.dni));
+      }
+      const data = items.map((r: any) => {
+        const d = Number(String(r.dni || '').replace(/\D/g, ''));
+        return { ...r, tandas: d ? tandasPorDni.get(d) || [] : [], extranjero: d ? extranjeros.has(d) : false };
+      });
+      return res.json({ ok: true, data });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] antecedentes-recibidos error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
   // Agregar agentes a una tanda (INSERT IGNORE → no duplica por UNIQUE(tanda,dni)).
   // Body: { tanda, origen: 'anio'|'manual', items: [{ dni, anio }] } (o `dnis` como antes).
   router.post('/tandas', async (req: Request, res: Response) => {
@@ -3321,7 +3432,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
   });
 
   // Guarda el combinado en el orden de páginas elegido en:
-  // DOCU\<dni>\Tramite de nombramiento\Tramite de nombramiento.pdf (pisa si existe).
+  // DOCU\<dni>\Tramite de nombramiento\Tramite de nombramiento <APELLIDO NOMBRE> <año>.pdf (pisa si existe).
   router.post('/combinar-guardar', async (req: Request, res: Response) => {
     try {
       const dni = parseDni(req.body?.dni);
@@ -3342,11 +3453,22 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       }
       if (!armadas) return res.status(400).json({ ok: false, error: 'No se armó ninguna página' });
 
+      // Nombre: "Tramite de nombramiento <APELLIDO NOMBRE> <año>.pdf". Si ya existe, se pisa.
+      const ident = await agenteIdentidad(sequelize, dni);
+      const apeNom = ident
+        ? `${String(ident.apellido || '').trim()} ${String(ident.nombre || '').trim()}`.trim()
+        : `DNI ${dni}`;
+      const apeNomSeguro = apeNom.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase() || `DNI ${dni}`;
+      const fileName = `${COMBINAR_NOMBRE_SALIDA} ${apeNomSeguro} ${new Date().getFullYear()}.pdf`;
+
       const destDir = path.join(resolveDocuAgentDir(dni), COMBINAR_NOMBRE_SALIDA);
       fs.mkdirSync(destDir, { recursive: true });
-      const destPath = path.join(destDir, `${COMBINAR_NOMBRE_SALIDA}.pdf`);
+      const destPath = path.join(destDir, fileName);
       fs.writeFileSync(destPath, Buffer.from(await merged.save()));
-      return res.json({ ok: true, data: { dni, paginas: armadas, ruta: `${COMBINAR_NOMBRE_SALIDA}/${COMBINAR_NOMBRE_SALIDA}.pdf` } });
+      // queda anotado para la pestaña "Combinados" (envío a GDEBA)
+      await registrarCombinado(sequelize, dni, `${dni}/${COMBINAR_NOMBRE_SALIDA}/${fileName}`)
+        .catch((e) => logger.warn({ msg: '[tramites] no se pudo anotar el combinado', error: e?.message }));
+      return res.json({ ok: true, data: { dni, paginas: armadas, ruta: `${COMBINAR_NOMBRE_SALIDA}/${fileName}` } });
     } catch (err: any) {
       logger.error({ msg: '[tramites] combinar-guardar error', error: err?.message });
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al guardar el combinado' });
@@ -3643,6 +3765,188 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       return res.json({ ok: true, data: { tanda, prueba, pendientes: Number(n), como } });
     } catch (err: any) {
       logger.error({ msg: '[tramites] nota-designacion gdeba error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'No se pudo lanzar el robot de GDEBA' });
+    }
+  });
+
+  // ── Combinados de "Tramite de nombramiento" → GDEBA (IFGRA) ─────────────────
+  // Lista los PDF de DOCU\<DNI>\Tramite de nombramiento\ (los graba "Guardar combinado")
+  // con el estado de su envío a GDEBA (tabla tramites_combinado_gdeba, mig 131).
+  // Recorrer las ~3000 carpetas de DOCU tarda ~25 s, así que la lista sale de la tabla
+  // (cada "Guardar combinado" anota su archivo). ?rescan=1 recorre el disco y anota los
+  // que falten (para los guardados antes de esta pestaña o copiados a mano).
+  router.get('/combinados', async (req: Request, res: Response) => {
+    try {
+      await ensureCombinadoGdebaTable(sequelize);
+      const base = path.resolve(getDocuBaseDir());
+      if (!getDocuBaseDir() || !fs.existsSync(base)) {
+        return res.status(400).json({ ok: false, error: `Carpeta DOCU no disponible: ${base}` });
+      }
+      if (String(req.query.rescan || '') === '1') {
+        for (const d of fs.readdirSync(base, { withFileTypes: true })) {
+          if (!d.isDirectory() || !/^\d{6,9}$/.test(d.name)) continue;
+          const dir = path.join(base, d.name, COMBINAR_NOMBRE_SALIDA);
+          if (!fs.existsSync(dir)) continue;
+          for (const f of fs.readdirSync(dir)) {
+            // los "... - FIRMADO IF-....pdf" los baja el robot de firmados: no son combinados nuevos
+            if (f.toLowerCase().endsWith('.pdf') && !/ - FIRMADO /i.test(f)) {
+              await registrarCombinado(sequelize, Number(d.name), `${d.name}/${COMBINAR_NOMBRE_SALIDA}/${f}`);
+            }
+          }
+        }
+      }
+      const registrados = await sequelize.query<any>(`SELECT dni, archivo FROM tramites_combinado_gdeba`, { type: QueryTypes.SELECT });
+      const archivos: { dni: number; archivo: string; nombreArchivo: string; bytes: number; modificado: string }[] = [];
+      for (const r of registrados) {
+        const full = path.join(base, ...String(r.archivo).split('/'));
+        if (!fs.existsSync(full)) continue; // borrado o renombrado a mano: no se lista
+        const st = fs.statSync(full);
+        archivos.push({
+          dni: Number(r.dni),
+          archivo: String(r.archivo),
+          nombreArchivo: path.basename(full),
+          bytes: st.size,
+          modificado: st.mtime.toISOString(),
+        });
+      }
+      const dnis = [...new Set(archivos.map((a) => a.dni))];
+      const personas = dnis.length
+        ? await sequelize.query<any>(
+          `SELECT dni, TRIM(CONCAT(COALESCE(apellido,''), ', ', COALESCE(nombre,''))) AS apellidoNombre
+             FROM personal WHERE dni IN (:dnis)`,
+          { replacements: { dnis }, type: QueryTypes.SELECT })
+        : [];
+      const nombres = new Map(personas.map((p: any) => [Number(p.dni), String(p.apellidoNombre)]));
+      const estados = await sequelize.query<any>(
+        `SELECT archivo, estado, firmante, gdeba_numero AS gdebaNumero, gdeba_error AS gdebaError,
+                enviada_at AS enviadaAt, estado_at AS estadoAt, archivo_firmado AS archivoFirmado,
+                firmada_at AS firmadaAt
+           FROM tramites_combinado_gdeba`,
+        { type: QueryTypes.SELECT });
+      const porArchivo = new Map(estados.map((e: any) => [String(e.archivo), e]));
+      const rows = archivos
+        .map((a) => {
+          const e: any = porArchivo.get(a.archivo) || {};
+          return {
+            ...a,
+            apellidoNombre: nombres.get(a.dni) || `DNI ${a.dni}`,
+            estado: e.estado || 'PENDIENTE',
+            firmante: e.firmante || null,
+            gdebaNumero: e.gdebaNumero || null,
+            gdebaError: e.gdebaError || null,
+            enviadaAt: e.enviadaAt || null,
+            firmadaAt: e.firmadaAt || null,
+            // solo si el PDF firmado sigue en disco
+            archivoFirmado: e.archivoFirmado && fs.existsSync(path.join(base, ...String(e.archivoFirmado).split('/')))
+              ? String(e.archivoFirmado) : null,
+          };
+        })
+        .sort((x, y) => x.apellidoNombre.localeCompare(y.apellidoNombre, 'es'));
+      return res.json({ ok: true, data: { rows, carpeta: base } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] combinados list error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al listar combinados' });
+    }
+  });
+
+  // Ver un combinado (archivo = "<dni>/Tramite de nombramiento/<archivo>.pdf").
+  router.get('/combinados/pdf', (req: Request, res: Response) => {
+    try {
+      const fullPath = resolverCombinado(String(req.query.archivo || ''));
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath).replace(/"/g, '_')}"`);
+      return fs.createReadStream(fullPath).pipe(res);
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al abrir el PDF' });
+    }
+  });
+
+  // Cambio manual de estado (p.ej. FIRMADA con su número de GDEBA, o volver a PENDIENTE).
+  router.put('/combinados/estado', async (req: Request, res: Response) => {
+    try {
+      await ensureCombinadoGdebaTable(sequelize);
+      const archivo = String(req.body?.archivo || '');
+      const fullPath = resolverCombinado(archivo);
+      const estado = String(req.body?.estado || '').toUpperCase();
+      if (!['PENDIENTE', 'ENVIADA_FIRMA', 'FIRMADA', 'ERROR'].includes(estado)) {
+        return res.status(400).json({ ok: false, error: 'Estado inválido' });
+      }
+      const numero = String(req.body?.gdebaNumero || '').trim() || null;
+      const actor = (req as any).auth?.principalType === 'user' ? Number((req as any).auth.principalId) || null : null;
+      const dni = Number(archivo.split('/')[0]);
+      await sequelize.query(
+        `INSERT INTO tramites_combinado_gdeba (dni, archivo, estado, gdeba_numero, estado_at, estado_por)
+         VALUES (:dni, :archivo, :estado, :numero, NOW(), :actor)
+         ON DUPLICATE KEY UPDATE estado = VALUES(estado), gdeba_numero = COALESCE(VALUES(gdeba_numero), gdeba_numero),
+           gdeba_error = IF(VALUES(estado) = 'ERROR', gdeba_error, NULL), estado_at = NOW(), estado_por = VALUES(estado_por)`,
+        { replacements: { dni, archivo: archivoRelCombinado(fullPath), estado, numero, actor } },
+      );
+      return res.json({ ok: true });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al cambiar el estado' });
+    }
+  });
+
+  // Dispara el robot gdeba_combinado_firmados.py: busca en GEDO (Avisos) los combinados
+  // enviados a firmar y baja los firmados a la misma carpeta. Solo lectura en GDEBA.
+  router.post('/combinados/bajar-firmados', async (req: Request, res: Response) => {
+    try {
+      await ensureCombinadoGdebaTable(sequelize);
+      const archivos: string[] = (Array.isArray(req.body?.archivos) ? req.body.archivos : [])
+        .map((a: any) => String(a || '')).filter(Boolean);
+      const [{ n }] = await sequelize.query<any>(
+        `SELECT COUNT(*) AS n FROM tramites_combinado_gdeba WHERE estado = 'ENVIADA_FIRMA'
+         ${archivos.length ? 'AND archivo IN (:archivos)' : ''}`,
+        { replacements: { archivos: archivos.length ? archivos : [''] }, type: QueryTypes.SELECT },
+      );
+      if (!Number(n)) return res.status(400).json({ ok: false, error: 'No hay combinados enviados a firmar para buscar' });
+      const actor = (req as any).auth?.principalType === 'user' ? Number((req as any).auth.principalId) || null : null;
+      await sequelize.query(
+        `INSERT INTO app_runtime_config (config_key, config_json, updated_by, created_at, updated_at)
+         VALUES ('gdeba_combinado_firmados_pedido', :j, :u, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE config_json = VALUES(config_json), updated_by = VALUES(updated_by), updated_at = NOW()`,
+        { replacements: { j: JSON.stringify(archivos.length ? { archivos } : {}), u: actor } },
+      );
+      const como = await ejecutarAhora('gdeba_combinado_firmados');
+      return res.json({ ok: true, data: { buscar: Number(n), como } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] combinados bajar-firmados error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'No se pudo lanzar el robot' });
+    }
+  });
+
+  // Dispara el robot gdeba_combinado_ifgra.py: sube cada PDF como Informe Gráfico (IFGRA)
+  // y lo envía a firmar al usuario GDEBA indicado. prueba = true (default): 1 archivo,
+  // frena antes de Aceptar. El pedido va a app_runtime_config (run_robot no pasa parámetros).
+  router.post('/combinados/gdeba', async (req: Request, res: Response) => {
+    try {
+      await ensureCombinadoGdebaTable(sequelize);
+      const archivos: string[] = (Array.isArray(req.body?.archivos) ? req.body.archivos : [])
+        .map((a: any) => archivoRelCombinado(resolverCombinado(String(a || ''))));
+      if (!archivos.length) return res.status(400).json({ ok: false, error: 'Elegí al menos un combinado' });
+      const firmante = String(req.body?.firmanteUsuario || '').trim().toUpperCase();
+      if (!/^[A-Z0-9._-]{3,40}$/.test(firmante)) {
+        return res.status(400).json({ ok: false, error: 'Falta el usuario GDEBA del firmante (ej. el usuario de GDEBA, no el nombre)' });
+      }
+      const prueba = req.body?.prueba !== false && req.body?.prueba !== 'false';
+      for (const a of archivos) {
+        await sequelize.query(
+          `INSERT INTO tramites_combinado_gdeba (dni, archivo, estado) VALUES (:dni, :a, 'PENDIENTE')
+           ON DUPLICATE KEY UPDATE dni = dni`,
+          { replacements: { dni: Number(a.split('/')[0]), a } },
+        );
+      }
+      const actor = (req as any).auth?.principalType === 'user' ? Number((req as any).auth.principalId) || null : null;
+      await sequelize.query(
+        `INSERT INTO app_runtime_config (config_key, config_json, updated_by, created_at, updated_at)
+         VALUES ('gdeba_combinado_ifgra_pedido', :j, :u, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE config_json = VALUES(config_json), updated_by = VALUES(updated_by), updated_at = NOW()`,
+        { replacements: { j: JSON.stringify({ archivos: prueba ? archivos.slice(0, 1) : archivos, prueba, firmanteUsuario: firmante }), u: actor } },
+      );
+      const como = await ejecutarAhora('gdeba_combinado_ifgra');
+      return res.json({ ok: true, data: { archivos: prueba ? 1 : archivos.length, prueba, firmante, como } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] combinados gdeba error', error: err?.message });
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'No se pudo lanzar el robot de GDEBA' });
     }
   });

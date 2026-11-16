@@ -15306,6 +15306,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/gp_reset_cola:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List gp_reset_cola
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_gp_reset_cola"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create gp_reset_cola
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gp_reset_cola_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/gp_reset_cola/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get gp_reset_cola by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update gp_reset_cola by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gp_reset_cola"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch gp_reset_cola by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_gp_reset_cola_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete gp_reset_cola by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/guarderia:
     get:
       tags:
@@ -18067,6 +18199,270 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete jubilacion_servicios_controlados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/juntas_medicas:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List juntas_medicas
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_juntas_medicas"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create juntas_medicas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_juntas_medicas_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/juntas_medicas/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get juntas_medicas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update juntas_medicas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_juntas_medicas"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch juntas_medicas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_juntas_medicas_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete juntas_medicas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/juntas_medicas_descartes:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List juntas_medicas_descartes
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_juntas_medicas_descartes"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create juntas_medicas_descartes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_juntas_medicas_descartes_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/juntas_medicas_descartes/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get juntas_medicas_descartes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update juntas_medicas_descartes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_juntas_medicas_descartes"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch juntas_medicas_descartes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_juntas_medicas_descartes_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete juntas_medicas_descartes by id
       parameters:
         - name: id
           in: path
@@ -27846,6 +28242,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/samo_codigos_ocultos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List samo_codigos_ocultos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_samo_codigos_ocultos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create samo_codigos_ocultos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_samo_codigos_ocultos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/samo_codigos_ocultos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get samo_codigos_ocultos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update samo_codigos_ocultos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_samo_codigos_ocultos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch samo_codigos_ocultos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_samo_codigos_ocultos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete samo_codigos_ocultos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/samo_meses_habilitados:
     get:
       tags:
@@ -31542,6 +32070,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/tramites_combinado_gdeba:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List tramites_combinado_gdeba
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_tramites_combinado_gdeba"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create tramites_combinado_gdeba
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_combinado_gdeba_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/tramites_combinado_gdeba/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get tramites_combinado_gdeba by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update tramites_combinado_gdeba by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_combinado_gdeba"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch tramites_combinado_gdeba by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_combinado_gdeba_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete tramites_combinado_gdeba by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/tramites_documentales_agentes:
     get:
       tags:
@@ -33126,6 +33786,270 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/v_publico_agenda_agente:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List v_publico_agenda_agente
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_v_publico_agenda_agente"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create v_publico_agenda_agente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_v_publico_agenda_agente_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/v_publico_agenda_agente/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get v_publico_agenda_agente by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update v_publico_agenda_agente by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_v_publico_agenda_agente"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch v_publico_agenda_agente by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_v_publico_agenda_agente_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete v_publico_agenda_agente by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/v_publico_wa_claves:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List v_publico_wa_claves
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_v_publico_wa_claves"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create v_publico_wa_claves
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_v_publico_wa_claves_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/v_publico_wa_claves/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get v_publico_wa_claves by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update v_publico_wa_claves by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_v_publico_wa_claves"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch v_publico_wa_claves by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_v_publico_wa_claves_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete v_publico_wa_claves by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/vacaciones_adelantadas:
     get:
       tags:
@@ -33643,6 +34567,798 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete webhooks by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/whatsapp_bot_chats:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List whatsapp_bot_chats
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_whatsapp_bot_chats"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create whatsapp_bot_chats
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_chats_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/whatsapp_bot_chats/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get whatsapp_bot_chats by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update whatsapp_bot_chats by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_chats"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch whatsapp_bot_chats by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_chats_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete whatsapp_bot_chats by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/whatsapp_bot_config:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List whatsapp_bot_config
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_whatsapp_bot_config"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create whatsapp_bot_config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_config_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/whatsapp_bot_config/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get whatsapp_bot_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update whatsapp_bot_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_config"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch whatsapp_bot_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_config_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete whatsapp_bot_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/whatsapp_bot_entrada:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List whatsapp_bot_entrada
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_whatsapp_bot_entrada"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create whatsapp_bot_entrada
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_entrada_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/whatsapp_bot_entrada/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get whatsapp_bot_entrada by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update whatsapp_bot_entrada by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_entrada"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch whatsapp_bot_entrada by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_entrada_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete whatsapp_bot_entrada by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/whatsapp_bot_mensajes:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List whatsapp_bot_mensajes
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_whatsapp_bot_mensajes"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create whatsapp_bot_mensajes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_mensajes_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/whatsapp_bot_mensajes/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get whatsapp_bot_mensajes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update whatsapp_bot_mensajes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_mensajes"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch whatsapp_bot_mensajes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_mensajes_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete whatsapp_bot_mensajes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/whatsapp_bot_opciones:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List whatsapp_bot_opciones
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_whatsapp_bot_opciones"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create whatsapp_bot_opciones
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_opciones_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/whatsapp_bot_opciones/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get whatsapp_bot_opciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update whatsapp_bot_opciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_opciones"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch whatsapp_bot_opciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_opciones_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete whatsapp_bot_opciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/whatsapp_bot_pedidos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List whatsapp_bot_pedidos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_whatsapp_bot_pedidos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create whatsapp_bot_pedidos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_pedidos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/whatsapp_bot_pedidos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get whatsapp_bot_pedidos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update whatsapp_bot_pedidos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_pedidos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch whatsapp_bot_pedidos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_whatsapp_bot_pedidos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete whatsapp_bot_pedidos by id
       parameters:
         - name: id
           in: path
@@ -47305,6 +49021,122 @@ components:
         detalle:
           type: string
           nullable: true
+    Table_gp_reset_cola:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        telefono:
+          type: string
+        opcion_id:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        detalle:
+          type: string
+          nullable: true
+        prueba:
+          type: number
+        lanzado_at:
+          type: string
+          format: date-time
+          nullable: true
+        procesado_at:
+          type: string
+          format: date-time
+          nullable: true
+        avisado:
+          type: number
+        avisado_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - dni
+        - telefono
+    Table_gp_reset_cola_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        telefono:
+          type: string
+        opcion_id:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        detalle:
+          type: string
+          nullable: true
+        prueba:
+          type: number
+        lanzado_at:
+          type: string
+          format: date-time
+          nullable: true
+        procesado_at:
+          type: string
+          format: date-time
+          nullable: true
+        avisado:
+          type: number
+        avisado_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - dni
+        - telefono
+    Table_gp_reset_cola_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        telefono:
+          type: string
+        opcion_id:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        detalle:
+          type: string
+          nullable: true
+        prueba:
+          type: number
+        lanzado_at:
+          type: string
+          format: date-time
+          nullable: true
+        procesado_at:
+          type: string
+          format: date-time
+          nullable: true
+        avisado:
+          type: number
+        avisado_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
     Table_guarderia:
       type: object
       additionalProperties: false
@@ -50591,6 +52423,265 @@ components:
         deleted_by:
           type: number
           nullable: true
+    Table_juntas_medicas:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: string
+        agente_nombre:
+          type: string
+          nullable: true
+        servicio:
+          type: string
+          nullable: true
+        fecha_junta:
+          type: string
+          format: date-time
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        cantidad_dias:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        archivo_id:
+          type: number
+          nullable: true
+        activo:
+          type: number
+        creado_por_id:
+          type: number
+          nullable: true
+        creado_por_email:
+          type: string
+          nullable: true
+        creado_at:
+          type: string
+          format: date-time
+        modificado_por_id:
+          type: number
+          nullable: true
+        modificado_por_email:
+          type: string
+          nullable: true
+        modificado_at:
+          type: string
+          format: date-time
+          nullable: true
+        eliminado_por_id:
+          type: number
+          nullable: true
+        eliminado_por_email:
+          type: string
+          nullable: true
+        eliminado_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - dni
+    Table_juntas_medicas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: string
+        agente_nombre:
+          type: string
+          nullable: true
+        servicio:
+          type: string
+          nullable: true
+        fecha_junta:
+          type: string
+          format: date-time
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        cantidad_dias:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        archivo_id:
+          type: number
+          nullable: true
+        activo:
+          type: number
+        creado_por_id:
+          type: number
+          nullable: true
+        creado_por_email:
+          type: string
+          nullable: true
+        creado_at:
+          type: string
+          format: date-time
+        modificado_por_id:
+          type: number
+          nullable: true
+        modificado_por_email:
+          type: string
+          nullable: true
+        modificado_at:
+          type: string
+          format: date-time
+          nullable: true
+        eliminado_por_id:
+          type: number
+          nullable: true
+        eliminado_por_email:
+          type: string
+          nullable: true
+        eliminado_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+    Table_juntas_medicas_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: string
+        agente_nombre:
+          type: string
+          nullable: true
+        servicio:
+          type: string
+          nullable: true
+        fecha_junta:
+          type: string
+          format: date-time
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        cantidad_dias:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        archivo_id:
+          type: number
+          nullable: true
+        activo:
+          type: number
+        creado_por_id:
+          type: number
+          nullable: true
+        creado_por_email:
+          type: string
+          nullable: true
+        creado_at:
+          type: string
+          format: date-time
+        modificado_por_id:
+          type: number
+          nullable: true
+        modificado_por_email:
+          type: string
+          nullable: true
+        modificado_at:
+          type: string
+          format: date-time
+          nullable: true
+        eliminado_por_id:
+          type: number
+          nullable: true
+        eliminado_por_email:
+          type: string
+          nullable: true
+        eliminado_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_juntas_medicas_descartes:
+      type: object
+      additionalProperties: false
+      properties:
+        archivo_id:
+          type: number
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        at:
+          type: string
+          format: date-time
+      required:
+        - archivo_id
+    Table_juntas_medicas_descartes_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        archivo_id:
+          type: number
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        at:
+          type: string
+          format: date-time
+      required:
+        - archivo_id
+    Table_juntas_medicas_descartes_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        archivo_id:
+          type: number
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        at:
+          type: string
+          format: date-time
     Table_legajo_concepto_menciones:
       type: object
       additionalProperties: false
@@ -59512,6 +61603,46 @@ components:
         revocada_por_id:
           type: number
           nullable: true
+    Table_samo_codigos_ocultos:
+      type: object
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+        ocultado_por:
+          type: number
+          nullable: true
+        ocultado_en:
+          type: string
+          format: date-time
+      required:
+        - codigo
+    Table_samo_codigos_ocultos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+        ocultado_por:
+          type: number
+          nullable: true
+        ocultado_en:
+          type: string
+          format: date-time
+      required:
+        - codigo
+    Table_samo_codigos_ocultos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+        ocultado_por:
+          type: number
+          nullable: true
+        ocultado_en:
+          type: string
+          format: date-time
     Table_samo_meses_habilitados:
       type: object
       additionalProperties: false
@@ -62136,6 +64267,149 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_tramites_combinado_gdeba:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        archivo:
+          type: string
+        estado:
+          type: string
+        firmante:
+          type: string
+          nullable: true
+        gdeba_numero:
+          type: string
+          nullable: true
+        archivo_firmado:
+          type: string
+          nullable: true
+        gdeba_error:
+          type: string
+          nullable: true
+        enviada_at:
+          type: string
+          format: date-time
+          nullable: true
+        firmada_at:
+          type: string
+          format: date-time
+          nullable: true
+        estado_at:
+          type: string
+          format: date-time
+          nullable: true
+        estado_por:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - dni
+        - archivo
+    Table_tramites_combinado_gdeba_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        archivo:
+          type: string
+        estado:
+          type: string
+        firmante:
+          type: string
+          nullable: true
+        gdeba_numero:
+          type: string
+          nullable: true
+        archivo_firmado:
+          type: string
+          nullable: true
+        gdeba_error:
+          type: string
+          nullable: true
+        enviada_at:
+          type: string
+          format: date-time
+          nullable: true
+        firmada_at:
+          type: string
+          format: date-time
+          nullable: true
+        estado_at:
+          type: string
+          format: date-time
+          nullable: true
+        estado_por:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+        - archivo
+    Table_tramites_combinado_gdeba_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        archivo:
+          type: string
+        estado:
+          type: string
+        firmante:
+          type: string
+          nullable: true
+        gdeba_numero:
+          type: string
+          nullable: true
+        archivo_firmado:
+          type: string
+          nullable: true
+        gdeba_error:
+          type: string
+          nullable: true
+        enviada_at:
+          type: string
+          format: date-time
+          nullable: true
+        firmada_at:
+          type: string
+          format: date-time
+          nullable: true
+        estado_at:
+          type: string
+          format: date-time
+          nullable: true
+        estado_por:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
     Table_tramites_documentales_agentes:
       type: object
       additionalProperties: false
@@ -62903,6 +65177,8 @@ components:
           nullable: true
         ley_14783:
           type: number
+        ley_10592:
+          type: number
       required:
         - id
         - tanda
@@ -62926,6 +65202,8 @@ components:
           type: number
           nullable: true
         ley_14783:
+          type: number
+        ley_10592:
           type: number
       required:
         - tanda
@@ -62951,6 +65229,8 @@ components:
           type: number
           nullable: true
         ley_14783:
+          type: number
+        ley_10592:
           type: number
     Table_turnos_salud_laboral:
       type: object
@@ -63490,6 +65770,93 @@ components:
           type: string
           format: date-time
           nullable: true
+    Table_v_publico_agenda_agente:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        ley_nombre:
+          type: string
+          nullable: true
+        ocupacion_nombre:
+          type: string
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_v_publico_agenda_agente_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        ley_nombre:
+          type: string
+          nullable: true
+        ocupacion_nombre:
+          type: string
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_v_publico_agenda_agente_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        ley_nombre:
+          type: string
+          nullable: true
+        ocupacion_nombre:
+          type: string
+          nullable: true
+    Table_v_publico_wa_claves:
+      type: object
+      additionalProperties: false
+      properties:
+        k:
+          type: string
+        valor:
+          type: string
+          nullable: true
+      required:
+        - k
+    Table_v_publico_wa_claves_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        k:
+          type: string
+        valor:
+          type: string
+          nullable: true
+      required:
+        - k
+    Table_v_publico_wa_claves_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        k:
+          type: string
+        valor:
+          type: string
+          nullable: true
     Table_vacaciones_adelantadas:
       type: object
       additionalProperties: false
@@ -63986,6 +66353,506 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
+    Table_whatsapp_bot_chats:
+      type: object
+      additionalProperties: false
+      properties:
+        telefono:
+          type: string
+        nombre_wa:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        humano_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        dni:
+          type: number
+          nullable: true
+        ultimo_in:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+        intentos_dni:
+          type: number
+        bloqueado_hasta:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - telefono
+    Table_whatsapp_bot_chats_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        telefono:
+          type: string
+        nombre_wa:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        humano_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        dni:
+          type: number
+          nullable: true
+        ultimo_in:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+        intentos_dni:
+          type: number
+        bloqueado_hasta:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - telefono
+    Table_whatsapp_bot_chats_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        telefono:
+          type: string
+        nombre_wa:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        humano_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        dni:
+          type: number
+          nullable: true
+        ultimo_in:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+        intentos_dni:
+          type: number
+        bloqueado_hasta:
+          type: string
+          format: date-time
+          nullable: true
+    Table_whatsapp_bot_config:
+      type: object
+      additionalProperties: false
+      properties:
+        k:
+          type: string
+        valor:
+          type: string
+          nullable: true
+        updated_by:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - k
+    Table_whatsapp_bot_config_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        k:
+          type: string
+        valor:
+          type: string
+          nullable: true
+        updated_by:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - k
+    Table_whatsapp_bot_config_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        k:
+          type: string
+        valor:
+          type: string
+          nullable: true
+        updated_by:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+    Table_whatsapp_bot_entrada:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        cuerpo:
+          type: string
+        recibido_at:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        procesado_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+          nullable: true
+      required:
+        - id
+        - cuerpo
+    Table_whatsapp_bot_entrada_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        cuerpo:
+          type: string
+        recibido_at:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        procesado_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+          nullable: true
+      required:
+        - cuerpo
+    Table_whatsapp_bot_entrada_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        cuerpo:
+          type: string
+        recibido_at:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        procesado_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+          nullable: true
+    Table_whatsapp_bot_mensajes:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        wa_msg_id:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+        direccion:
+          type: string
+        tipo:
+          type: string
+        texto:
+          type: string
+          nullable: true
+        opcion:
+          type: string
+          nullable: true
+        dni:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - telefono
+        - direccion
+        - tipo
+    Table_whatsapp_bot_mensajes_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        wa_msg_id:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+        direccion:
+          type: string
+        tipo:
+          type: string
+        texto:
+          type: string
+          nullable: true
+        opcion:
+          type: string
+          nullable: true
+        dni:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - telefono
+        - direccion
+        - tipo
+    Table_whatsapp_bot_mensajes_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        wa_msg_id:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+        direccion:
+          type: string
+        tipo:
+          type: string
+        texto:
+          type: string
+          nullable: true
+        opcion:
+          type: string
+          nullable: true
+        dni:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    Table_whatsapp_bot_opciones:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        orden:
+          type: number
+        titulo:
+          type: string
+        palabras:
+          type: string
+          nullable: true
+        accion:
+          type: string
+        respuesta:
+          type: string
+          nullable: true
+        requiere_agente:
+          type: number
+        registrar_pedido:
+          type: number
+        activa:
+          type: number
+        updated_by:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - titulo
+    Table_whatsapp_bot_opciones_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        orden:
+          type: number
+        titulo:
+          type: string
+        palabras:
+          type: string
+          nullable: true
+        accion:
+          type: string
+        respuesta:
+          type: string
+          nullable: true
+        requiere_agente:
+          type: number
+        registrar_pedido:
+          type: number
+        activa:
+          type: number
+        updated_by:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - titulo
+    Table_whatsapp_bot_opciones_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        orden:
+          type: number
+        titulo:
+          type: string
+        palabras:
+          type: string
+          nullable: true
+        accion:
+          type: string
+        respuesta:
+          type: string
+          nullable: true
+        requiere_agente:
+          type: number
+        registrar_pedido:
+          type: number
+        activa:
+          type: number
+        updated_by:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Table_whatsapp_bot_pedidos:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        telefono:
+          type: string
+        dni:
+          type: number
+          nullable: true
+        tipo:
+          type: string
+        estado:
+          type: string
+        prueba:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        atendido_at:
+          type: string
+          format: date-time
+          nullable: true
+        atendido_por:
+          type: string
+          nullable: true
+      required:
+        - id
+        - telefono
+        - tipo
+    Table_whatsapp_bot_pedidos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        telefono:
+          type: string
+        dni:
+          type: number
+          nullable: true
+        tipo:
+          type: string
+        estado:
+          type: string
+        prueba:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        atendido_at:
+          type: string
+          format: date-time
+          nullable: true
+        atendido_por:
+          type: string
+          nullable: true
+      required:
+        - telefono
+        - tipo
+    Table_whatsapp_bot_pedidos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        telefono:
+          type: string
+        dni:
+          type: number
+          nullable: true
+        tipo:
+          type: string
+        estado:
+          type: string
+        prueba:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        atendido_at:
+          type: string
+          format: date-time
+          nullable: true
+        atendido_por:
+          type: string
           nullable: true
     Table_whatsapp_recibidos:
       type: object

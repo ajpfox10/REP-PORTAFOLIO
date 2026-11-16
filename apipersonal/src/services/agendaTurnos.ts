@@ -44,7 +44,32 @@ function ddl(): string[] {
   return out;
 }
 
+// ── Conexión del servidor público (usuario de MySQL con permisos mínimos) ───
+// No crea ni modifica tablas (eso lo hace la API) y no lee `personal`/`agentes`: usa la vista
+// v_publico_agenda_agente, que solo tiene nombre, ley y ocupación de quienes recibieron un enlace.
+
+const publicas = new WeakSet<Sequelize>();
+export function marcarConexionPublica(sequelize: Sequelize) { publicas.add(sequelize); }
+const esPublica = (sq: Sequelize) => publicas.has(sq);
+
+/** La crea la API (usuario completo). Idempotente. */
+export async function ensureVistaPublicaAgenda(sequelize: Sequelize): Promise<void> {
+  await ensureAgendaTablas(sequelize);
+  const ultimo = (campo: string, join: string) => `(
+      SELECT ${campo} FROM agentes a ${join}
+       WHERE a.dni = p.dni AND a.deleted_at IS NULL
+       ORDER BY (a.estado_empleo = 'ACTIVO') DESC, a.fecha_ingreso DESC, a.id DESC LIMIT 1)`;
+  await sequelize.query(`
+    CREATE OR REPLACE SQL SECURITY DEFINER VIEW v_publico_agenda_agente AS
+    SELECT p.dni, p.apellido, p.nombre,
+           ${ultimo('l.nombre', 'LEFT JOIN ley l ON l.id = a.ley_id')} AS ley_nombre,
+           ${ultimo('o.nombre', 'LEFT JOIN ocupaciones o ON o.id = a.ocupacion_id')} AS ocupacion_nombre
+      FROM personal p
+     WHERE p.dni IN (SELECT h.dni FROM agenda_habilitaciones h)`);
+}
+
 export function ensureAgendaTablas(sequelize: Sequelize): Promise<void> {
+  if (esPublica(sequelize)) return Promise.resolve(); // el usuario público no puede (ni debe) tocar el esquema
   let p = listas.get(sequelize);
   if (!p) {
     p = (async () => {
@@ -323,13 +348,13 @@ export async function anularHabilitacion(sq: Sequelize, id: number, userId: numb
 
 // ── Enlace del agente ───────────────────────────────────────────────────────
 
-const SQL_HAB = `
+const sqlHab = (sq: Sequelize) => `
   SELECT h.id, h.agenda_id, h.dni, h.estado, DATE_FORMAT(h.vence_el, '%Y-%m-%d') AS vence_el, h.turno_id,
          p.apellido, p.nombre,
          a.nombre AS agenda_nombre, a.descripcion AS agenda_descripcion, a.lugar AS agenda_lugar,
          a.cancelar_horas, a.carga_jubilacion, a.activa
     FROM agenda_habilitaciones h
-    JOIN personal p ON p.dni = h.dni
+    JOIN ${esPublica(sq) ? 'v_publico_agenda_agente' : 'personal'} p ON p.dni = h.dni
     JOIN agendas a  ON a.id = h.agenda_id
    WHERE h.token = :token`;
 
@@ -377,7 +402,7 @@ export async function icsEnlace(sq: Sequelize, token: string): Promise<string> {
 /** Lo que ve el agente al abrir su enlace. */
 export async function estadoEnlace(sq: Sequelize, token: string) {
   if (!tokenValido(token)) throw new AgendaError('Enlace inválido', 404);
-  const h = (await sq.query<any>(SQL_HAB, { replacements: { token }, type: QueryTypes.SELECT }))[0];
+  const h = (await sq.query<any>(sqlHab(sq), { replacements: { token }, type: QueryTypes.SELECT }))[0];
   if (!h) throw new AgendaError('Enlace inválido', 404);
   let estado: string = h.estado;
   if (estado === 'HABILITADO' && h.vence_el < hoyAR()) {
@@ -465,8 +490,9 @@ async function cargarEnJubilacion(sq: Sequelize, t: Transaction, turnoId: number
   const tu = (await sq.query<any>(
     `SELECT dni, DATE_FORMAT(fecha, '%Y-%m-%d') AS fecha, TIME_FORMAT(hora, '%H:%i:%s') AS hora, origen FROM agenda_turnos WHERE id = :id`,
     { replacements: { id: turnoId }, type: QueryTypes.SELECT, transaction: t }))[0];
-  const ag = (await sq.query<any>(
-    `SELECT p.apellido, p.nombre, l.nombre AS ley_nombre, o.nombre AS ocupacion_nombre
+  const ag = (await sq.query<any>(esPublica(sq)
+    ? `SELECT apellido, nombre, ley_nombre, ocupacion_nombre FROM v_publico_agenda_agente WHERE dni = :dni`
+    : `SELECT p.apellido, p.nombre, l.nombre AS ley_nombre, o.nombre AS ocupacion_nombre
        FROM personal p
        LEFT JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL
        LEFT JOIN ley l ON l.id = a.ley_id
@@ -508,7 +534,7 @@ export async function reservarEnlace(sq: Sequelize, token: string, fecha: any, h
       `SELECT h.id, h.agenda_id, h.dni, h.estado, DATE_FORMAT(h.vence_el, '%Y-%m-%d') AS vence_el, a.nombre AS agenda_nombre,
               a.carga_jubilacion, a.activa
          FROM agenda_habilitaciones h JOIN agendas a ON a.id = h.agenda_id
-        WHERE h.token = :token FOR UPDATE`,
+        WHERE h.token = :token FOR UPDATE OF h`,
       { replacements: { token }, type: QueryTypes.SELECT, transaction: t }))[0];
     if (!hab) throw new AgendaError('Enlace inválido', 404);
     if (hab.estado === 'USADO') throw new AgendaError('Con este enlace ya se pidió un turno', 409, 'USADO');

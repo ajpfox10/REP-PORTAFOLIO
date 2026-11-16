@@ -7,6 +7,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
+import { AntecedentesPorTanda } from './AntecedentesPorTanda';
 
 const ROBOT = 'gmail_antecedentes';
 
@@ -36,6 +37,7 @@ export function BajarAntecedentesMail() {
   const [robot, setRobot] = useState<{ fase: 'idle' | 'corriendo' | 'ok' | 'error'; msg?: string }>({ fase: 'idle' });
   const [items, setItems] = useState<Item[]>([]);
   const [verPanel, setVerPanel] = useState(false);
+  const [verTanda, setVerTanda] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -106,11 +108,17 @@ export function BajarAntecedentesMail() {
             : robot.fase === 'ok' ? `✅ ${robot.msg}` : `❌ ${robot.msg}`}
         </span>
       )}
-      <button type="button" onClick={() => setVerPanel(v => !v)}
+      <button type="button" onClick={() => { setVerPanel(v => !v); setVerTanda(false); }}
         title="Últimos certificados que llegaron por mail, con el formato en que vino cada uno"
         style={{ ...btn, background: verPanel ? 'rgba(124,58,237,0.3)' : 'transparent', cursor: 'pointer' }}>
         📋 Recibidos
       </button>
+      <button type="button" onClick={() => { setVerTanda(v => !v); setVerPanel(false); }}
+        title="Todos los certificados recibidos por mail agrupados por tanda, con extranjeros marcados y filtro por año del mail"
+        style={{ ...btn, background: verTanda ? 'rgba(124,58,237,0.3)' : 'transparent', cursor: 'pointer' }}>
+        🗂️ Por tanda
+      </button>
+      {verTanda && <AntecedentesPorTanda onClose={() => setVerTanda(false)} />}
       <button type="button" onClick={() => void lanzar()} disabled={robot.fase === 'corriendo'}
         title="Baja ya los certificados de antecedentes penales de recepciondeantecedentesrrhhkm@gmail.com a DOCU (también corre solo todos los días a las 18:00). Toma PDF y fotos JPG/PNG."
         style={{ ...btn, background: robot.fase === 'corriendo' ? 'rgba(124,58,237,0.15)' : 'rgba(124,58,237,0.3)', cursor: robot.fase === 'corriendo' ? 'wait' : 'pointer' }}>

@@ -532,7 +532,7 @@ export function SamoPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <Layout title="SAMO" showBack>
+    <Layout title="SAMO" showBack fluid={tab === 'ministerio'}>
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>

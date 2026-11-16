@@ -1,20 +1,25 @@
 // src/routes/samoMinisterio.routes.ts
 // SAMO → pestaña "Licencias Ministerio": licencias cargadas en la Intranet del Ministerio
 // (tabla ministerio_novedades_anual, robot intranet_descarga_anual) por dependencia,
-// una línea por agente con código + fechas del mes. Todo menos 34-FRANCO COMPENSATORIO.
+// una línea por agente con código + fechas del mes. Menos los códigos que el admin ocultó (samo_codigos_ocultos).
 // Cada mes se ve solo si un admin lo habilitó cargando la clave fija SAMO_CLAVE_HABILITACION (.env).
 //   GET    /samo-ministerio/meses                  → meses habilitados
 //   GET    /samo-ministerio/licencias?anio&mes&dep → filas (403 si el mes no está habilitado)
 //   GET    /samo-ministerio/clave                  → clave del .env (solo admin)
-//   POST   /samo-ministerio/meses {anio,mes,clave} → habilitar (solo admin)
+//   POST   /samo-ministerio/meses {anio,mes,clave} → habilitar (solo admin) + lanza el robot intranet_descarga_anual
 //   DELETE /samo-ministerio/meses/:anio/:mes       → deshabilitar (solo admin)
+//   GET    /samo-ministerio/ocultos                → códigos del Ministerio + si SAMO los ve (solo admin)
+//   PUT    /samo-ministerio/ocultos {codigos[]}    → códigos que SAMO no ve (solo admin; SAMO no los recibe)
 
 import { Router, Request, Response } from 'express';
 import { Sequelize, QueryTypes } from 'sequelize';
 import crypto from 'crypto';
-import { requireAny } from '../middlewares/rbacCrud';
+import { requireAny, hasAnyPermission } from '../middlewares/rbacCrud';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
+import { ejecutarAhora } from '../services/robotsTareasWindows';
+
+const ROBOT_ANUAL = 'intranet_descarga_anual';
 
 // ─── Tabla (mig 071) ──────────────────────────────────────────────────────────
 // Se crea sola al levantar la API; espejo en scripts/migrations/071__samo_meses_habilitados.sql
@@ -27,8 +32,15 @@ const DDL = `CREATE TABLE IF NOT EXISTS samo_meses_habilitados (
   UNIQUE KEY ux_samo_meses_anio_mes (anio, mes)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`;
 
+// Códigos que SAMO no ve: los elige el admin (tilde en la pestaña). Se arranca con 34-FRANCO COMPENSATORIO.
+const DDL_OCULTOS = `CREATE TABLE IF NOT EXISTS samo_codigos_ocultos (
+  codigo VARCHAR(20) NOT NULL PRIMARY KEY,
+  ocultado_por INT NULL,
+  ocultado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`;
+
 const DEPENDENCIAS = ['HOSPITAL', 'UPA 4', 'UPA 18'];
-const CODIGOS_EXCLUIDOS = ['34']; // 34-FRANCO COMPENSATORIO
+const ADMIN_PERMS = ['usuarios:write', 'crud:*:*'];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -50,9 +62,24 @@ function claveOk(ingresada: string): boolean {
 export function buildSamoMinisterioRouter(sequelize: Sequelize): Router {
   const router = Router();
   const read  = requireAny(['app:samo:access', 'crud:*:*']);
-  const admin = requireAny(['usuarios:write', 'crud:*:*']);
-  const ready = sequelize.query(DDL).catch((e: any) =>
-    logger.error({ msg: 'samo-ministerio: error creando samo_meses_habilitados', error: e?.message }));
+  const admin = requireAny(ADMIN_PERMS);
+  const ready = (async () => {
+    await sequelize.query(DDL);
+    // solo al crear la tabla arranca con el 34 (lo que antes estaba fijo en el código);
+    // si después el admin destilda todo, no se vuelve a cargar
+    const [{ n }] = await sequelize.query<any>(
+      `SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'samo_codigos_ocultos'`,
+      { type: QueryTypes.SELECT });
+    await sequelize.query(DDL_OCULTOS);
+    if (!Number(n)) await sequelize.query(`INSERT IGNORE INTO samo_codigos_ocultos (codigo) VALUES ('34')`);
+  })().catch((e: any) =>
+    logger.error({ msg: 'samo-ministerio: error creando tablas', error: e?.message }));
+
+  async function codigosOcultos(): Promise<string[]> {
+    await ready;
+    const rows = await sequelize.query<any>(`SELECT codigo FROM samo_codigos_ocultos`, { type: QueryTypes.SELECT });
+    return rows.map(r => String(r.codigo));
+  }
 
   async function habilitado(anio: number, mes: number): Promise<boolean> {
     await ready;
@@ -86,7 +113,10 @@ export function buildSamoMinisterioRouter(sequelize: Sequelize): Router {
       }
       const ini = `${am.anio}-${pad(am.mes)}-01`;
       const fin = new Date(Date.UTC(am.anio, am.mes, 0)).toISOString().slice(0, 10);
-      const rows = await sequelize.query<any>(
+      // SAMO no recibe los códigos ocultos; el admin los recibe marcados (oculto: true)
+      const esAdmin = hasAnyPermission(req, ADMIN_PERMS);
+      const ocultos = new Set(await codigosOcultos());
+      const rowsTodas = await sequelize.query<any>(
         `SELECT dni, apellido_nombre, legajo, cargo, codigo, novedad,
                 DATE_FORMAT(GREATEST(fecha_desde, :ini), '%Y-%m-%d') AS desde,
                 DATE_FORMAT(LEAST(fecha_hasta, :fin), '%Y-%m-%d')    AS hasta,
@@ -95,9 +125,10 @@ export function buildSamoMinisterioRouter(sequelize: Sequelize): Router {
            FROM ministerio_novedades_anual
           WHERE dependencia = :dep
             AND fecha_desde <= :fin AND fecha_hasta >= :ini
-            AND (codigo IS NULL OR codigo NOT IN (:excl))
           ORDER BY apellido_nombre, dni, fecha_desde, codigo`,
-        { replacements: { dep, ini, fin, excl: CODIGOS_EXCLUIDOS }, type: QueryTypes.SELECT });
+        { replacements: { dep, ini, fin }, type: QueryTypes.SELECT });
+      const codDe = (r: any) => String(r.codigo || String(r.novedad || '').split('-')[0] || '?').trim();
+      const rows = esAdmin ? rowsTodas : rowsTodas.filter(r => !ocultos.has(codDe(r)));
 
       // Una línea por agente; descarta duplicados exactos (el Ministerio a veces repite la carga)
       const porDni = new Map<string, any>();
@@ -108,13 +139,15 @@ export function buildSamoMinisterioRouter(sequelize: Sequelize): Router {
           ag = { dni: r.dni, apellido_nombre: r.apellido_nombre, legajo: r.legajo, cargo: r.cargo, licencias: [], dias: 0 };
           porDni.set(key, ag);
         }
-        const codigo = String(r.codigo || String(r.novedad || '').split('-')[0] || '?').trim();
+        const codigo = codDe(r);
         if (ag.licencias.some((l: any) => l.codigo === codigo && l.desde === r.desde && l.hasta === r.hasta)) continue;
+        const oculto = ocultos.has(codigo);
         ag.licencias.push({
           codigo, novedad: r.novedad, desde: r.desde, hasta: r.hasta,
-          desde_real: r.desde_real, hasta_real: r.hasta_real,
+          desde_real: r.desde_real, hasta_real: r.hasta_real, oculto,
         });
-        ag.dias += Math.round((Date.parse(r.hasta) - Date.parse(r.desde)) / 86400000) + 1;
+        // días = lo que ve SAMO (las ocultas no suman, tampoco para el admin)
+        if (!oculto) ag.dias += Math.round((Date.parse(r.hasta) - Date.parse(r.desde)) / 86400000) + 1;
       }
       const ult = await sequelize.query<any>(
         `SELECT MAX(descargado_en) AS d FROM ministerio_novedades_anual WHERE dependencia = :dep`,
@@ -123,6 +156,55 @@ export function buildSamoMinisterioRouter(sequelize: Sequelize): Router {
     } catch (e: any) {
       logger.error({ msg: 'samo-ministerio: error consultando licencias', error: e?.message });
       return res.status(500).json({ ok: false, error: 'Error consultando licencias del Ministerio' });
+    }
+  });
+
+  // Catálogo de códigos que existen en los datos del Ministerio + si SAMO los ve o no (solo admin)
+  router.get('/ocultos', admin, async (_req: Request, res: Response) => {
+    try {
+      const ocultos = new Set(await codigosOcultos());
+      const rows = await sequelize.query<any>(
+        `SELECT codigo, MAX(novedad) AS novedad, COUNT(*) AS cantidad
+           FROM ministerio_novedades_anual
+          WHERE codigo IS NOT NULL AND codigo <> ''
+          GROUP BY codigo`,
+        { type: QueryTypes.SELECT });
+      const data = rows.map(r => ({
+        codigo: String(r.codigo), novedad: r.novedad, cantidad: Number(r.cantidad), oculto: ocultos.has(String(r.codigo)),
+      }));
+      // ocultos que no están en los datos (por si acaso) también se listan, para poder destildarlos
+      for (const c of ocultos) if (!data.some(d => d.codigo === c)) data.push({ codigo: c, novedad: null, cantidad: 0, oculto: true });
+      data.sort((a, b) => a.codigo.localeCompare(b.codigo, 'es', { numeric: true }));
+      return res.json({ ok: true, data });
+    } catch (e: any) {
+      logger.error({ msg: 'samo-ministerio: error listando códigos', error: e?.message });
+      return res.status(500).json({ ok: false, error: 'Error listando códigos' });
+    }
+  });
+
+  // Reemplaza la lista de códigos ocultos para SAMO (solo admin)
+  router.put('/ocultos', admin, async (req: Request, res: Response) => {
+    const lista = req.body?.codigos;
+    if (!Array.isArray(lista)) return res.status(400).json({ ok: false, error: 'Falta la lista de códigos' });
+    const codigos = [...new Set(lista.map((c: any) => String(c ?? '').trim()).filter((c: string) => c && c.length <= 20))];
+    try {
+      await ready;
+      const userId = (req as any).auth?.principalId ?? null;
+      await sequelize.transaction(async (t) => {
+        if (codigos.length) {
+          await sequelize.query(`DELETE FROM samo_codigos_ocultos WHERE codigo NOT IN (:codigos)`, { replacements: { codigos }, transaction: t });
+          for (const codigo of codigos) {
+            await sequelize.query(`INSERT IGNORE INTO samo_codigos_ocultos (codigo, ocultado_por) VALUES (:codigo, :userId)`,
+              { replacements: { codigo, userId }, transaction: t });
+          }
+        } else {
+          await sequelize.query(`DELETE FROM samo_codigos_ocultos`, { transaction: t });
+        }
+      });
+      return res.json({ ok: true, codigos });
+    } catch (e: any) {
+      logger.error({ msg: 'samo-ministerio: error guardando códigos ocultos', error: e?.message });
+      return res.status(500).json({ ok: false, error: 'Error guardando los códigos ocultos' });
     }
   });
 
@@ -144,7 +226,22 @@ export function buildSamoMinisterioRouter(sequelize: Sequelize): Router {
         `INSERT INTO samo_meses_habilitados (anio, mes, habilitado_por) VALUES (:anio, :mes, :userId)
          ON DUPLICATE KEY UPDATE habilitado_por = VALUES(habilitado_por), habilitado_en = CURRENT_TIMESTAMP`,
         { replacements: { ...am, userId } });
-      return res.json({ ok: true });
+      // Al habilitar se baja del Ministerio lo más nuevo (robot anual: período completo, no solo el mes,
+      // para refrescar también licencias que arrancaron antes). Si no se puede lanzar, el mes queda habilitado igual.
+      let robot: 'lanzado' | 'no_lanzado' = 'no_lanzado';
+      let robotError: string | undefined;
+      try {
+        const [cfg] = await sequelize.query<any>(
+          `SELECT script, comando FROM robots_config WHERE script = :s AND activo = 1`,
+          { replacements: { s: ROBOT_ANUAL }, type: QueryTypes.SELECT });
+        if (!cfg?.comando) throw new Error(`Robot ${ROBOT_ANUAL} inexistente o inactivo`);
+        await ejecutarAhora(ROBOT_ANUAL);
+        robot = 'lanzado';
+      } catch (e: any) {
+        robotError = e?.message || 'Error lanzando el robot';
+        logger.error({ msg: 'samo-ministerio: no se pudo lanzar el robot anual', error: robotError });
+      }
+      return res.json({ ok: true, robot, robotError });
     } catch (e: any) {
       logger.error({ msg: 'samo-ministerio: error habilitando mes', error: e?.message });
       return res.status(500).json({ ok: false, error: 'Error habilitando el mes' });

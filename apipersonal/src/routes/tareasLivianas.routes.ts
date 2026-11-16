@@ -175,8 +175,10 @@ export function buildTareasLivianasRouter(sequelize: Sequelize) {
       if (servicioId != null) {
         // Mismo criterio que el portal: pase abierto con ese servicio_id, o pase histórico
         // sin servicio_id cuyo nombre coincide con el del servicio.
-        conds.push(`t.agente_dni IN (
-          SELECT CAST(ags.dni AS CHAR)
+        // Comparación numérica: CAST(ags.dni AS CHAR) toma la collation de la conexión
+        // (utf8mb4_unicode_ci) y chocaba con agente_dni (0900_ai_ci) → 500 "Illegal mix of collations".
+        conds.push(`CAST(t.agente_dni AS UNSIGNED) IN (
+          SELECT ags.dni
             FROM agentes_servicios ags
             JOIN servicios srv ON srv.id = ?
            WHERE ags.fecha_hasta IS NULL AND ags.deleted_at IS NULL
@@ -188,8 +190,12 @@ export function buildTareasLivianasRouter(sequelize: Sequelize) {
         `SELECT t.id, t.agente_dni, t.agente_nombre, t.servicio, t.turno,
                 t.fecha_desde, t.fecha_hasta, t.cantidad_dias, t.junta_medica_doc_id,
                 t.observaciones, t.creado_at,
-                -- dictamen: el vinculado a la tarea o, si no hay, la última junta escaneada del agente
+                -- dictamen: el vinculado a la tarea, si no la última junta registrada (mig 133) y,
+                -- si tampoco, la última junta escaneada del agente
                 COALESCE(t.junta_medica_doc_id, (
+                  SELECT j.archivo_id FROM juntas_medicas j
+                   WHERE j.dni = t.agente_dni AND j.activo = 1 AND j.archivo_id IS NOT NULL
+                   ORDER BY COALESCE(j.fecha_junta, DATE(j.creado_at)) DESC, j.id DESC LIMIT 1), (
                   SELECT a.id FROM tblarchivos a
                    WHERE a.dni = t.agente_dni AND a.deleted_at IS NULL
                      AND (a.tipo LIKE '%junta%' OR a.nombre LIKE '%junta%' OR a.tipo LIKE '%dictamen%')
@@ -257,7 +263,11 @@ export function buildTareasLivianasRouter(sequelize: Sequelize) {
       if (servicio) { conds.push('servicio LIKE ?'); vals.push(`%${servicio}%`); }
       if (turno)    { conds.push('turno = ?'); vals.push(turno); }
       const rows = await sequelize.query<any>(
-        `SELECT *, TIMESTAMPDIFF(HOUR, creado_at, NOW()) AS horas_desde_carga
+        `SELECT *, TIMESTAMPDIFF(HOUR, creado_at, NOW()) AS horas_desde_carga,
+                -- última junta registrada del agente (mig 133): el 📄 la muestra si la tarea no tiene una vinculada
+                (SELECT j.archivo_id FROM juntas_medicas j
+                  WHERE j.dni = tareas_livianas.agente_dni AND j.activo = 1 AND j.archivo_id IS NOT NULL
+                  ORDER BY COALESCE(j.fecha_junta, DATE(j.creado_at)) DESC, j.id DESC LIMIT 1) AS junta_registrada_doc_id
            FROM tareas_livianas WHERE ${conds.join(' AND ')}
           ORDER BY fecha_desde DESC, id DESC`,
         { type: QueryTypes.SELECT, replacements: vals },

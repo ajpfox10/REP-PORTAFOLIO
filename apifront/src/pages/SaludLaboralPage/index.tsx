@@ -1,6 +1,6 @@
 // src/pages/SaludLaboralPage/index.tsx
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useAuth } from '../../auth/AuthProvider';
 import { useToast } from '../../ui/toast';
@@ -8,6 +8,7 @@ import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { exportToExcel, exportToPdf } from '../../utils/export';
 import { ReclamosLicenciasMedicasTab } from './ReclamosLicenciasMedicasTab';
+import { JuntasMedicasTab } from './JuntasMedicasTab';
 
 // ─── Leyes becados/residentes ─────────────────────────────────────────────────
 const LEYES_BECADOS = [6, 7, 8, 9, 10, 11, 12, 13];
@@ -66,7 +67,7 @@ interface ExamenAnual {
   updated_by_email: string | null;
 }
 
-type Tab = 'reconocimientos' | 'examenes' | 'reclamos' | 'tareas';
+type Tab = 'reconocimientos' | 'examenes' | 'reclamos' | 'tareas' | 'juntas';
 
 interface TareaLiviana {
   id: number;
@@ -78,6 +79,8 @@ interface TareaLiviana {
   fecha_hasta: string | null;
   cantidad_dias: number | null;
   junta_medica_doc_id: number | null;
+  /** Última junta registrada del agente en la pestaña Juntas médicas (si la tarea no tiene una vinculada). */
+  junta_registrada_doc_id?: number | null;
   observaciones: string | null;
   creado_por_email: string | null;
   creado_at: string;
@@ -341,7 +344,9 @@ export function SaludLaboralPage() {
   // Tareas livianas: visible a admin + user (mismo criterio que canSeeProcesado)
   const canTareas = hasPerm('crud:*:read');
 
-  const [tab, setTab] = useState<Tab>('reconocimientos');
+  // ?tab=juntas&dni=… → vuelve a la pestaña Juntas médicas con el agente (ej. al volver de escanear)
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => (searchParams.get('tab') === 'juntas' && canTareas ? 'juntas' : 'reconocimientos'));
 
   // Lista de becados cargada una vez
   const { allBecados, historicos, nombresPorDni, loading: loadingBecados } = useAllBecados();
@@ -798,6 +803,11 @@ export function SaludLaboralPage() {
             <button className={`btn${tab === 'tareas' ? ' active' : ''}`} type="button" onClick={() => setTab('tareas')}>
               🪶 Tareas Livianas
               <span className="badge" style={{ marginLeft: 6, fontSize: '0.7rem' }}>{tab === 'tareas' ? tareas.length : allTareas.length}</span>
+            </button>
+          )}
+          {canTareas && (
+            <button className={`btn${tab === 'juntas' ? ' active' : ''}`} type="button" onClick={() => setTab('juntas')}>
+              ⚖️ Juntas médicas
             </button>
           )}
           {isAdmin && (
@@ -1549,8 +1559,10 @@ export function SaludLaboralPage() {
                           <td style={{ ...td, whiteSpace: 'nowrap' }}>{t.fecha_hasta ? fmt(t.fecha_hasta) : <span className="muted">—</span>}</td>
                           <td style={{ ...td, textAlign: 'center', whiteSpace: 'nowrap' }}>{t.cantidad_dias != null ? <span style={{ fontWeight: 700, color: '#10b981' }}>{t.cantidad_dias}d</span> : <span className="muted">—</span>}</td>
                           <td style={{ ...td, textAlign: 'center' }}>
-                            {t.junta_medica_doc_id
-                              ? <button className="btn" type="button" style={{ fontSize: '0.72rem', padding: '3px 8px' }} onClick={() => abrirDocumento(t.junta_medica_doc_id!)}>📄</button>
+                            {(t.junta_medica_doc_id || t.junta_registrada_doc_id)
+                              ? <button className="btn" type="button" style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                                  title={t.junta_medica_doc_id ? 'Ver la junta vinculada' : 'Ver la última junta registrada del agente'}
+                                  onClick={() => abrirDocumento((t.junta_medica_doc_id || t.junta_registrada_doc_id)!)}>📄</button>
                               : <span className="muted">—</span>}
                           </td>
                           <td style={{ ...td, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.observaciones || <span className="muted">—</span>}</td>
@@ -1570,6 +1582,15 @@ export function SaludLaboralPage() {
       )}
 
       {isAdmin && tab === 'reclamos' && <ReclamosLicenciasMedicasTab />}
+
+      {canTareas && tab === 'juntas' && (
+        <JuntasMedicasTab
+          isAdmin={isAdmin}
+          puedeCargar={canCrud('tareas_livianas', 'create')}
+          puedeEditar={canCrud('tareas_livianas', 'update')}
+          dniInicial={searchParams.get('dni') || undefined}
+        />
+      )}
 
       <div className="muted" style={{ fontSize: '0.72rem', marginTop: 12 }}>
         🩺 Reconocimientos: solo becados activos · 📋 Examen anual: todos los agentes ·

@@ -3,6 +3,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useDashboard } from './hooks/useDashboard';
+import { GpAvisosTile } from './components/GpAvisosTile';
 import { useAuth } from '../../auth/AuthProvider';
 import { isAtilioVarelaUser } from '../../auth/userIdentity';
 import { useKiosk } from '../../hooks/useKiosk';
@@ -20,7 +21,6 @@ import { ReclamosHaberesDashboardBanner } from '../AlertasPage/ReclamosHaberesBa
 import { ConcursosFuncionesBanner } from '../ConcursosPage/ConcursosFuncionesExamenes';
 import { JubilacionCargaBanner } from '../HerramientasPage/JubilacionCargaBanner';
 import { DashboardAlertSlot, useDashboardAlertsConfig } from './components/DashboardAlertSlot';
-import { GpAvisosTile } from './components/GpAvisosTile';
 import type { DashboardAlertKey } from './components/DashboardAlertSlot';
 import './styles/DashboardPage.css';
 
@@ -585,6 +585,9 @@ export function DashboardPage() {
             <Tile to="/app/agenda-turnos" title="📆 Agenda de turnos" desc="Turnos que el agente elige solo desde un enlace por WhatsApp (uno por enlace). Agendas por sector, horarios, bloqueos y sincronización con Google Calendar." accent="#0e7490" />
           )}
           {(hasPerm('crud:agentexdni1:read') || hasPerm('crud:*:*')) && <GpAvisosTile />}
+          {hasPerm('crud:*:*') && (
+            <Tile to="/app/whatsapp-bot" title="🤖 Bot de WhatsApp" desc="Respuestas automáticas por la API oficial: menú de opciones, certificado IOMA en PDF, pasar a una persona, textos, horario, pedidos, conversaciones y simulador." accent="#16a34a" />
+          )}
           <Tile to="/app/concursos" title="🏆 Concursos Ley 10471" desc="Concurso de ingreso por año, ley, servicio y agente. Concurso de funciones: Ley 10471 con más de 15 años de antigüedad. Exportación a Excel." accent="#6366f1" />
           <LegajoTile />
           <Tile to="/app/mi-cuenta" title="👤 Mi cuenta" desc="Perfil, permisos, tablas del sistema e información de acceso." accent="#0ea5e9" />

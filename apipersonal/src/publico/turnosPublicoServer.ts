@@ -8,25 +8,39 @@
 //   GET  /api/t/:token/disponibles    → días y horarios libres
 //   POST /api/t/:token/reservar       → { fecha, hora, telefono? }
 //   POST /api/t/:token/cancelar
+//   GET  /wa/webhook                  → verificación del webhook de WhatsApp (Meta)
+//   POST /wa/webhook                  → mensajes entrantes del bot de WhatsApp (firma X-Hub-Signature-256)
 //
-// Variables (.env): TURNOS_PUBLICO_PORT (3010), TURNOS_PUBLICO_HOST (127.0.0.1).
+// Variables (.env): TURNOS_PUBLICO_PORT (3010), TURNOS_PUBLICO_HOST (127.0.0.1),
+//   PUBLICO_DB_USER / PUBLICO_DB_PASSWORD = usuario de MySQL de permisos mínimos (scripts/crear_usuario_publico.cmd).
+//   Sin ellas arranca con el usuario de la API y lo avisa en el log (no recomendado).
 // Arranque: dev `npx ts-node --transpile-only src/publico/turnosPublicoServer.ts`, prod `node dist/publico/turnosPublicoServer.js`.
+//
+// Seguridad: este proceso NO lee agentes, DNI, celulares, pedidos ni chats. El webhook solo valida la firma
+// de Meta y anota el cuerpo en whatsapp_bot_entrada (la API interna lo atiende). La Agenda usa la vista
+// v_publico_agenda_agente y nunca crea ni modifica tablas.
 
 import express, { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { createSequelize } from '../db/sequelize';
+import { createSequelize, createSequelizeComo } from '../db/sequelize';
 import { logger } from '../logging/logger';
 import { PAGINA_HTML, PAGINA_JS, PAGINA_CSS } from './turnoPagina';
 import {
   AgendaError, ensureAgendaTablas, estadoEnlace, disponiblesEnlace, reservarEnlace, cancelarEnlace, tokenValido, icsEnlace,
+  marcarConexionPublica,
 } from '../services/agendaTurnos';
+import { verificarSuscripcion, firmaValida, anotarEntrada } from '../services/whatsappWebhook';
 
 // prod 3011 / dev 3010 sin depender de variables de pm2 (el deploy regenera el .env de prod desde el de dev)
 const PORT = Number(process.env.TURNOS_PUBLICO_PORT || (process.env.NODE_ENV === 'production' ? 3011 : 3010));
 const HOST = process.env.TURNOS_PUBLICO_HOST || '127.0.0.1';
 
-const sequelize = createSequelize();
+const USUARIO_PUBLICO = (process.env.PUBLICO_DB_USER || '').trim();
+const sequelize = USUARIO_PUBLICO
+  ? createSequelizeComo(USUARIO_PUBLICO, process.env.PUBLICO_DB_PASSWORD || '')
+  : createSequelize();
+marcarConexionPublica(sequelize);
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 'loopback');
@@ -51,6 +65,36 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'same-origin' },
 }));
 app.use((_req, res, next) => { res.setHeader('X-Robots-Tag', 'noindex, nofollow'); res.setHeader('Cache-Control', 'no-store'); next(); });
+
+// Webhook del bot de WhatsApp (API oficial de Meta). Va ANTES del límite general y del json de 4kb:
+// Meta manda ráfagas desde pocas IP y la firma se valida sobre el cuerpo crudo.
+app.get('/wa/webhook', async (req, res) => {
+  try {
+    const challenge = await verificarSuscripcion(sequelize, req.query);
+    return challenge === null ? res.sendStatus(403) : res.type('text/plain').send(challenge);
+  } catch (err: any) {
+    logger.error({ msg: 'wabot verificación', error: err?.message });
+    return res.sendStatus(500);
+  }
+});
+app.post('/wa/webhook', express.raw({ type: '*/*', limit: '1mb' }), async (req, res) => {
+  const raw = req.body as Buffer;
+  try {
+    if (!Buffer.isBuffer(raw) || !(await firmaValida(sequelize, raw, req.get('x-hub-signature-256')))) return res.sendStatus(401);
+  } catch (err: any) {
+    logger.error({ msg: 'wabot firma', error: err?.message });
+    return res.sendStatus(500);
+  }
+  try {
+    JSON.parse(raw.toString('utf8')); // basura firmada no se anota
+    await anotarEntrada(sequelize, raw);
+  } catch (err: any) {
+    logger.error({ msg: 'wabot anotar entrada', error: err?.message });
+    return res.sendStatus(500); // Meta reintenta
+  }
+  return res.sendStatus(200); // la API interna lo atiende en ~2 s
+});
+
 app.use(limite(60_000, 120));
 app.use(express.json({ limit: '4kb' }));
 
@@ -102,8 +146,12 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 
 (async () => {
   await sequelize.authenticate();
-  await ensureAgendaTablas(sequelize);
-  app.listen(PORT, HOST, () => logger.info({ msg: `Turnos público escuchando en http://${HOST}:${PORT}` }));
+  if (!USUARIO_PUBLICO) {
+    logger.warn({ msg: 'turnos_publico: SIN usuario de MySQL restringido (PUBLICO_DB_USER): usa el de la API. Correr scripts/crear_usuario_publico.cmd' });
+  }
+  app.listen(PORT, HOST, () => logger.info({
+    msg: `Turnos público escuchando en http://${HOST}:${PORT}`, usuario_db: USUARIO_PUBLICO ? 'restringido' : 'el de la API',
+  }));
 })().catch((err) => {
   logger.error({ msg: 'turnos_publico no arrancó', error: err?.message });
   process.exit(1);

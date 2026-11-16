@@ -46,6 +46,8 @@ export const SUBCARPETAS_PRESETS: PresetSubcarpeta[] = [
 export const CARPETA_POR_TIPO: Record<string, string> = {
   antecedentes_nacionales: 'Certificado ant. Nacionales',
   antecedentes_provinciales: 'Certificado ant. Provinciales',
+  // carpeta de DOCU que lee el robot pase_planta (si queda en la raíz no la copia)
+  planilla_compatibilidad: 'Planilla de incompatibilidad',
 };
 
 /** Devuelve las subdivisiones preset de una categoría (o []). */

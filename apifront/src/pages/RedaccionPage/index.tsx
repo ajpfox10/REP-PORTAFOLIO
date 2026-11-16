@@ -18,6 +18,7 @@ import { searchPersonal } from '../../api/searchPersonal';
 import { useToast }                     from '../../ui/toast';
 import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 import { Diferencial2pctPanel } from './Diferencial2pctPanel';
+import { ReclamoHaberesPanel } from './ReclamoHaberesPanel';
 
 const JUB_WIN_START = parseInt((import.meta as any).env?.VITE_JUB_WINDOW_DAY_START ?? '1');
 const JUB_WIN_END   = parseInt((import.meta as any).env?.VITE_JUB_WINDOW_DAY_END   ?? '10');
@@ -97,6 +98,8 @@ const DOCS = [
     frase: 'Elevacion administrativa de la solicitud de designacion del agente becario.' },
   { id: 19, label: 'Diferencial 2%',              implementado: true,
     frase: 'Certifica el descuento del 14 % desde el nombramiento hasta el 30/06/2015, con licencias sin goce y jefaturas del periodo.' },
+  { id: 20, label: 'Reclamo de Haberes',          implementado: true,
+    frase: 'Formulario de reclamo de haberes por cese: solo para agentes dados de baja con la resolucion de cese cargada en Resoluciones y Varios.' },
 ];
 
 function DocModal({ agente, doc, onClose }: {
@@ -584,6 +587,7 @@ function DocModal({ agente, doc, onClose }: {
 
   const renderPreview = () => {
     if (doc.id === 19) return <Diferencial2pctPanel agente={agente} />;
+    if (doc.id === 20) return <ReclamoHaberesPanel agente={agente} />;
 
     if (doc.id === 1) {
       if (loadingDatos || loadingPreview) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando documento...</p>;

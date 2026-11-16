@@ -2795,6 +2795,14 @@ export function JefeServicioPage() {
   useEffect(() => {
     if (tab === 'tareas_livianas') cargarTareasLivianas();
   }, [tab, cargarTareasLivianas]);
+  // Juntas médicas hechas de los agentes del sector (cargadas por Salud Laboral, mig 133), con o sin tarea liviana
+  const [juntasSector, setJuntasSector] = useState<any[]>([]);
+  useEffect(() => {
+    if (tab !== 'tareas_livianas') return;
+    apiFetch<any>('/juntas-medicas/mi-sector')
+      .then(r => setJuntasSector(r?.data ?? []))
+      .catch(() => setJuntasSector([]));
+  }, [tab]);
   const abrirJuntaMedica = useCallback(async (docId: number) => {
     try {
       const { blob } = await apiFetchBlobWithMeta(`/documents/${docId}/file`);
@@ -4264,6 +4272,46 @@ export function JefeServicioPage() {
                             <td className="js-td-muted" style={{ maxWidth: 260, whiteSpace: 'pre-wrap' }}>
                               {t.observaciones || '—'}
                             </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Juntas médicas hechas del sector (con o sin tarea liviana) */}
+              <div className="js-section-title" style={{ marginTop: 18, marginBottom: 8 }}>
+                ⚖️ Juntas médicas del sector
+                <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>({juntasSector.length})</span>
+              </div>
+              {juntasSector.length === 0 ? (
+                <div className="js-empty">No hay juntas médicas cargadas para agentes del sector.</div>
+              ) : (
+                <div className="js-tabla-wrap">
+                  <table className="js-tabla">
+                    <thead>
+                      <tr><th>DNI</th><th>Agente</th><th>Fecha junta</th><th>Resultado</th><th>Desde</th><th>Hasta</th><th>Días</th><th>Junta</th><th>Observaciones</th></tr>
+                    </thead>
+                    <tbody>
+                      {juntasSector.map((j: any) => {
+                        const hasta = String(j.fecha_hasta || '').slice(0, 10);
+                        const vigente = hasta ? hasta >= hoyISO() : !!j.fecha_desde;
+                        return (
+                          <tr key={j.id} style={{ background: vigente ? 'rgba(14,165,233,0.06)' : undefined }}>
+                            <td className="js-td-dni">{j.dni}</td>
+                            <td>{j.agente_nombre || '—'}</td>
+                            <td>{j.fecha_junta ? fmt(j.fecha_junta) : '—'}</td>
+                            <td>{j.resultado || '—'}</td>
+                            <td>{j.fecha_desde ? fmt(j.fecha_desde) : '—'}</td>
+                            <td style={{ fontWeight: 700, color: vigente ? '#38bdf8' : undefined }}>{j.fecha_hasta ? fmt(j.fecha_hasta) : '—'}</td>
+                            <td>{j.cantidad_dias ? `${j.cantidad_dias}d` : '—'}</td>
+                            <td>
+                              {j.archivo_id
+                                ? <button type="button" className="btn" title="Ver dictamen de la junta médica" onClick={() => abrirJuntaMedica(Number(j.archivo_id))}>📄</button>
+                                : '—'}
+                            </td>
+                            <td className="js-td-muted" style={{ maxWidth: 260, whiteSpace: 'pre-wrap' }}>{j.observaciones || '—'}</td>
                           </tr>
                         );
                       })}

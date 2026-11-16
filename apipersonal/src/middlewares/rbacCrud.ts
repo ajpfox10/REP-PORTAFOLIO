@@ -253,3 +253,10 @@ export const requireAll =
 
     return next();
   };
+
+/** Para decidir dentro de un handler (no corta la request): ¿el usuario tiene alguno de estos permisos? */
+export const hasAnyPermission = (req: Request, perms: string[]): boolean => {
+  const auth = getAuth(req);
+  if (!auth) return false;
+  return (perms || []).map(normalize).filter(Boolean).some((p) => hasPermission(auth.permissions || [], p));
+};

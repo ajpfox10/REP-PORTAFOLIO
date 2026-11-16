@@ -35,6 +35,7 @@ import hashlib
 import io
 import os
 import re
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -48,6 +49,9 @@ import gmail_antecedentes as G
 SCRIPT_ID = "gmail_antecedentes"
 DOCU = Path(os.environ.get("DOCU_DIR", r"D:\G\DOCU"))
 SIN_IDENTIFICAR = Path(os.environ.get("ANTECEDENTES_SIN_IDENTIFICAR_DIR", r"D:\G\VARIOS\ANTECEDENTES SIN IDENTIFICAR"))
+VIEJOS = "viejos"   # subcarpeta donde va lo reemplazado (misma convención que pase_planta.py)
+# Nunca se mueven: notas de toma de posesión mal archivadas en DOCU ("<dni> - TPAT.pdf").
+NO_MOVER = re.compile(r"TPAT", re.I)
 ETIQ_OK = "Robot/Procesado"
 ETIQ_REVISAR = "Robot/Sin identificar"
 # in:anywhere = todas las carpetas (Recibidos, archivados, Spam y Papelera): Gmail manda a spam
@@ -279,6 +283,40 @@ def guardar(carpeta, nombre_base, datos):
     return destino, True
 
 
+def a_viejos(carpeta, archivo):
+    """Mueve el archivo a carpeta/viejos sin pisar. Devuelve la ruta nueva."""
+    dv = carpeta / VIEJOS
+    dv.mkdir(exist_ok=True)
+    dst, n = dv / archivo.name, 2
+    while dst.exists():
+        dst, n = dv / f"{archivo.stem} ({n}){archivo.suffix}", n + 1
+    shutil.move(str(archivo), str(dst))
+    return dst
+
+
+def pasar_viejos(cn, carpeta, nombre_base, fecha, dry_run=False):
+    """Pedido 14/11/2026: al llegar un certificado nuevo, lo anterior de esa carpeta va a "viejos"
+    (no se borra). Quedan: lo que se guardó con el mismo nombre_base (mismo día: frente/dorso, hojas
+    sueltas), lo más nuevo que el mail y las notas TPAT. tblarchivos: se actualiza la ruta."""
+    movidos = []
+    if not carpeta.is_dir():
+        return movidos
+    for f in sorted(carpeta.iterdir()):
+        if (not f.is_file() or f.name.startswith(nombre_base) or NO_MOVER.search(f.name)
+                or datetime.fromtimestamp(f.stat().st_mtime) > fecha):
+            continue
+        if dry_run:
+            movidos.append(f.name)
+            continue
+        dst = a_viejos(carpeta, f)
+        with cn.cursor() as cur:
+            cur.execute("UPDATE tblarchivos SET ruta = %s WHERE ruta = %s AND deleted_at IS NULL",
+                        (str(dst.relative_to(DOCU)), str(f.relative_to(DOCU))))
+        cn.commit()
+        movidos.append(f.name)
+    return movidos
+
+
 def registrar_archivo(cn, dni, ruta, tipo, fecha, nombre_adjunto, remitente):
     """Fila en tblarchivos (mismo formato que el scanner), para que se vea en el legajo.
     Solo agentes de personal (FK) y sin duplicar la ruta. Devuelve el id o None."""
@@ -357,6 +395,10 @@ def procesar_mail(svc, cn, msg_id, dry_run):
             else:
                 ruta, nuevo = guardar(carpeta, nombre_base, datos)
             txt = f"{tipo or '?'} -> {ruta}{'' if nuevo else ' (ya estaba)'} · vino en {formato} · {detalle} · de {remitente}"
+            if tipo and nuevo:
+                movidos = pasar_viejos(cn, carpeta, nombre_base, fecha, dry_run)
+                if movidos:
+                    txt += f" · a viejos: {', '.join(movidos)}"
             if not dry_run and tipo and agente:          # agente = está en personal (FK de tblarchivos)
                 try:
                     txt += f" · tblarchivos #{registrar_archivo(cn, dni, ruta, tipo, fecha, nombre, remitente)}"
@@ -381,11 +423,43 @@ def pasar_a_planta(dry_run, sin_mails):
         print("[sin novedades]")
 
 
+def ordenar_viejos(dry_run):
+    """Carpetas ya tocadas por el robot: queda la tanda más nueva del robot (mismo día) y
+    lo demás va a viejos con las mismas reglas que pasar_viejos."""
+    pat = re.compile(r"^(%s) (\d{4}-\d\d-\d\d)" % "|".join(re.escape(t[1]) for t in TIPOS.values()))
+    total = 0
+    with MN.conn() as cn:
+        with cn.cursor() as cur:
+            cur.execute("SELECT DISTINCT detalle FROM script_run_items WHERE script=%s AND estado IN ('ok','aviso')", (SCRIPT_ID,))
+            carpetas = set()
+            for r in cur.fetchall():
+                m = re.match(r"\w+ -> (.+?\.pdf)", r["detalle"] or "")
+                if m and Path(m.group(1)).parent.is_dir() and DOCU in Path(m.group(1)).parents:
+                    carpetas.add(Path(m.group(1)).parent)
+        for c in sorted(carpetas):
+            del_robot = sorted((pat.match(f.name).group(2), pat.match(f.name).group(1))
+                               for f in c.iterdir() if f.is_file() and pat.match(f.name))
+            if not del_robot:
+                continue
+            dia, base = del_robot[-1]
+            fecha = datetime.strptime(dia, "%Y-%m-%d").replace(hour=23, minute=59)
+            movidos = pasar_viejos(cn, c, f"{base} {dia}", fecha, dry_run)
+            if movidos:
+                total += len(movidos)
+                print(f"{c.relative_to(DOCU)}: {', '.join(movidos)}")
+    print(f"{'(dry-run) ' if dry_run else ''}{total} archivo(s) a viejos")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="lee y clasifica, no guarda ni etiqueta")
     ap.add_argument("--max", type=int, default=200, help="máximo de mails por corrida")
+    ap.add_argument("--ordenar-viejos", action="store_true",
+                    help="una vez: en las carpetas donde ya guardó el robot, pasa lo anterior a 'viejos'")
     args = ap.parse_args()
+    if args.ordenar_viejos:
+        return ordenar_viejos(args.dry_run)
 
     svc = G.servicio()
     ids, token = [], None

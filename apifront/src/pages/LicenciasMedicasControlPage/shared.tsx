@@ -3,11 +3,46 @@
 // (fila + detalle día por día + historial de notas + paginado) y las acciones de reclamo
 // (tilde + modal de nota). Las usan la página /app/licencias-medicas-control y el modal de Gestión.
 import React, { useEffect, useState } from 'react';
-import { apiFetch } from '../../api/http';
+import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { useToast } from '../../ui/toast';
 
 // Clave para deshacer errores (la misma que desbloquea el escaneo). Acceso estático para que Vite la hornee.
 const BYPASS_CODE = import.meta.env.VITE_SCAN_BYPASS_CODE || '';
+
+/** Botón "📄 Ver junta" con la última junta médica escaneada del agente (Salud Laboral → Juntas
+ *  médicas, mig 133; si no hay registrada, el último escaneo de junta). Sin permiso o sin junta: nada. */
+export function VerJuntaEscaneada({ dni }: { dni: string }) {
+  const toast = useToast();
+  const [doc, setDoc] = useState<{ id: number; texto: string } | null>(null);
+  useEffect(() => {
+    const clean = String(dni || '').replace(/\D/g, '');
+    if (!clean) return;
+    let vivo = true;
+    apiFetch<any>(`/juntas-medicas/por-dni/${clean}`).then(r => {
+      if (!vivo || !r?.ok) return;
+      const j = (r.juntas || []).find((x: any) => x.archivo_id);
+      const fecha = (s: string | null) => (s ? String(s).slice(0, 10).split('-').reverse().join('/') : '');
+      if (j) { setDoc({ id: j.archivo_id, texto: `Junta ${fecha(j.fecha_junta)}${j.resultado ? ` · ${j.resultado}` : ''}` }); return; }
+      const e = (r.escaneos || []).find((x: any) => !x.descartado);
+      if (e) setDoc({ id: e.id, texto: `Escaneo ${fecha(e.fecha || e.created_at)}` });
+    }).catch(() => { /* sin permiso: no se muestra */ });
+    return () => { vivo = false; };
+  }, [dni]);
+  if (!doc) return null;
+  const abrir = async () => {
+    try {
+      const { blob } = await apiFetchBlobWithMeta(`/documents/${doc.id}/file`);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: any) { toast.error('No se pudo abrir la junta', e?.message); }
+  };
+  return (
+    <button type="button" className="btn" style={{ marginLeft: 8, padding: '1px 8px', fontSize: '0.74rem' }} onClick={e => { e.stopPropagation(); void abrir(); }} title={doc.texto}>
+      📄 Ver junta escaneada ({doc.texto})
+    </button>
+  );
+}
 
 export interface Fichada { primera: string; ultima: string; marcas: number }
 export interface Dia {
@@ -508,6 +543,7 @@ export function LicenciasMedicasTabla({
                       <div className="muted" style={{ fontSize: '0.78rem', margin: '6px 0' }}>
                         Solicitud {fmtFecha(l.fecha_solicitud)} · Modalidad {l.modalidad || '—'} · Junta médica {l.junta_medica || '—'}
                         {l.diagnostico && l.diagnostico !== '-' ? ` · Diagnóstico: ${l.codigo_oms} ${l.diagnostico}` : ''}
+                        <VerJuntaEscaneada dni={l.dni} />
                       </div>
                       {l.notas.length > 0 && (
                         <div style={{ margin: '8px 0 12px' }}>

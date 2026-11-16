@@ -35,6 +35,7 @@ import { NormativaPage } from '../pages/NormativaPage';
 import { LicenciasPlusPage } from '../pages/LicenciasPlusPage';
 import { FeriadosPage } from '../pages/FeriadosPage';
 import { AgendaTurnosPage } from '../pages/AgendaTurnosPage';
+import { WhatsappBotPage } from '../pages/WhatsappBotPage';
 import { ComisionesPage } from '../pages/ComisionesPage';
 import { VacacionesAdelantadasPage } from '../pages/VacacionesAdelantadasPage';
 import { CargaHorariaLeyPage } from '../pages/CargaHorariaLeyPage';
@@ -485,6 +486,16 @@ export function App() {
                 <Private>
                   <Guard anyOf={['crud:agentexdni1:read', 'crud:*:*']}>
                     <AgendaTurnosPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/whatsapp-bot"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:*:*']}>
+                    <WhatsappBotPage />
                   </Guard>
                 </Private>
               }

@@ -84,6 +84,18 @@ def _ultima_fila(cur, script):
     return (r or {}).get("id") or 0
 
 
+def _ultima_fue_error(script):
+    """True si la ultima corrida registrada del robot quedo en error (ante la duda, False)."""
+    try:
+        with MN.conn() as cn, cn.cursor() as cur:
+            cur.execute("SELECT estado FROM script_runs WHERE script = %s ORDER BY id DESC LIMIT 1", (script,))
+            r = cur.fetchone()
+        return bool(r) and r.get("estado") == "error"
+    except Exception as e:
+        print(f"AVISO: no pude leer la ultima corrida de {script}: {e}")
+        return False
+
+
 def _resumen_salida(lineas, n=3):
     utiles = [l.strip() for l in lineas if l.strip() and not l.strip().startswith("====")]
     return " | ".join(utiles[-n:])[:480]
@@ -194,8 +206,11 @@ def main():
 
     # Robots que corren muy seguido (gmail_antecedentes, cada 2 min): si terminan OK diciendo
     # "[sin novedades]" no se registra la corrida, para no llenar el historial de Robots.
+    # Excepcion: si lo ultimo registrado fue un error, esta corrida OK SI se registra, para que
+    # el banner de robots fallidos se limpie apenas el robot vuelve a andar.
     if code == 0 and any(l.strip() == "[sin novedades]" for l in lineas[-5:]):
-        return code
+        if not _ultima_fue_error(script):
+            return code
 
     MN.registrar_run(script, cfg["descripcion"], "ok" if code == 0 else "error",
                      motivo=(_resumen_salida(lineas) if code == 0

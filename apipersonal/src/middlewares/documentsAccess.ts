@@ -5,8 +5,9 @@
 // Ahora:
 //   - admin (crud:*:*) o tblarchivos:read  → todo, como siempre.
 //   - permiso de tareas livianas (Salud Laboral) → solo dictámenes de junta médica.
-//   - jefe (app:jefe_servicio:access) → solo el dictamen vinculado a una tarea liviana
-//     de un agente con pase abierto en SU servicio (usuarios.servicio_id).
+//   - jefe (app:jefe_servicio:access) → solo dictámenes de junta (escaneo de junta, junta
+//     registrada en juntas_medicas o vinculada a una tarea liviana) de agentes con pase
+//     abierto en SU servicio (usuarios.servicio_id).
 //   - el resto → 403.
 
 import { Request, Response, NextFunction } from 'express';
@@ -65,26 +66,28 @@ export function requireDocumentFile(sequelize: Sequelize) {
           `SELECT id FROM tblarchivos
             WHERE id = ? AND deleted_at IS NULL
               AND (tipo LIKE '%junta%' OR nombre LIKE '%junta%' OR tipo LIKE '%dictamen%'
-                   OR id IN (SELECT junta_medica_doc_id FROM tareas_livianas WHERE activo = 1))`,
+                   OR id IN (SELECT junta_medica_doc_id FROM tareas_livianas WHERE activo = 1)
+                   OR id IN (SELECT archivo_id FROM juntas_medicas WHERE activo = 1))`,
           { type: QueryTypes.SELECT, replacements: [id] },
         );
         if (doc) return next();
       }
 
-      // Jefe: solo dictámenes de junta de agentes de su servicio que tienen tarea liviana
-      // (el vinculado a la tarea, o una junta escaneada de ese mismo agente)
+      // Jefe: solo dictámenes de junta de agentes con pase abierto en SU servicio: el vinculado a
+      // una tarea liviana, el de una junta registrada (mig 133) o un escaneo de junta del agente.
+      // (Antes exigía que el agente tuviera tarea liviana; una junta sin tarea no se podía ver.)
       const auth = (req as any).auth ?? {};
       if (p.includes('app:jefe_servicio:access') && auth.principalType === 'user' && auth.principalId) {
         const [ok] = await sequelize.query<any>(
-          `SELECT t.id
+          `SELECT a.id
              FROM tblarchivos a
-             JOIN tareas_livianas t ON t.activo = 1 AND t.agente_dni = CAST(a.dni AS CHAR)
              JOIN usuarios u ON u.id = ? AND u.deleted_at IS NULL AND u.servicio_id IS NOT NULL
              JOIN servicios srv ON srv.id = u.servicio_id
             WHERE a.id = ? AND a.deleted_at IS NULL
-              AND (t.junta_medica_doc_id = a.id
-                   OR a.tipo LIKE '%junta%' OR a.nombre LIKE '%junta%' OR a.tipo LIKE '%dictamen%')
-              AND t.agente_dni IN (
+              AND (a.tipo LIKE '%junta%' OR a.nombre LIKE '%junta%' OR a.tipo LIKE '%dictamen%'
+                   OR a.id IN (SELECT junta_medica_doc_id FROM tareas_livianas WHERE activo = 1)
+                   OR a.id IN (SELECT archivo_id FROM juntas_medicas WHERE activo = 1))
+              AND CAST(a.dni AS CHAR) IN (
                 SELECT CAST(ags.dni AS CHAR) FROM agentes_servicios ags
                  WHERE ags.fecha_hasta IS NULL AND ags.deleted_at IS NULL
                    AND (ags.servicio_id = srv.id

@@ -55,10 +55,12 @@ import { buildAccidentesPunzoRouter } from '../routes/accidentesPunzo.routes';
 import { buildCasosViolenciaRouter } from '../routes/casosViolencia.routes';
 import { buildTurnosSaludLaboralRouter } from '../routes/turnosSaludLaboral.routes';
 import { buildTareasLivianasRouter } from '../routes/tareasLivianas.routes';
+import { buildJuntasMedicasRouter } from '../routes/juntasMedicas.routes';
 import { buildSaludLaboralHabilitacionesRouter } from '../routes/saludLaboralHabilitaciones.routes';
 import { buildBajasRouter } from '../routes/bajas.routes';
 import { buildJubilacionRouter } from '../routes/jubilacion.routes';
 import { buildAgendaTurnosRouter } from '../routes/agendaTurnos.routes';
+import { buildWhatsappBotRouter } from '../routes/whatsappBot.routes';
 import { buildGpAvisosRouter } from '../routes/gpAvisos.routes';
 import { buildHerramientasRouter } from '../routes/herramientas.routes';
 import { buildComisionesRouter } from '../routes/comisiones.routes';
@@ -240,6 +242,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/casos-violencia`, ...protect, buildCasosViolenciaRouter(sequelize));
   app.use(`${apiPrefix}/turnos-salud-laboral`, ...protect, requireAny(['app:jefe_servicio:access', ADMIN]), buildTurnosSaludLaboralRouter(sequelize));
   app.use(`${apiPrefix}/tareas-livianas`,  ...protect, buildTareasLivianasRouter(sequelize));
+  app.use(`${apiPrefix}/juntas-medicas`,   ...protect, buildJuntasMedicasRouter(sequelize));
   app.use(`${apiPrefix}/salud-laboral-habilitaciones`, ...protect, buildSaludLaboralHabilitacionesRouter(sequelize));
   app.use(`${apiPrefix}/bajas-estructura`, ...protect, buildBajasRouter(sequelize));
   app.use(`${apiPrefix}/jubilacion`,       ...protect, buildJubilacionRouter(sequelize));
@@ -252,6 +255,8 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/vacaciones-adelantadas`, ...protect, buildVacacionesAdelantadasRouter(sequelize));
   app.use(`${apiPrefix}/carga-horaria-ley`, ...protect, buildCargaHorariaLeyRouter(sequelize));
   app.use(`${apiPrefix}/whatsapp`,         ...protect, buildWhatsappRouter(sequelize));
+  // Bot de WhatsApp (API oficial): configuración. El webhook vive en publico/turnosPublicoServer.ts
+  app.use(`${apiPrefix}/whatsapp-bot`,     ...protect, requireAny([ADMIN]), buildWhatsappBotRouter(sequelize));
   app.use(`${apiPrefix}/stress`,           ...protect, buildStressRouter(sequelize));
   app.use(`${apiPrefix}/antiguedad`,       ...protect, requireAny([ADMIN]), buildAntiguedadRouter(sequelize));
   app.use(`${apiPrefix}/licencias`,          ...protect, buildLicenciasRouter(sequelize));

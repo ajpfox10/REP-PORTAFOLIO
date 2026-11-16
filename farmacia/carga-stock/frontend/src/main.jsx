@@ -6882,10 +6882,16 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
     if (!minPorDroga.has(d)) minPorDroga.set(d, []);
     minPorDroga.get(d).push(m);
   }
-  const decisionMinisterio = (codigo, descripcion) => {
+  // Por nombre: misma droga y misma forma farmaceutica (inyectable no es comprimido).
+  // Si alguna de las dos formas no se reconoce ('Otra'), queda como posible para revisar.
+  const decisionMinisterio = (codigo, descripcion, textoForma = descripcion) => {
     const m = minPorCodigo.get(String(codigo || '').toUpperCase());
     if (m) return { ...m, porNombre: false };
-    const candidatos = minPorDroga.get(drogaDe(descripcion)) || [];
+    const forma = formaFarmaceutica(textoForma);
+    const candidatos = (minPorDroga.get(drogaDe(descripcion)) || []).filter((x) => {
+      const fx = formaFarmaceutica(x.medicamento);
+      return forma === 'Otra' || fx === 'Otra' || fx === forma;
+    });
     const mNombre = candidatos.find((x) => x.decision === 'no') || candidatos[0];
     return mNombre ? { ...mNombre, porNombre: true, otros: candidatos.length } : null;
   };
@@ -6893,12 +6899,18 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
   const difOcNoReqVisibles = difOcNoReqMin.filter(FILTROS_DIF_MIN[filtroDifMin].pred);
   const difReqNoOcMin = difReqNoOc.map((f) => {
     const porSigaf = sigafValido(f.g.sigaf) ? minPorCodigo.get(sigafValido(f.g.sigaf)) : null;
-    return { ...f, min: porSigaf ? { ...porSigaf, porNombre: false } : decisionMinisterio(f.g.codigo, f.g.droga) };
+    return { ...f, min: porSigaf ? { ...porSigaf, porNombre: false } : decisionMinisterio(f.g.codigo, f.g.droga, `${f.g.droga} ${f.g.descripcion}`) };
   });
   const difReqNoOcVisibles = difReqNoOcMin.filter(FILTROS_DIF_MIN[filtroDifReq].pred);
+  // Requerimiento completo del ciclo (sin filtrar por diferencias), con lo comprado en semestres anteriores
+  const reqTodoMin = filasOc.map((f) => {
+    const porSigaf = sigafValido(f.g.sigaf) ? minPorCodigo.get(sigafValido(f.g.sigaf)) : null;
+    return { ...f, min: porSigaf ? { ...porSigaf, porNombre: false } : decisionMinisterio(f.g.codigo, f.g.droga, `${f.g.droga} ${f.g.descripcion}`) };
+  });
+  const reqTodoVisibles = reqTodoMin.filter(FILTROS_DIF_MIN[filtroDifReq].pred);
   const filasStockMin = filasStock.map((f) => {
     const porSigaf = sigafValido(f.g.sigaf) ? minPorCodigo.get(sigafValido(f.g.sigaf)) : null;
-    return { ...f, min: porSigaf ? { ...porSigaf, porNombre: false } : decisionMinisterio(f.g.codigo, f.g.droga) };
+    return { ...f, min: porSigaf ? { ...porSigaf, porNombre: false } : decisionMinisterio(f.g.codigo, f.g.droga, `${f.g.droga} ${f.g.descripcion}`) };
   });
   const stockNoRequeridoMin = stockNoRequerido.map((x) => ({ ...x, min: decisionMinisterio(x.codigo, x.nombre) }));
   const predStockMin = FILTROS_DIF_MIN[filtroStockMin].pred;
@@ -8241,9 +8253,76 @@ function RequerimientoAnualPage({ token, soloMinisterio = false }) {
             <button className={`ghost ${difLado === 'req_no_oc' ? 'active' : ''}`} onClick={() => setDifLado('req_no_oc')}>
               Pedido y no comprado en {semestreDeCiclo(ciclo) === 2 ? "2dos" : "1ros"} semestres anteriores ({difReqNoOc.length})
             </button>
+            <button className={`ghost ${difLado === 'req_todo' ? 'active' : ''}`} onClick={() => setDifLado('req_todo')} title="Todos los códigos pedidos en el ciclo, sin filtrar por diferencias">
+              Requerimiento completo {etiquetaCiclo(ciclo)} ({filasOc.length})
+            </button>
           </section>
 
-          {difLado === 'oc_no_req' ? (
+          {difLado === 'req_todo' ? (
+            <>
+              <div style={{ color: '#5b6b76', fontSize: 14, margin: '4px 2px' }}>
+                Todo lo pedido en el {etiquetaCiclo(ciclo)} ({filasOc.length} códigos, {fmtCantidad(filasOc.reduce((a, f) => a + Number(f.g.cantidad || 0), 0))} unidades, {formatPesos(filasOc.reduce((a, f) => a + Number(f.g.total || 0), 0))}), con lo comprado en las O.C. de semestres anteriores. Solo respeta el selector de requerimiento y el buscador de arriba.
+              </div>
+              <section className="filters">
+                {comSel ? (
+                  <FiltroSituacion
+                    valor={filtroDifReq}
+                    onCambiar={setFiltroDifReq}
+                    opciones={Object.entries(FILTROS_DIF_MIN).map(([k, f]) => ({ clave: k, label: f.label, cantidad: reqTodoMin.filter(f.pred).length }))}
+                  />
+                ) : null}
+              </section>
+              <ColumnasPeriodo periodos={periodosOc} ocultos={periodosOcultos} onCambiar={setPeriodosOcultos} />
+              <ExportButton targetId="tabla-req-todo" name="requerimiento-completo" />
+              <section className="table-wrap">
+                <table id="tabla-req-todo" className="compact">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Cód. Sigaf</th>
+                      <th>Droga</th>
+                      <th>Descripción</th>
+                      <th>Ministerio</th>
+                      <th>Requerimientos</th>
+                      <th style={{ textAlign: 'right' }}>Pedido del ciclo</th>
+                      <th style={{ textAlign: 'right' }}>Monto</th>
+                      {periodosVisibles.map((k) => <th key={k} style={{ textAlign: 'right' }}>Comprado {etiquetaPeriodo(k)}</th>)}
+                      <th>Situación</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reqTodoVisibles.map((f) => (
+                      <tr key={f.g.clave} style={f.min?.porNombre ? { background: '#fff8e1' } : f.min?.decision === 'no' ? { background: '#ffe3e3' } : undefined}>
+                        <td className="code">{f.g.codigo}</td>
+                        <td>{f.g.sigaf}</td>
+                        <td style={{ fontWeight: 700 }}>{f.g.droga}</td>
+                        <td>{f.g.descripcion}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {f.min
+                            ? f.min.porNombre
+                              ? <span className="status iniciado" title={`Misma droga, otro código: ${f.min.codigo} ${f.min.medicamento}`}>
+                                  posible · {f.min.codigo} {String(f.min.habilitado || '').toLowerCase() === 'no' ? 'dijo NO' : f.min.habilitado}
+                                </span>
+                              : <span className={`status ${f.min.decision === 'no' ? 'error' : f.min.decision === 'comprar' ? 'listo' : 'iniciado'}`} title={`${f.min.codigo} ${f.min.medicamento}`}>
+                                  {f.min.habilitado}
+                                </span>
+                            : <span style={{ color: '#5b6b76' }}>{comSel ? 'no está en la lista' : '-'}</span>}
+                        </td>
+                        <td>{f.g.ubicaciones.join(', ')}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmtCantidad(f.g.cantidad)}</td>
+                        <td style={{ textAlign: 'right' }}>{formatPesos(f.g.total)}</td>
+                        {periodosVisibles.map((k) => (
+                          <td key={k} style={{ textAlign: 'right' }}>{f.porPeriodo[k] ? fmtCantidad(f.porPeriodo[k].cantidad) : '-'}</td>
+                        ))}
+                        <td>{f.rows.length ? <span className="status listo">comprado antes</span> : <span className="status error">nunca comprado</span>}</td>
+                      </tr>
+                    ))}
+                    {!reqTodoVisibles.length ? <tr><td colSpan={9 + periodosVisibles.length} className="empty">No hay productos en esta categoría</td></tr> : null}
+                  </tbody>
+                </table>
+              </section>
+            </>
+          ) : difLado === 'oc_no_req' ? (
             <>
               <div style={{ color: '#5b6b76', fontSize: 14, margin: '4px 2px' }}>
                 Productos comprados en O.C. {difPeriodo === 'todos' ? 'de semestres anteriores' : `del ${etiquetaPeriodo(difPeriodo)}`} que no están pedidos en el {etiquetaCiclo(ciclo)}: ¿faltó pedirlos?

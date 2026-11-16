@@ -9,7 +9,8 @@ import { env } from "../config/env";
 import { finResidencia } from "../services/certificadoLaboral";
 import { horasSemanalesAgente } from "../services/cargaHoraria";
 import { armarCertificadoLaboral, renderCertificadoLaboralHtml, renderCertificadoLaboralDocx } from "../services/certificadoLaboralDoc";
-import { datosDiferencial2pct, armarCertificadoDiferencial, renderCertificadoDiferencialHtml, renderCertificadoDiferencialDocx } from "../services/certificadoDiferencialDoc";
+import { datosReclamoHaberes, armarReclamoHaberes, renderReclamoHaberesDocx } from "../services/reclamoHaberesDoc";
+import { datosDiferencial2pct,armarCertificadoDiferencial, renderCertificadoDiferencialHtml, renderCertificadoDiferencialDocx } from "../services/certificadoDiferencialDoc";
 
 let ExcelJS: any;
 try { ExcelJS = require("exceljs"); } catch { ExcelJS = null; }
@@ -678,6 +679,60 @@ function buildCvFields(p: any, fields: Record<string, string>, domicilioOverride
   };
 }
 
+/**
+ * Certificado para IOMA (plantilla 1.docx) relleno. Lo usan la ruta POST /certificado-trabajo
+ * y el bot de WhatsApp. null = el DNI no está en personaldetalle.
+ */
+export async function generarCertificadoIomaDocx(
+  sequelize: Sequelize,
+  dni: number,
+  fallback: { legajo?: any; decreto?: any } = {},
+): Promise<{ buffer: Buffer; replacements: Record<string, string> } | null> {
+  const p = await queryPersonaldetalle(sequelize, dni);
+  if (!p) return null;
+
+  const ingresoTxt     = formatDateDMY(p.fecha_ingreso) + " ";
+  const hastaTxt       = await calcHastaIoma(sequelize, dni, p.ley);
+  const lugarFechaAuto = `González Catán, ${formatDateDMY(new Date())}`;
+  const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
+
+  const legajoVal = String(p.legajo ?? fallback.legajo ?? "");
+  const decretoVal = String(p.decreto_designacion ?? fallback.decreto ?? "");
+
+  const replacements: Record<string, string> = {
+    // Placeholders exactos del template (luego de consolidar runs)
+    "APELLIDOYNOMBRE":    apellidoNombre,
+    "APELLIDOYNOMBRE ":   apellidoNombre,   // con espacio al final por si Word lo agrega
+    "DNIP":               String(p.dni ?? dni),
+    "DEPENDENCIA":        String(p.dependencia ?? ""),
+    "LEGAJO":             legajoVal,
+    "DECRETO":            decretoVal,
+    "LUGARYFECHA":        lugarFechaAuto,
+    // Fecha de ingreso — el template tiene "{{FECHA_INGRESO }}" fragmentado en dos runs
+    // Después de consolidar quedará junto; cubrimos todas las variantes:
+    "{{FECHA_INGRESO }}": ingresoTxt,
+    "{{FECHA_INGRESO}}":  ingresoTxt,
+    "{{HASTA}}":          hastaTxt,
+    "FECHA_INGRESO":      ingresoTxt,
+    "HASTA":              hastaTxt,
+  };
+
+  // En dev: process.cwd()/src/templates/  En prod: process.cwd()/templates/
+  // El deploy copia src/templates/ → dist/../templates/ (raíz del proyecto prod)
+  const prodPath = path.join(process.cwd(), "templates", "1.docx");
+  const devPath  = path.join(process.cwd(), "src", "templates", "1.docx");
+  const templatePath = fs.existsSync(prodPath) ? prodPath : devPath;
+  if (!fs.existsSync(templatePath)) {
+    throw new Error("Plantilla no encontrada (buscada en templates/ y src/templates/)");
+  }
+  const tpl = fs.readFileSync(templatePath);
+  const buffer = await fillDocxTemplate(tpl, replacements, {
+    "APELLIDOYNOMBRE": 1471,
+    "DEPENDENCIA":     1471,
+  });
+  return { buffer, replacements };
+}
+
 export function buildCertificadosRouter(sequelize: Sequelize) {
   const router = Router();
 
@@ -789,50 +844,14 @@ export function buildCertificadosRouter(sequelize: Sequelize) {
       return res.status(400).json({ ok: false, error: "dni requerido (number)" });
     }
 
-    const p = await queryPersonaldetalle(sequelize, dni);
-    if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
-
-    const ingresoTxt     = formatDateDMY(p.fecha_ingreso) + " ";
-    const hastaTxt       = await calcHastaIoma(sequelize, dni, p.ley);
-    const lugarFechaAuto = `González Catán, ${formatDateDMY(new Date())}`;
-    const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
-
-    const legajoVal = String(p.legajo ?? req.body?.legajo ?? "");
-    const decretoVal = String(p.decreto_designacion ?? req.body?.decreto ?? "");
-
-    const replacements: Record<string, string> = {
-      // Placeholders exactos del template (luego de consolidar runs)
-      "APELLIDOYNOMBRE":    apellidoNombre,
-      "APELLIDOYNOMBRE ":   apellidoNombre,   // con espacio al final por si Word lo agrega
-      "DNIP":               String(p.dni ?? dni),
-      "DEPENDENCIA":        String(p.dependencia ?? ""),
-      "LEGAJO":             legajoVal,
-      "DECRETO":            decretoVal,
-      "LUGARYFECHA":        lugarFechaAuto,
-      // Fecha de ingreso — el template tiene "{{FECHA_INGRESO }}" fragmentado en dos runs
-      // Después de consolidar quedará junto; cubrimos todas las variantes:
-      "{{FECHA_INGRESO }}": ingresoTxt,
-      "{{FECHA_INGRESO}}":  ingresoTxt,
-      "{{HASTA}}":          hastaTxt,
-      "FECHA_INGRESO":      ingresoTxt,
-      "HASTA":              hastaTxt,
-    };
-
-    // En dev: process.cwd()/src/templates/  En prod: process.cwd()/templates/
-    // El deploy copia src/templates/ → dist/../templates/ (raíz del proyecto prod)
-    const templatePath = (() => {
-      const prodPath = path.join(process.cwd(), "templates", "1.docx");
-      const devPath  = path.join(process.cwd(), "src", "templates", "1.docx");
-      return fs.existsSync(prodPath) ? prodPath : devPath;
-    })();
-    if (!fs.existsSync(templatePath)) {
-      return res.status(500).json({ ok: false, error: "Plantilla no encontrada (buscada en templates/ y src/templates/)" });
+    let gen: Awaited<ReturnType<typeof generarCertificadoIomaDocx>>;
+    try {
+      gen = await generarCertificadoIomaDocx(sequelize, dni, { legajo: req.body?.legajo, decreto: req.body?.decreto });
+    } catch (e: any) {
+      return res.status(500).json({ ok: false, error: e?.message || "Error generando el certificado" });
     }
-    const tpl = fs.readFileSync(templatePath);
-    const out = await fillDocxTemplate(tpl, replacements, {
-      "APELLIDOYNOMBRE": 1471,
-      "DEPENDENCIA":     1471,
-    });
+    if (!gen) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+    const { buffer: out, replacements } = gen;
 
     (res.locals as any).audit = {
       action: "certificado_ioma_generate",
@@ -926,6 +945,57 @@ export function buildCertificadosRouter(sequelize: Sequelize) {
     };
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     res.setHeader("Content-Disposition", `attachment; filename="certificado_diferencial_2pct_${dni}.docx"`);
+    res.setHeader("Content-Length", String(out.length));
+    return res.status(200).send(out);
+  });
+
+  // ─── Reclamo de Haberes por Cese (solo de baja + resolución de cese con PDF) ──
+
+  // GET /api/v1/certificados/reclamo-haberes/datos?dni=X
+  router.get("/reclamo-haberes/datos", async (req: Request, res: Response) => {
+    const dni = Number(req.query?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido" });
+    const d = await datosReclamoHaberes(sequelize, dni);
+    if (!d) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+    return res.json({ ok: true, data: d });
+  });
+
+  // POST /api/v1/certificados/reclamo-haberes/preview { dni, campos, resolucionId } → HTML
+  router.post("/reclamo-haberes/preview", async (req: Request, res: Response) => {
+    const dni = Number(req.body?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).send("<p>dni requerido</p>");
+    const r = await armarReclamoHaberes(sequelize, dni, req.body ?? {});
+    if (!r) return res.status(404).send("<p>Persona no encontrada</p>");
+    if (!r.datos.habilitado) return res.status(409).send(`<p>${r.datos.motivosNoHabilitado.join("<br>")}</p>`);
+    const docx = await renderReclamoHaberesDocx(r.campos);
+    const mammoth = await import("mammoth");
+    const html = (await mammoth.convertToHtml({ buffer: docx })).value;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      body{font-family:Calibri,Arial,sans-serif;padding:24px 32px;color:#111;font-size:12px;max-width:820px;margin:0 auto}
+      table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:3px 6px;vertical-align:top}p{margin:0}
+    </style></head><body>${html}</body></html>`);
+  });
+
+  // POST /api/v1/certificados/reclamo-haberes { dni, campos, resolucionId } → DOCX
+  router.post("/reclamo-haberes", async (req: Request, res: Response) => {
+    const dni = Number(req.body?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido (number)" });
+    const r = await armarReclamoHaberes(sequelize, dni, req.body ?? {});
+    if (!r) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+    if (!r.datos.habilitado) {
+      return res.status(409).json({ ok: false, error: r.datos.motivosNoHabilitado.join(" ") });
+    }
+    const out = await renderReclamoHaberesDocx(r.campos);
+    (res.locals as any).audit = {
+      action: "reclamo_haberes_generate",
+      table_name: "personaldetalle",
+      record_pk: dni,
+      request_json: { dni, resolucionId: req.body?.resolucionId ?? null, ...r.campos },
+      response_json: { status: 200, bytes: out.length },
+    };
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="reclamo_haberes_${dni}.docx"`);
     res.setHeader("Content-Length", String(out.length));
     return res.status(200).send(out);
   });

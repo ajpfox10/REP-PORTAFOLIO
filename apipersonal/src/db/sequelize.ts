@@ -42,6 +42,21 @@ export function createSequelize(): Sequelize {
 }
 
 /**
+ * Conexión aparte con OTRO usuario de MySQL (misma base/host). La usa el servidor público con el
+ * usuario de permisos mínimos (PUBLICO_DB_USER): no es el singleton de la API.
+ */
+export function createSequelizeComo(user: string, password: string): Sequelize {
+  return new Sequelize(env.DB_NAME, user, password, {
+    host: env.DB_HOST,
+    port: env.DB_PORT,
+    dialect: "mysql",
+    logging: false,
+    pool: { max: 5, min: 0, acquire: env.DB_POOL_ACQUIRE_MS, idle: env.DB_POOL_IDLE_MS },
+    dialectOptions: { connectTimeout: env.DB_QUERY_TIMEOUT_MS },
+  });
+}
+
+/**
  * Export "directo" para imports existentes: `import { sequelize } from "../db/sequelize"`
  * Se inicializa lazy (cuando alguien lo usa por primera vez).
  */
