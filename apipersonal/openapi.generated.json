@@ -61296,6 +61296,10 @@
           "anulado_by": {
             "type": "number",
             "nullable": true
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -61358,6 +61362,10 @@
           },
           "anulado_by": {
             "type": "number",
+            "nullable": true
+          },
+          "motivo": {
+            "type": "string",
             "nullable": true
           }
         },
@@ -61423,6 +61431,10 @@
           },
           "anulado_by": {
             "type": "number",
+            "nullable": true
+          },
+          "motivo": {
+            "type": "string",
             "nullable": true
           }
         }
@@ -61515,6 +61527,14 @@
             "type": "number"
           },
           "gcal_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "citacion_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "motivo": {
             "type": "string",
             "nullable": true
           }
@@ -61614,6 +61634,14 @@
           "gcal_error": {
             "type": "string",
             "nullable": true
+          },
+          "citacion_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -61711,6 +61739,14 @@
             "type": "number"
           },
           "gcal_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "citacion_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "motivo": {
             "type": "string",
             "nullable": true
           }
@@ -103065,6 +103101,10 @@
           "atendido_por": {
             "type": "string",
             "nullable": true
+          },
+          "pedido_id": {
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
@@ -103104,6 +103144,10 @@
           },
           "atendido_por": {
             "type": "string",
+            "nullable": true
+          },
+          "pedido_id": {
+            "type": "number",
             "nullable": true
           }
         },
@@ -103146,6 +103190,10 @@
           },
           "atendido_por": {
             "type": "string",
+            "nullable": true
+          },
+          "pedido_id": {
+            "type": "number",
             "nullable": true
           }
         }

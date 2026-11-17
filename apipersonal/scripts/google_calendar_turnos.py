@@ -116,7 +116,7 @@ def calendario_perdido(cur, agenda_id, cal_id):
 # ── 2. Subir turnos ────────────────────────────────────────────────────────────
 
 SQL_PENDIENTES = """
-  SELECT t.id, t.agenda_id, t.dni, t.estado, t.origen, t.telefono_contacto, t.observaciones, t.gcal_event_id,
+  SELECT t.id, t.agenda_id, t.dni, t.estado, t.origen, t.telefono_contacto, t.observaciones, t.gcal_event_id, t.motivo,
          DATE_FORMAT(t.fecha, '%Y-%m-%d') AS fecha, TIME_FORMAT(t.hora, '%H:%i') AS hora,
          a.nombre AS agenda, a.lugar, a.gcal_calendar_id AS cal,
          p.apellido, p.nombre,
@@ -135,14 +135,15 @@ def cuerpo_evento(t):
     ini = datetime.fromisoformat(f"{t['fecha']}T{t['hora']}")
     fin = ini + timedelta(minutes=int(t["duracion"] or 20))
     pref = {"ATENDIDO": "✔ ", "AUSENTE": "✖ AUSENTE · "}.get(t["estado"], "")
-    desc = [f"DNI {t['dni']}", f"Agenda: {t['agenda']}",
+    desc = [f"DNI {t['dni']}", f"Motivo: {t.get('motivo') or '-'}", f"Agenda: {t['agenda']}",
             "Pedido por el agente desde el enlace" if t["origen"] == "ENLACE" else "Cargado en la oficina"]
     if t.get("telefono_contacto"):
         desc.append(f"Tel.: {t['telefono_contacto']}")
     if t.get("observaciones"):
         desc.append(f"Obs.: {t['observaciones']}")
     return {
-        "summary": f"{pref}{str(t['apellido'] or '').upper()} {tc(t['nombre'])}".strip(),
+        "summary": (f"{pref}{str(t['apellido'] or '').upper()} {tc(t['nombre'])}".strip()
+                    + (f" · {t['motivo']}" if t.get("motivo") else "")),
         "description": "\n".join(desc) + PIE,
         "location": t.get("lugar") or None,
         "start": {"dateTime": ini.strftime("%Y-%m-%dT%H:%M:00"), "timeZone": TZ},

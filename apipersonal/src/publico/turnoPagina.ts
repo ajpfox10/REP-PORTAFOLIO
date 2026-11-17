@@ -48,7 +48,7 @@ h2{font-size:1.05rem;margin:0 0 10px}
 .hora{border:1px solid var(--borde);background:var(--card);color:var(--txt);border-radius:10px;padding:12px 0;font:inherit;font-weight:600;cursor:pointer}
 .hora[aria-pressed=true]{border-color:var(--pri);background:var(--pri);color:var(--pri-txt)}
 label{display:block;font-size:.9rem;color:var(--sub);margin:4px 0 6px}
-input{width:100%;font:inherit;padding:12px;border-radius:10px;border:1px solid var(--borde);background:var(--card);color:var(--txt)}
+input,select{width:100%;font:inherit;padding:12px;border-radius:10px;border:1px solid var(--borde);background:var(--card);color:var(--txt);margin-bottom:8px}
 .btn{display:block;width:100%;border:0;border-radius:12px;padding:15px;font:inherit;font-weight:700;background:var(--pri);color:var(--pri-txt);cursor:pointer;margin-top:12px}
 .btn[disabled]{opacity:.45;cursor:default}
 .btn.sec{background:transparent;color:var(--err);border:1px solid var(--err)}
@@ -71,7 +71,7 @@ export const PAGINA_JS = String.raw`
   var $c = document.getElementById('contenido');
   var $t = document.getElementById('titulo');
   var $s = document.getElementById('subtitulo');
-  var estado = null, dias = [], diaSel = null, horaSel = null, aviso = null;
+  var estado = null, dias = [], diaSel = null, horaSel = null, aviso = null, motSel = '', motOtro = '';
 
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(ch){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]; }); }
   function api(path, body){
@@ -92,19 +92,21 @@ export const PAGINA_JS = String.raw`
     var gd = function(f, h){ return f.replace(/-/g, '') + 'T' + h.replace(':', '') + '00'; };
     var det = [e.agenda.descripcion, 'Turno pedido desde el enlace de la Oficina de Personal.'].filter(Boolean).join('\n');
     return 'https://calendar.google.com/calendar/render?action=TEMPLATE'
-      + '&text=' + encodeURIComponent('Turno: ' + e.agenda.nombre)
+      + '&text=' + encodeURIComponent('Turno: ' + (motivoDe(e) || e.agenda.nombre))
       + '&dates=' + gd(e.turno.fecha, e.turno.hora) + '/' + gd(e.turno.fecha, e.turno.hora_fin)
       + '&ctz=' + encodeURIComponent('America/Argentina/Buenos_Aires')
       + (e.agenda.lugar ? '&location=' + encodeURIComponent(e.agenda.lugar) : '')
       + '&details=' + encodeURIComponent(det);
   }
+  function motivoDe(e){ return (e.turno && e.turno.motivo) || e.motivo || ''; }
+  function motivoTxt(){ var m = estado && motivoDe(estado); return m ? '<p class="dato">Motivo: <b>' + esc(m) + '</b></p>' : ''; }
   function lugar(){ return estado && estado.agenda.lugar ? '<p class="dato">Lugar: ' + esc(estado.agenda.lugar) + '</p>' : ''; }
 
   function cargar(){
     return api('').then(function(e){
       estado = e;
       $t.textContent = e.agenda.nombre;
-      $s.textContent = 'Turno para ' + nombre();
+      $s.textContent = 'Turno para ' + nombre() + (motivoDe(e) ? ' · ' + motivoDe(e) : '');
       if (e.estado === 'HABILITADO') return api('/disponibles').then(function(d){ dias = d; diaSel = null; horaSel = null; pintar(); });
       pintar();
     }).catch(function(err){
@@ -118,7 +120,7 @@ export const PAGINA_JS = String.raw`
     if (e.turno && e.turno.estado === 'RESERVADO') {
       h += msg() + '<div class="card"><h2>Tu turno</h2>'
         + '<p class="grande cap">' + esc(e.turno.dia) + '</p><p class="grande">' + esc(e.turno.hora) + ' h</p>'
-        + lugar() + (e.agenda.descripcion ? '<p class="dato">' + esc(e.agenda.descripcion) + '</p>' : '')
+        + motivoTxt() + lugar() + (e.agenda.descripcion ? '<p class="dato">' + esc(e.agenda.descripcion) + '</p>' : '')
         + '<a class="btn ghost" id="gcal" href="' + esc(linkGoogle(e)) + '" target="_blank" rel="noopener">📅 Agregar a Google Calendar</a>'
         + '<a class="btn ghost" href="' + base + '/turno.ics">📲 Agregar al calendario del celular (iPhone / otros)</a>'
         + '<p class="nota">Guardá este enlace: con él podés volver a ver tu turno.</p>';
@@ -147,8 +149,15 @@ export const PAGINA_JS = String.raw`
           h += '</div></div>';
         }
         if (horaSel) {
-          h += '<div class="card"><h2>3. Confirmá</h2><p class="grande cap">' + esc(dias[diaSel].dia) + '</p><p class="grande">' + esc(horaSel) + ' h</p>' + lugar()
-            + '<label for="tel">Celular de contacto (opcional)</label><input id="tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" placeholder="11 2345 6789">'
+          h += '<div class="card"><h2>3. Confirmá</h2><p class="grande cap">' + esc(dias[diaSel].dia) + '</p><p class="grande">' + esc(horaSel) + ' h</p>' + motivoTxt() + lugar();
+          if (!e.motivo) {
+            // la oficina no eligió el motivo: lo elige el agente (lista u "Otro" escrito)
+            h += '<label for="motivo">Motivo del turno</label><select id="motivo"><option value="">Elegí…</option>';
+            (e.motivos || []).forEach(function(m){ h += '<option' + (motSel === m ? ' selected' : '') + '>' + esc(m) + '</option>'; });
+            h += '</select>';
+            if (motSel === 'Otro') h += '<input id="motivo_otro" maxlength="150" placeholder="Escribí el motivo" value="' + esc(motOtro) + '">';
+          }
+          h += '<label for="tel">Celular de contacto (opcional)</label><input id="tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" placeholder="11 2345 6789">'
             + '<button class="btn" id="confirmar">Confirmar turno</button>'
             + '<p class="nota">El enlace sirve para un solo turno. Vence el ' + esc(e.vence_el.split('-').reverse().join('/')) + '.</p></div>';
         }
@@ -168,11 +177,22 @@ export const PAGINA_JS = String.raw`
     Array.prototype.forEach.call($c.querySelectorAll('.hora'), function(b){
       b.onclick = function(){ horaSel = b.getAttribute('data-hora'); aviso = null; pintar(); var c = document.getElementById('confirmar'); if (c) c.scrollIntoView({ behavior:'smooth', block:'center' }); };
     });
+    var $m = document.getElementById('motivo');
+    if ($m) $m.onchange = function(){
+      var tel = (document.getElementById('tel') || {}).value || '';
+      motSel = $m.value; pintar();
+      var t2 = document.getElementById('tel'); if (t2) t2.value = tel;
+      var o = document.getElementById('motivo_otro'); if (o) o.focus();
+    };
+    var $o = document.getElementById('motivo_otro');
+    if ($o) $o.oninput = function(){ motOtro = $o.value; };
     var conf = document.getElementById('confirmar');
     if (conf) conf.onclick = function(){
+      if (!estado.motivo && !motSel) { aviso = { tipo:'err', texto:'Elegí el motivo del turno.' }; pintar(); return; }
+      if (!estado.motivo && motSel === 'Otro' && !motOtro.trim()) { aviso = { tipo:'err', texto:'Escribí el motivo del turno.' }; pintar(); return; }
       conf.disabled = true; conf.textContent = 'Reservando…';
       var tel = (document.getElementById('tel') || {}).value || '';
-      api('/reservar', { fecha: dias[diaSel].fecha, hora: horaSel, telefono: tel }).then(function(e){
+      api('/reservar', { fecha: dias[diaSel].fecha, hora: horaSel, telefono: tel, motivo: motSel, motivo_otro: motOtro }).then(function(e){
         estado = e; aviso = { tipo:'ok', texto:'¡Listo! Tu turno quedó reservado.' }; pintar(); window.scrollTo(0, 0);
       }).catch(function(err){
         aviso = { tipo:'err', texto: err.message };

@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
+import { MotivoTurnoSelect, MotivoValor, MOTIVO_VACIO, motivoBody, motivoCompleto } from '../../components/MotivoTurno';
 
 interface Franja { dia_semana: number; hora_desde: string; hora_hasta: string; duracion_min: number; cupo: number }
 interface Agenda {
@@ -18,11 +19,12 @@ interface Turno {
   id: number; dni: number; apellido: string; nombre: string; telefono: string | null; fecha: string; hora: string;
   estado: 'RESERVADO' | 'ATENDIDO' | 'AUSENTE' | 'CANCELADO'; origen: 'ENLACE' | 'INTERNO';
   telefono_contacto: string | null; observaciones: string | null; cancelado_por: string | null; jubilacion_cita_id: number | null;
+  motivo: string | null;
 }
 interface Habilitacion {
   id: number; dni: number; apellido: string; nombre: string; telefono: string | null; celular: string | null; dudoso: boolean;
   token: string | null; estado: 'HABILITADO' | 'USADO' | 'VENCIDO' | 'ANULADO'; observacion: string | null; vence_el: string;
-  created_at: string; turno_fecha: string | null; turno_hora: string | null; turno_estado: string | null;
+  created_at: string; turno_fecha: string | null; turno_hora: string | null; turno_estado: string | null; motivo: string | null;
 }
 interface Bloqueo { id: number; agenda_id: number | null; agenda_nombre: string | null; fecha_desde: string; fecha_hasta: string; hora_desde: string | null; hora_hasta: string | null; motivo: string | null }
 interface Horario { hora: string; cupo: number; ocupados: number; libres: number; bloqueado: boolean; google: string | null }
@@ -57,13 +59,14 @@ const AGENDA_VACIA: Agenda = {
 };
 
 type Tab = 'turnos' | 'habilitar' | 'bloqueos' | 'google' | 'config';
+type Cfg = { url_publica: string; plantilla: string; plantillaDefault: string; motivos: string[] };
 
 export function AgendaTurnosPage() {
   const toast = useToast();
   const [agendas, setAgendas] = useState<Agenda[]>([]);
   const [agendaId, setAgendaId] = useState<number>(0);
   const [tab, setTab] = useState<Tab>('turnos');
-  const [cfg, setCfg] = useState<{ url_publica: string; plantilla: string; plantillaDefault: string }>({ url_publica: '', plantilla: '', plantillaDefault: '' });
+  const [cfg, setCfg] = useState<Cfg>({ url_publica: '', plantilla: '', plantillaDefault: '', motivos: [] });
 
   const agenda = agendas.find(a => a.id === agendaId) || null;
 
@@ -113,7 +116,7 @@ export function AgendaTurnosPage() {
       </div>
 
       {tab === 'config' && <ConfigTab agenda={agendaId ? agenda : null} cfg={cfg} onGuardado={(id) => { void cargarAgendas(id); setTab('turnos'); }} onCfg={() => cargarAgendas()} />}
-      {agenda && tab === 'turnos' && <TurnosTab agenda={agenda} onCambio={() => cargarAgendas()} />}
+      {agenda && tab === 'turnos' && <TurnosTab agenda={agenda} motivos={cfg.motivos} onCambio={() => cargarAgendas()} />}
       {agenda && tab === 'habilitar' && <HabilitarTab agenda={agenda} cfg={cfg} onCambio={() => cargarAgendas()} />}
       {agenda && tab === 'bloqueos' && <BloqueosTab agenda={agenda} />}
       {agenda && tab === 'google' && <GoogleTab agenda={agenda} />}
@@ -123,7 +126,7 @@ export function AgendaTurnosPage() {
 
 // ── Turnos ──────────────────────────────────────────────────────────────────
 
-function TurnosTab({ agenda, onCambio }: { agenda: Agenda; onCambio: () => void }) {
+function TurnosTab({ agenda, motivos, onCambio }: { agenda: Agenda; motivos: string[]; onCambio: () => void }) {
   const toast = useToast();
   const [desde, setDesde] = useState(hoy());
   const [hasta, setHasta] = useState(masDias(hoy(), 13));
@@ -132,6 +135,7 @@ function TurnosTab({ agenda, onCambio }: { agenda: Agenda; onCambio: () => void 
   const [verCancelados, setVerCancelados] = useState(false);
   const [manual, setManual] = useState<{ fecha: string; hora: string } | null>(null);
   const [dniManual, setDniManual] = useState('');
+  const [motManual, setMotManual] = useState<MotivoValor>(MOTIVO_VACIO);
 
   const cargar = async () => {
     try {
@@ -152,9 +156,9 @@ function TurnosTab({ agenda, onCambio }: { agenda: Agenda; onCambio: () => void 
   const cargarManual = async () => {
     if (!manual) return;
     try {
-      await apiFetch('/agenda-turnos/turnos', json('POST', { agenda_id: agenda.id, dni: Number(dniManual.replace(/\D/g, '')), fecha: manual.fecha, hora: manual.hora }));
+      await apiFetch('/agenda-turnos/turnos', json('POST', { agenda_id: agenda.id, dni: Number(dniManual.replace(/\D/g, '')), fecha: manual.fecha, hora: manual.hora, ...motivoBody(motManual) }));
       toast.ok('Turno cargado', `${fmt(manual.fecha)} ${manual.hora}`);
-      setManual(null); setDniManual(''); await cargar(); onCambio();
+      setManual(null); setDniManual(''); setMotManual(MOTIVO_VACIO); await cargar(); onCambio();
     } catch (err: any) { toast.error('Turno', err?.message); }
   };
 
@@ -203,7 +207,8 @@ function TurnosTab({ agenda, onCambio }: { agenda: Agenda; onCambio: () => void 
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.85rem' }}>Cargar a mano el {fmt(manual.fecha)} {manual.hora} · DNI</span>
                 <input value={dniManual} onChange={(e) => setDniManual(e.target.value)} style={sel} placeholder="DNI" autoFocus />
-                <button type="button" className="btn" onClick={() => void cargarManual()} disabled={!dniManual.trim()}>Guardar</button>
+                <MotivoTurnoSelect value={motManual} onChange={setMotManual} motivos={motivos} style={sel} />
+                <button type="button" className="btn" onClick={() => void cargarManual()} disabled={!dniManual.trim() || !motivoCompleto(motManual, true)}>Guardar</button>
                 <button type="button" className="btn" onClick={() => setManual(null)}>Cancelar</button>
               </div>
             )}
@@ -213,7 +218,7 @@ function TurnosTab({ agenda, onCambio }: { agenda: Agenda; onCambio: () => void 
                   {lista.map(t => (
                     <tr key={t.id} style={{ opacity: t.estado === 'CANCELADO' ? 0.5 : 1 }}>
                       <td style={{ ...td, width: 60 }}><b>{t.hora}</b></td>
-                      <td style={td}>{t.apellido} {t.nombre}<div className="muted" style={{ fontSize: '0.75rem' }}>DNI {t.dni}{t.telefono_contacto ? ` · tel. ${t.telefono_contacto}` : t.telefono ? ` · ${t.telefono}` : ''}</div></td>
+                      <td style={td}>{t.apellido} {t.nombre}{t.motivo && <span className="badge" style={{ marginLeft: 6, color: '#c4b5fd' }}>{t.motivo}</span>}<div className="muted" style={{ fontSize: '0.75rem' }}>DNI {t.dni}{t.telefono_contacto ? ` · tel. ${t.telefono_contacto}` : t.telefono ? ` · ${t.telefono}` : ''}</div></td>
                       <td style={td}><Badge e={t.estado} />{' '}<span className="muted" style={{ fontSize: '0.72rem' }}>{t.origen === 'ENLACE' ? 'por enlace' : 'cargado a mano'}{t.cancelado_por ? ` · canceló ${t.cancelado_por.toLowerCase()}` : ''}{t.jubilacion_cita_id ? ' · en citas de jubilación' : ''}</span></td>
                       <td style={{ ...td, whiteSpace: 'nowrap', textAlign: 'right' }}>
                         {t.estado === 'RESERVADO' && <>
@@ -238,7 +243,7 @@ function TurnosTab({ agenda, onCambio }: { agenda: Agenda; onCambio: () => void 
 
 // ── Habilitar y enviar ──────────────────────────────────────────────────────
 
-function HabilitarTab({ agenda, cfg, onCambio }: { agenda: Agenda; cfg: { url_publica: string; plantilla: string }; onCambio: () => void }) {
+function HabilitarTab({ agenda, cfg, onCambio }: { agenda: Agenda; cfg: Cfg; onCambio: () => void }) {
   const toast = useToast();
   const [lista, setLista] = useState<Habilitacion[]>([]);
   const [filtro, setFiltro] = useState<string>('HABILITADO');
@@ -246,6 +251,7 @@ function HabilitarTab({ agenda, cfg, onCambio }: { agenda: Agenda; cfg: { url_pu
   const [encontrados, setEncontrados] = useState<any[]>([]);
   const [pegados, setPegados] = useState('');
   const [resultado, setResultado] = useState<any[] | null>(null);
+  const [mot, setMot] = useState<MotivoValor>(MOTIVO_VACIO);
 
   const cargar = async () => {
     try { const r = await apiFetch<any>(`/agenda-turnos/habilitaciones?agenda_id=${agenda.id}&estado=${filtro}`); setLista(r.data || []); }
@@ -263,18 +269,20 @@ function HabilitarTab({ agenda, cfg, onCambio }: { agenda: Agenda; cfg: { url_pu
   }, [busca]);
 
   const link = (token: string | null) => (token && cfg.url_publica ? `${cfg.url_publica.replace(/\/+$/, '')}/t/${token}` : '');
-  const mensaje = (h: Pick<Habilitacion, 'nombre' | 'apellido' | 'token' | 'vence_el'>) =>
+  const mensaje = (h: Pick<Habilitacion, 'nombre' | 'apellido' | 'token' | 'vence_el' | 'motivo'>) =>
     (agenda.mensaje_whatsapp || cfg.plantilla)
       .replace(/\{NOMBRE\}/g, `${h.nombre}`.trim())
       .replace(/\{APELLIDO\}/g, `${h.apellido}`.trim())
-      .replace(/\{AGENDA\}/g, agenda.nombre)
+      .replace(/\{AGENDA\}/g, h.motivo || agenda.nombre)   // con motivo: "su turno de *Nacimiento*"
+      .replace(/\{MOTIVO\}/g, h.motivo || '')
       .replace(/\{VENCE\}/g, fmt(h.vence_el))
       .replace(/\{LINK\}/g, link(h.token));
 
   const habilitar = async (dnis: number[]) => {
     if (!dnis.length) return;
+    if (!motivoCompleto(mot, false)) { toast.warning('Motivo', 'Escribí el motivo o elegí otro de la lista.'); return; }
     try {
-      const r = await apiFetch<any>('/agenda-turnos/habilitaciones', json('POST', { agenda_id: agenda.id, dnis }));
+      const r = await apiFetch<any>('/agenda-turnos/habilitaciones', json('POST', { agenda_id: agenda.id, dnis, ...motivoBody(mot) }));
       setResultado(r.data || []);
       const ok = (r.data || []).filter((x: any) => x.ok).length;
       toast.ok('Habilitados', `${ok} de ${dnis.length}`);
@@ -300,6 +308,11 @@ function HabilitarTab({ agenda, cfg, onCambio }: { agenda: Agenda; cfg: { url_pu
 
   return (
     <div className="card" style={{ marginTop: 12, padding: 16 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+        <b>Motivo del turno</b>
+        <MotivoTurnoSelect value={mot} onChange={setMot} motivos={cfg.motivos} sinMotivoTexto="Que lo elija el agente" style={{ ...sel, minWidth: 200 }} />
+        <span className="muted" style={{ fontSize: '0.78rem' }}>Se aplica a los que habilites ahora.</span>
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
         <div>
           <b>Habilitar un agente</b>
@@ -342,7 +355,7 @@ function HabilitarTab({ agenda, cfg, onCambio }: { agenda: Agenda; cfg: { url_pu
         <tbody>
           {lista.map(h => (
             <tr key={h.id}>
-              <td style={td}>{h.apellido} {h.nombre}<div className="muted" style={{ fontSize: '0.75rem' }}>DNI {h.dni} · {h.celular ? `cel. ${h.celular}${h.dudoso ? ' (dudoso)' : ''}` : 'sin celular'}</div></td>
+              <td style={td}>{h.apellido} {h.nombre}<span className="badge" style={{ marginLeft: 6, color: h.motivo ? '#c4b5fd' : '#94a3b8' }}>{h.motivo || 'motivo: lo elige el agente'}</span><div className="muted" style={{ fontSize: '0.75rem' }}>DNI {h.dni} · {h.celular ? `cel. ${h.celular}${h.dudoso ? ' (dudoso)' : ''}` : 'sin celular'}</div></td>
               <td style={td}><Badge e={h.estado} /></td>
               <td style={td}>
                 {h.estado === 'USADO' && h.turno_fecha ? <>{fmt(h.turno_fecha)} {h.turno_hora} {h.turno_estado && <Badge e={h.turno_estado} />}</> : <>vence {fmt(h.vence_el)}</>}
@@ -556,7 +569,7 @@ function ConfigTab({ agenda, cfg, onGuardado, onCfg }: {
       <div className="card" style={{ marginTop: 12, padding: 16 }}>
         <b>{agenda ? `Editar "${agenda.nombre}"` : 'Nueva agenda'}</b>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10, marginTop: 10 }}>
-          <label style={{ fontSize: '0.82rem' }}>Nombre (lo ve el agente)<input value={a.nombre} onChange={(e) => setA({ ...a, nombre: e.target.value })} style={{ ...sel, width: '100%' }} placeholder="Jubilación" /></label>
+          <label style={{ fontSize: '0.82rem' }}>Nombre (lo ve el agente)<input value={a.nombre} onChange={(e) => setA({ ...a, nombre: e.target.value })} style={{ ...sel, width: '100%' }} placeholder="Turnos de Personal" /></label>
           <label style={{ fontSize: '0.82rem' }}>Lugar<input value={a.lugar || ''} onChange={(e) => setA({ ...a, lugar: e.target.value })} style={{ ...sel, width: '100%' }} placeholder="Oficina de Personal, planta baja" /></label>
           <label style={{ fontSize: '0.82rem' }}>Indicaciones para el agente<input value={a.descripcion || ''} onChange={(e) => setA({ ...a, descripcion: e.target.value })} style={{ ...sel, width: '100%' }} placeholder="Traer DNI y último recibo" /></label>
         </div>
@@ -569,7 +582,7 @@ function ConfigTab({ agenda, cfg, onGuardado, onCfg }: {
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
           <label style={{ fontSize: '0.85rem', display: 'flex', gap: 6, alignItems: 'center' }}>
             <input type="checkbox" checked={!!a.carga_jubilacion} onChange={(e) => setA({ ...a, carga_jubilacion: e.target.checked ? 1 : 0 })} />
-            Cargar también en la Agenda de citas de Jubilación
+            Cargar en la Agenda de citas de Jubilación los turnos con motivo Jubilación
           </label>
           <label style={{ fontSize: '0.85rem', display: 'flex', gap: 6, alignItems: 'center' }}>
             <input type="checkbox" checked={!!a.activa} onChange={(e) => setA({ ...a, activa: e.target.checked ? 1 : 0 })} /> Activa
@@ -598,7 +611,7 @@ function ConfigTab({ agenda, cfg, onGuardado, onCfg }: {
         </button>
 
         <div style={{ marginTop: 14 }}>
-          <label style={{ fontSize: '0.82rem' }}>Mensaje de WhatsApp propio de esta agenda (vacío = el general). Variables: {'{NOMBRE} {APELLIDO} {AGENDA} {LINK} {VENCE}'}</label>
+          <label style={{ fontSize: '0.82rem' }}>Mensaje de WhatsApp propio de esta agenda (vacío = el general). Variables: {'{NOMBRE} {APELLIDO} {AGENDA} {MOTIVO} {LINK} {VENCE}'} ({'{AGENDA}'} pone el motivo si lo tiene)</label>
           <textarea value={a.mensaje_whatsapp || ''} onChange={(e) => setA({ ...a, mensaje_whatsapp: e.target.value })} rows={4} style={{ ...sel, width: '100%', fontFamily: 'inherit' }} />
         </div>
         <button type="button" className="btn" onClick={() => void guardar()} disabled={!a.nombre.trim()} style={{ marginTop: 10, background: '#16a34a', color: '#fff', fontWeight: 700 }}>

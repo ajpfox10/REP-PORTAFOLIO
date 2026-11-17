@@ -133,6 +133,9 @@ export function ensureBotTablas(sequelize: Sequelize): Promise<void> {
           error VARCHAR(500) NULL,
           KEY ix_estado (estado, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      // 16/11: cada pedido real también va a la tabla `pedidos` de siempre; acá queda el enlace
+      const colPed = await sequelize.query<any>(`SHOW COLUMNS FROM whatsapp_bot_pedidos LIKE 'pedido_id'`, { type: QueryTypes.SELECT });
+      if (!colPed.length) await sequelize.query(`ALTER TABLE whatsapp_bot_pedidos ADD COLUMN pedido_id INT NULL`);
       // Lo único de la config que ve el servidor público: para validar que el webhook viene de Meta
       await sequelize.query(`
         CREATE OR REPLACE SQL SECURITY DEFINER VIEW v_publico_wa_claves AS
@@ -541,6 +544,12 @@ export async function avisarResultadosReset(sequelize: Sequelize): Promise<numbe
       avisado = 3; // no salió el mensaje: queda registrado en whatsapp_bot_mensajes con el error
       logger.error({ msg: 'wabot aviso reseteo', id: r.id, error: err?.message });
     }
+    // A la tabla `pedidos` como lo carga la oficina ("RESETEO"): hecho si el robot lo reseteó, pendiente si falló
+    if (r.estado === 'OK' || r.estado === 'YA_PROVISORIA') {
+      await pedidoEnTablaPedidos(ctx, Number(r.dni), 'RESETEO', 'hecho', `Reseteado por el bot de WhatsApp (${r.telefono})`);
+    } else if (r.estado === 'ERROR') {
+      await pedidoEnTablaPedidos(ctx, Number(r.dni), 'RESETEO', 'pendiente', `El bot de WhatsApp no pudo resetear: ${String(r.detalle ?? '').slice(0, 200)}`);
+    }
     await sequelize.query(`UPDATE gp_reset_cola SET avisado = :a, avisado_at = NOW() WHERE id = :id`, { replacements: { a: avisado, id: r.id } });
   }
   return rows.length;
@@ -559,6 +568,26 @@ export async function marcarLanzamientoReset(sequelize: Sequelize): Promise<bool
   return Number(meta?.affectedRows ?? meta ?? 0) > 0;
 }
 
+/**
+ * Copia en la tabla `pedidos` de siempre (la que se ve en la ficha del agente), con lugar 'whatsapp'.
+ * Solo pedidos reales (no los del simulador) y con DNI validado (pedidos.dni es obligatorio).
+ * Nunca corta la conversación: si falla, queda en el log.
+ */
+async function pedidoEnTablaPedidos(ctx: Ctx, dni: number | null, pedido: string, estado: 'pendiente' | 'hecho', observacion: string | null): Promise<number | null> {
+  if (!dni || ctx.prueba) return null;
+  try {
+    const [id] = await ctx.sequelize.query(
+      `INSERT INTO pedidos (dni, pedido, fecha, lugar, estado, observacion, created_by)
+       VALUES (:dni, :pedido, CURDATE(), 'whatsapp', :estado, :obs, 'bot whatsapp')`,
+      { replacements: { dni, pedido: pedido.slice(0, 255), estado, obs: observacion ? observacion.slice(0, 500) : null } });
+    return Number(id) || null;
+  } catch (err: any) {
+    logger.error({ msg: 'wabot → pedidos', dni, pedido, error: err?.message });
+    return null;
+  }
+}
+
+/** Pedido interno del bot (pestaña Pedidos). NO va a `pedidos`: ahí solo van los certificados entregados. */
 async function nuevoPedido(ctx: Ctx, dni: number | null, tipo: string) {
   await ctx.sequelize.query(`INSERT INTO whatsapp_bot_pedidos (telefono, dni, tipo, prueba) VALUES (:telefono, :dni, :tipo, :prueba)`,
     { replacements: { telefono: ctx.tel, dni, tipo: tipo.slice(0, 80), prueba: ctx.prueba ? 1 : 0 } });
@@ -725,6 +754,9 @@ async function ejecutarOpcion(ctx: Ctx, m: MensajeEntrante, op: Opcion & { numer
       const pdf = await docxAPdf(docx);
       const archivo = op.accion === 'CERT_IOMA' ? `Certificado_IOMA_${dni}.pdf` : `Certificado_de_trabajo_${dni}.pdf`;
       await enviarPdf(ctx, pdf, archivo, respuesta || (op.accion === 'CERT_IOMA' ? 'Certificado para IOMA 📄' : 'Certificado de trabajo 📄'), opTxt, dni);
+      // El certificado ya se entregó por WhatsApp → queda como pedido HECHO (igual que los IOMA de la oficina)
+      await pedidoEnTablaPedidos(ctx, dni, op.accion === 'CERT_IOMA' ? 'IOMA' : 'Certificado de trabajo', 'hecho',
+        `Enviado en PDF por el bot de WhatsApp (${ctx.tel})`);
     } catch (err: any) {
       logger.error({ msg: `wabot ${op.accion}`, tel: ctx.tel, dni, error: err?.message });
       await enviarTexto(ctx, `${completar(e.c.texto_error, ctx, agente)}${derivar(ctx, agente)}`, opTxt, dni);

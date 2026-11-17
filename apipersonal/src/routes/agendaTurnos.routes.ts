@@ -25,7 +25,7 @@ import { logger } from '../logging/logger';
 import { celularDe } from './licenciasMedicasControl.routes';
 import {
   AgendaError, ensureAgendaTablas, disponibilidad, habilitar, anularHabilitacion, vencerHabilitaciones,
-  reservarInterno, cambiarEstadoTurno, esFecha, normHora, hoyAR, sumarDias, Franja,
+  reservarInterno, cambiarEstadoTurno, sincronizarCitaciones, normalizarMotivo, MOTIVOS, MOTIVO_OTRO, esFecha, normHora, hoyAR, sumarDias, Franja,
 } from '../services/agendaTurnos';
 
 const CONFIG_KEY = 'agenda_turnos';
@@ -71,8 +71,21 @@ function fallo(res: Response, err: any, donde: string) {
   return res.status(500).json({ ok: false, error: err?.message || 'Error' });
 }
 
+let citacionesIniciado = false;
+/** Turnos → citaciones: cada 30 s (también toma lo que reservan los agentes desde el enlace). */
+function iniciarSyncCitaciones(sequelize: Sequelize) {
+  if (citacionesIniciado || process.env.NODE_ENV === 'test') return;
+  citacionesIniciado = true;
+  const correr = () => sincronizarCitaciones(sequelize)
+    .then(r => { if (r.creadas || r.cerradas || r.movidas) logger.info({ msg: 'agenda→citaciones', ...r }); })
+    .catch(err => logger.error({ msg: 'agenda→citaciones', error: err?.message }));
+  setTimeout(correr, 15_000);
+  setInterval(correr, 30_000);
+}
+
 export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
   const router = Router();
+  iniciarSyncCitaciones(sequelize);
   const q = <T extends object = any>(sql: string, replacements: any = {}): Promise<T[]> =>
     sequelize.query<T>(sql, { replacements, type: QueryTypes.SELECT });
 
@@ -92,7 +105,7 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
     };
   };
   router.get('/config', async (_req, res) => {
-    try { return res.json({ ok: true, data: { ...(await leerConfig()), plantillaDefault: PLANTILLA_DEFAULT } }); }
+    try { return res.json({ ok: true, data: { ...(await leerConfig()), plantillaDefault: PLANTILLA_DEFAULT, motivos: [...MOTIVOS, MOTIVO_OTRO] } }); }
     catch (err) { return fallo(res, err, 'config get'); }
   });
   router.put('/config', async (req, res) => {
@@ -242,7 +255,7 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
       if (!agendaId) throw new AgendaError('Falta la agenda');
       const estado = String(req.query.estado ?? '').toUpperCase();
       const rows = await q<any>(
-        `SELECT h.id, h.dni, p.apellido, p.nombre, p.telefono, h.token, h.estado, h.observacion,
+        `SELECT h.id, h.dni, p.apellido, p.nombre, p.telefono, h.token, h.estado, h.observacion, COALESCE(t.motivo, h.motivo) AS motivo,
                 DATE_FORMAT(h.vence_el, '%Y-%m-%d') AS vence_el, h.created_at, h.usado_at,
                 DATE_FORMAT(t.fecha, '%Y-%m-%d') AS turno_fecha, TIME_FORMAT(t.hora, '%H:%i') AS turno_hora, t.estado AS turno_estado
            FROM agenda_habilitaciones h
@@ -259,7 +272,8 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
       const dnis = (Array.isArray(b.dnis) ? b.dnis : [b.dni]).map((d: any) => Number(String(d ?? '').replace(/\D/g, ''))).filter((d: number) => d > 0);
       if (!dnis.length) throw new AgendaError('Falta el DNI');
       if (dnis.length > 500) throw new AgendaError('Máximo 500 por vez');
-      const r = await habilitar(sequelize, Number(b.agenda_id), dnis, userId(req), txt(b.observacion, 300));
+      // motivo opcional: si la oficina no lo elige, lo elige el agente en su enlace
+      const r = await habilitar(sequelize, Number(b.agenda_id), dnis, userId(req), txt(b.observacion, 300), normalizarMotivo(b.motivo, b.motivo_otro, false));
       return res.json({ ok: true, data: r });
     } catch (err) { return fallo(res, err, 'habilitar'); }
   });
@@ -277,7 +291,7 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
       const hasta = esFecha(req.query.hasta) ? String(req.query.hasta) : sumarDias(desde, 30);
       const rows = await q<any>(
         `SELECT t.id, t.dni, p.apellido, p.nombre, p.telefono, DATE_FORMAT(t.fecha, '%Y-%m-%d') AS fecha, TIME_FORMAT(t.hora, '%H:%i') AS hora,
-                t.estado, t.origen, t.telefono_contacto, t.observaciones, t.cancelado_por, t.jubilacion_cita_id, t.created_at
+                t.estado, t.origen, t.motivo, t.telefono_contacto, t.observaciones, t.cancelado_por, t.jubilacion_cita_id, t.created_at
            FROM agenda_turnos t JOIN personal p ON p.dni = t.dni
           WHERE t.agenda_id = :a AND t.fecha BETWEEN :desde AND :hasta
           ORDER BY t.fecha, t.hora, t.lugar`, { a: agendaId, desde, hasta });
@@ -287,7 +301,8 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
   router.post('/turnos', async (req, res) => {
     try {
       const b = req.body ?? {};
-      const id = await reservarInterno(sequelize, Number(b.agenda_id), Number(b.dni), b.fecha, b.hora, txt(b.observaciones, 500), userId(req), userNombre(req));
+      const id = await reservarInterno(sequelize, Number(b.agenda_id), Number(b.dni), b.fecha, b.hora, txt(b.observaciones, 500), userId(req), userNombre(req),
+        normalizarMotivo(b.motivo, b.motivo_otro, true) as string);
       return res.json({ ok: true, id });
     } catch (err) { return fallo(res, err, 'turnos post'); }
   });
@@ -343,14 +358,14 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
       const agendas = await q<any>(`SELECT id, nombre, lugar, mensaje_whatsapp FROM agendas WHERE activa = 1 ORDER BY nombre`);
       // por agenda: la última habilitación y el turno vigente (si tiene)
       const habs = await q<any>(
-        `SELECT h.id, h.agenda_id, h.token, h.estado, DATE_FORMAT(h.vence_el, '%Y-%m-%d') AS vence_el, h.created_at,
+        `SELECT h.id, h.agenda_id, h.token, h.estado, DATE_FORMAT(h.vence_el, '%Y-%m-%d') AS vence_el, h.created_at, h.motivo,
                 DATE_FORMAT(t.fecha, '%Y-%m-%d') AS turno_fecha, TIME_FORMAT(t.hora, '%H:%i') AS turno_hora, t.estado AS turno_estado
            FROM agenda_habilitaciones h
            LEFT JOIN agenda_turnos t ON t.id = h.turno_id
           WHERE h.dni = :dni
             AND h.id = (SELECT MAX(h2.id) FROM agenda_habilitaciones h2 WHERE h2.dni = h.dni AND h2.agenda_id = h.agenda_id)`, { dni });
       const turnos = await q<any>(
-        `SELECT t.id, t.agenda_id, DATE_FORMAT(t.fecha, '%Y-%m-%d') AS fecha, TIME_FORMAT(t.hora, '%H:%i') AS hora, t.estado, t.origen
+        `SELECT t.id, t.agenda_id, DATE_FORMAT(t.fecha, '%Y-%m-%d') AS fecha, TIME_FORMAT(t.hora, '%H:%i') AS hora, t.estado, t.origen, t.motivo
            FROM agenda_turnos t
           WHERE t.dni = :dni AND t.estado = 'RESERVADO'`, { dni });
       const cfg = await leerConfig();
@@ -363,7 +378,7 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
             habilitacion: habs.find(h => h.agenda_id === a.id) ?? null,
             turno: turnos.find(t => t.agenda_id === a.id) ?? null,
           })),
-          url_publica: cfg.url_publica, plantilla: cfg.plantilla,
+          url_publica: cfg.url_publica, plantilla: cfg.plantilla, motivos: [...MOTIVOS, MOTIVO_OTRO],
           url_publica_temporal: cfg.url_publica_temporal, url_publica_desde: cfg.url_publica_desde,
         },
       });

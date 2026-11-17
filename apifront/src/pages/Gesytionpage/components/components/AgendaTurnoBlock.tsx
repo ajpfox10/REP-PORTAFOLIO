@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../../../api/http';
 import { useToast } from '../../../../ui/toast';
 import { aExtension } from '../../../LicenciasMedicasControlPage/WhatsappTab';
+import { MotivoTurnoSelect, MotivoValor, MOTIVO_VACIO, motivoBody, motivoCompleto } from '../../../../components/MotivoTurno';
 
 // La extensión deja el mensaje escrito sin enviar desde la 1.8.0. Con una más vieja NO se usa
 // (mandaría el mensaje sola): se abre el chat por teléfono y el Enviar lo toca la persona.
@@ -17,11 +18,11 @@ const palabrasDe = (s: string) => String(s || '').normalize('NFD').replace(/[̀-
 // "Dar turno" lo habilita en la agenda → enlace único (sirve para UN solo turno) → WhatsApp o copiar.
 // Backend: GET /agenda-turnos/agente/:dni, POST /agenda-turnos/habilitaciones, POST .../:id/anular (mig 122).
 
-interface Hab { id: number; token: string | null; estado: 'HABILITADO' | 'USADO' | 'VENCIDO' | 'ANULADO'; vence_el: string; turno_fecha: string | null; turno_hora: string | null; turno_estado: string | null }
-interface AgendaAg { id: number; nombre: string; lugar: string | null; mensaje_whatsapp: string | null; habilitacion: Hab | null; turno: { fecha: string; hora: string; origen: string } | null }
+interface Hab { id: number; token: string | null; estado: 'HABILITADO' | 'USADO' | 'VENCIDO' | 'ANULADO'; vence_el: string; turno_fecha: string | null; turno_hora: string | null; turno_estado: string | null; motivo: string | null }
+interface AgendaAg { id: number; nombre: string; lugar: string | null; mensaje_whatsapp: string | null; habilitacion: Hab | null; turno: { fecha: string; hora: string; origen: string; motivo: string | null } | null }
 interface Resp {
   agente: { dni: number; apellido: string; nombre: string; activo: boolean; celular: string | null; dudoso: boolean };
-  agendas: AgendaAg[]; url_publica: string; plantilla: string;
+  agendas: AgendaAg[]; url_publica: string; plantilla: string; motivos?: string[];
   url_publica_temporal?: boolean; url_publica_desde?: string | null;
 }
 
@@ -44,6 +45,7 @@ export function AgendaTurnoBlock({ dni }: { dni: string }) {
   const [editUrl, setEditUrl] = useState(false);
   const [abriendo, setAbriendo] = useState(false);   // la extensión está buscando el chat
   const [url, setUrl] = useState('');
+  const [mot, setMot] = useState<MotivoValor>(MOTIVO_VACIO);   // motivo del próximo "Dar turno"
 
   const cargar = async () => {
     try { const r = await apiFetch<any>(`/agenda-turnos/agente/${dni}`); setData(r.data); setError(null); }
@@ -58,7 +60,8 @@ export function AgendaTurnoBlock({ dni }: { dni: string }) {
   const mensaje = (a: AgendaAg, h: Hab) => (a.mensaje_whatsapp || data.plantilla)
     .replace(/\{NOMBRE\}/g, tc(data.agente.nombre || ''))
     .replace(/\{APELLIDO\}/g, tc(data.agente.apellido || ''))
-    .replace(/\{AGENDA\}/g, a.nombre)
+    .replace(/\{AGENDA\}/g, h.motivo || a.nombre)
+    .replace(/\{MOTIVO\}/g, h.motivo || '')
     .replace(/\{VENCE\}/g, fmt(h.vence_el))
     .replace(/\{LINK\}/g, link(h));
 
@@ -69,7 +72,7 @@ export function AgendaTurnoBlock({ dni }: { dni: string }) {
     return [
       `Hola ${tc(data.agente.nombre || '')}, le escribimos de la Oficina de Personal del Hospital.`,
       '',
-      `Le confirmamos su turno de *${a.nombre}*: ${diaLargo(t.fecha)} a las ${t.hora} h${a.lugar ? `, en ${a.lugar}` : ''}.`,
+      `Le confirmamos su turno de *${t.motivo || a.nombre}*: ${diaLargo(t.fecha)} a las ${t.hora} h${a.lugar ? `, en ${a.lugar}` : ''}.`,
       ...(l ? ['', 'Para ver o cancelar el turno entre a este enlace:', l] : []),
     ].join('\n');
   };
@@ -102,15 +105,16 @@ export function AgendaTurnoBlock({ dni }: { dni: string }) {
   };
 
   const habilitar = async (a: AgendaAg) => {
+    if (!motivoCompleto(mot, false)) { toast.warning('Motivo', 'Escribí el motivo o elegí otro de la lista.'); return; }
     setOcupado(a.id);
     try {
       const r = await apiFetch<any>('/agenda-turnos/habilitaciones', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agenda_id: a.id, dnis: [Number(dni)] }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agenda_id: a.id, dnis: [Number(dni)], ...motivoBody(mot) }),
       });
       const x = r.data?.[0];
       if (x && !x.ok) toast.warning('No se habilitó', x.motivo || '');
       else toast.ok('Turno habilitado', `${a.nombre}: ya se le puede mandar el enlace`);
-      await cargar();
+      setMot(MOTIVO_VACIO); await cargar();
     } catch (e: any) { toast.error('Agenda de turnos', e?.message); }
     finally { setOcupado(null); }
   };
@@ -179,6 +183,7 @@ export function AgendaTurnoBlock({ dni }: { dni: string }) {
             {a.turno ? (
               <div style={{ fontSize: '0.82rem', color: '#e2e8f0', marginTop: 3 }}>
                 ✅ Turno el <b style={{ textTransform: 'capitalize' }}>{dia(a.turno.fecha)}</b> a las <b>{a.turno.hora}</b>
+                {a.turno.motivo && <> · <b style={{ color: '#c4b5fd' }}>{a.turno.motivo}</b></>}
                 <span style={{ fontSize: '0.7rem', color: '#64748b' }}> · {a.turno.origen === 'ENLACE' ? 'lo pidió por el enlace' : 'cargado en la oficina'}</span>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                   <button type="button" style={btn} disabled={abriendo} onClick={() => void whatsappTexto(confirmacion(a))}
@@ -192,7 +197,7 @@ export function AgendaTurnoBlock({ dni }: { dni: string }) {
             ) : sinUsar && h ? (
               <>
                 <div style={{ fontSize: '0.78rem', color: '#fbbf24', marginTop: 3 }}>
-                  🔗 Enlace listo, todavía no eligió turno · vence {fmt(h.vence_el)}
+                  🔗 Enlace listo, todavía no eligió turno · vence {fmt(h.vence_el)} · {h.motivo ? <b style={{ color: '#c4b5fd' }}>{h.motivo}</b> : 'el motivo lo elige el agente'}
                 </div>
                 {!data.url_publica && <div style={{ fontSize: '0.7rem', color: '#f87171', marginTop: 2 }}>Falta la dirección pública (Agenda de turnos → Configurar).</div>}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
@@ -213,6 +218,9 @@ export function AgendaTurnoBlock({ dni }: { dni: string }) {
                       : h.estado === 'ANULADO' ? 'El último enlace fue anulado' : ''}
                   </div>
                 )}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                  <MotivoTurnoSelect value={mot} onChange={setMot} motivos={data.motivos} sinMotivoTexto="Motivo: que lo elija el agente" style={{ ...btn, cursor: 'pointer' }} />
+                </div>
                 <button type="button" style={{ ...btn, marginTop: 6, background: '#0e7490', borderColor: '#0e7490', fontWeight: 600 }}
                   disabled={ocupado === a.id} onClick={() => void habilitar(a)}>
                   {ocupado === a.id ? 'Habilitando…' : '📆 Dar turno (enlace para elegir UN turno)'}

@@ -6,7 +6,7 @@
 //   GET  /t/:token                    → página (HTML) que abre el agente desde WhatsApp
 //   GET  /api/t/:token                → estado del enlace (nombre del agente, agenda, turno si ya tiene)
 //   GET  /api/t/:token/disponibles    → días y horarios libres
-//   POST /api/t/:token/reservar       → { fecha, hora, telefono? }
+//   POST /api/t/:token/reservar       → { fecha, hora, telefono?, motivo?, motivo_otro? }
 //   POST /api/t/:token/cancelar
 //   GET  /wa/webhook                  → verificación del webhook de WhatsApp (Meta)
 //   POST /wa/webhook                  → mensajes entrantes del bot de WhatsApp (firma X-Hub-Signature-256)
@@ -135,7 +135,7 @@ app.get('/api/t/:token/turno.ics', fallos, async (req, res) => {
   }
 });
 app.post('/api/t/:token/reservar', fallos, acciones,
-  responder(req => reservarEnlace(sequelize, req.params.token, req.body?.fecha, req.body?.hora, req.body?.telefono)));
+  responder(req => reservarEnlace(sequelize, req.params.token, req.body?.fecha, req.body?.hora, req.body?.telefono, req.body?.motivo, req.body?.motivo_otro)));
 app.post('/api/t/:token/cancelar', fallos, acciones, responder(req => cancelarEnlace(sequelize, req.params.token)));
 
 app.use((_req, res) => res.status(404).type('text/plain').send('No encontrado'));

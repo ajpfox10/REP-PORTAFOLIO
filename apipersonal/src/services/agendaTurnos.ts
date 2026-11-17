@@ -27,7 +27,24 @@ export class AgendaError extends Error {
 
 const listas = new WeakMap<Sequelize, Promise<void>>();
 
-const MIGRACIONES = ['122__agenda_turnos.sql', '123__agenda_google_calendar.sql'];
+const MIGRACIONES = ['122__agenda_turnos.sql', '123__agenda_google_calendar.sql', '135__agenda_motivo.sql'];
+
+// ── Motivo del turno (lista fija + "Otro" escrito) ─────────────────────────
+export const MOTIVO_JUBILACION = 'Jubilación';
+export const MOTIVOS = [MOTIVO_JUBILACION, 'Entrega de papeles', 'Nacimiento', 'Apelación de licencia'] as const;
+export const MOTIVO_OTRO = 'Otro';
+
+/** motivo de la lista, u "Otro" + texto escrito → texto final. Sin motivo → null (o error si es obligatorio). */
+export function normalizarMotivo(motivo: any, otro: any, obligatorio: boolean): string | null {
+  const m = String(motivo ?? '').trim();
+  if (!m) { if (obligatorio) throw new AgendaError('Elegí el motivo del turno'); return null; }
+  const deLista = MOTIVOS.find(x => x.toLowerCase() === m.toLowerCase());
+  if (deLista) return deLista;
+  const texto = String(m.toLowerCase() === MOTIVO_OTRO.toLowerCase() ? (otro ?? '') : m).replace(/\s+/g, ' ').trim().slice(0, 150);
+  if (!texto) throw new AgendaError('Escribí el motivo del turno');
+  return texto;
+}
+const esMotivoJubilacion = (m: string | null | undefined) => m === MOTIVO_JUBILACION;
 
 function ddl(): string[] {
   const out: string[] = [];
@@ -78,6 +95,7 @@ export function ensureAgendaTablas(sequelize: Sequelize): Promise<void> {
         catch (err: any) {
           const code = err?.original?.code ?? err?.parent?.code;
           if (code === 'ER_DUP_FIELDNAME') continue;                         // columna ya agregada
+          if (code === 'ER_DUP_ENTRY' && /UPDATE agendas/i.test(s)) continue; // nombre ya usado
           if (code === 'ER_NO_SUCH_TABLE' && /robots_config/i.test(s)) continue; // base sin página Robots
           throw err;
         }
@@ -300,7 +318,7 @@ export interface ResultadoHabilitar { dni: number; ok: boolean; id?: number; tok
 
 /** Habilita a cada DNI en la agenda. Si ya tiene una habilitación vigente devuelve esa (no crea otra). */
 export async function habilitar(sq: Sequelize, agendaId: number, dnis: number[], userId: number | null,
-  observacion: string | null): Promise<ResultadoHabilitar[]> {
+  observacion: string | null, motivo: string | null = null): Promise<ResultadoHabilitar[]> {
   const agenda = await getAgenda(sq, agendaId);
   if (!agenda) throw new AgendaError('La agenda no existe', 404);
   if (!agenda.activa) throw new AgendaError('La agenda está desactivada');
@@ -323,13 +341,17 @@ export async function habilitar(sq: Sequelize, agendaId: number, dnis: number[],
     const vig = await sq.query<any>(
       `SELECT id, token FROM agenda_habilitaciones WHERE agenda_id = :a AND dni = :dni AND estado = 'HABILITADO'`,
       { replacements: { a: agendaId, dni }, type: QueryTypes.SELECT });
-    if (vig[0]) { out.push({ ...base, ok: true, id: vig[0].id, token: vig[0].token, existente: true }); continue; }
+    if (vig[0]) {
+      // enlace sin usar: si ahora la oficina eligió motivo, se le pone
+      if (motivo) await sq.query(`UPDATE agenda_habilitaciones SET motivo = :m WHERE id = :id`, { replacements: { m: motivo, id: vig[0].id } });
+      out.push({ ...base, ok: true, id: vig[0].id, token: vig[0].token, existente: true }); continue;
+    }
     const token = nuevoToken();
     try {
       const [id] = await sq.query(
-        `INSERT INTO agenda_habilitaciones (agenda_id, dni, token, vence_el, observacion, created_by)
-         VALUES (:a, :dni, :token, :vence, :obs, :u)`,
-        { replacements: { a: agendaId, dni, token, vence, obs: observacion, u: userId } });
+        `INSERT INTO agenda_habilitaciones (agenda_id, dni, token, vence_el, observacion, motivo, created_by)
+         VALUES (:a, :dni, :token, :vence, :obs, :motivo, :u)`,
+        { replacements: { a: agendaId, dni, token, vence, obs: observacion, motivo, u: userId } });
       out.push({ ...base, ok: true, id: Number(id), token });
     } catch (err: any) {
       if (err?.original?.code === 'ER_DUP_ENTRY') out.push({ ...base, ok: false, motivo: 'Ya estaba habilitado (otro usuario al mismo tiempo)' });
@@ -349,7 +371,7 @@ export async function anularHabilitacion(sq: Sequelize, id: number, userId: numb
 // ── Enlace del agente ───────────────────────────────────────────────────────
 
 const sqlHab = (sq: Sequelize) => `
-  SELECT h.id, h.agenda_id, h.dni, h.estado, DATE_FORMAT(h.vence_el, '%Y-%m-%d') AS vence_el, h.turno_id,
+  SELECT h.id, h.agenda_id, h.dni, h.estado, DATE_FORMAT(h.vence_el, '%Y-%m-%d') AS vence_el, h.turno_id, h.motivo,
          p.apellido, p.nombre,
          a.nombre AS agenda_nombre, a.descripcion AS agenda_descripcion, a.lugar AS agenda_lugar,
          a.cancelar_horas, a.carga_jubilacion, a.activa
@@ -361,7 +383,7 @@ const sqlHab = (sq: Sequelize) => `
 async function turnoDe(sq: Sequelize, id: number | null, o: Opts = {}) {
   if (!id) return null;
   const r = await sq.query<any>(
-    `SELECT id, DATE_FORMAT(fecha, '%Y-%m-%d') AS fecha, TIME_FORMAT(hora, '%H:%i') AS hora, estado, jubilacion_cita_id
+    `SELECT id, DATE_FORMAT(fecha, '%Y-%m-%d') AS fecha, TIME_FORMAT(hora, '%H:%i') AS hora, estado, jubilacion_cita_id, motivo
        FROM agenda_turnos WHERE id = :id`, { replacements: { id }, type: QueryTypes.SELECT, ...o });
   return r[0] ?? null;
 }
@@ -391,7 +413,7 @@ export async function icsEnlace(sq: Sequelize, token: string): Promise<string> {
     `DTSTAMP:${ahora}`,
     `DTSTART;TZID=America/Argentina/Buenos_Aires:${dt(e.turno.fecha, e.turno.hora)}`,
     `DTEND;TZID=America/Argentina/Buenos_Aires:${dt(e.turno.fecha, e.turno.hora_fin)}`,
-    `SUMMARY:${esc(`Turno: ${e.agenda.nombre}`)}`,
+    `SUMMARY:${esc(`Turno: ${e.turno?.motivo || e.motivo || e.agenda.nombre}`)}`,
     e.agenda.lugar ? `LOCATION:${esc(e.agenda.lugar)}` : '',
     `DESCRIPTION:${esc(desc)}`,
     'BEGIN:VALARM', 'TRIGGER:-PT1H', 'ACTION:DISPLAY', 'DESCRIPTION:Turno en 1 hora', 'END:VALARM',
@@ -413,7 +435,7 @@ export async function estadoEnlace(sq: Sequelize, token: string) {
   const t = await turnoDe(sq, h.turno_id);
   const dur = t ? await duracionTurno(sq, h.agenda_id, t.fecha, t.hora) : 0;
   const turno = t ? {
-    fecha: t.fecha, hora: t.hora, hora_fin: aHora(aMin(t.hora) + dur), dia: fechaLarga(t.fecha), estado: t.estado,
+    fecha: t.fecha, hora: t.hora, hora_fin: aHora(aMin(t.hora) + dur), dia: fechaLarga(t.fecha), estado: t.estado, motivo: t.motivo ?? null,
     puede_cancelar: t.estado === 'RESERVADO' && minutosHasta(t.fecha, t.hora) >= Number(h.cancelar_horas || 0) * 60,
   } : null;
   return {
@@ -422,6 +444,9 @@ export async function estadoEnlace(sq: Sequelize, token: string) {
     agente: { apellido: h.apellido, nombre: h.nombre },
     agenda: { nombre: h.agenda_nombre, descripcion: h.agenda_descripcion, lugar: h.agenda_lugar, cancelar_horas: Number(h.cancelar_horas) },
     turno,
+    // motivo que puso la oficina; si es null el agente lo elige de `motivos` (o "Otro" y lo escribe)
+    motivo: h.motivo ?? null,
+    motivos: [...MOTIVOS, MOTIVO_OTRO],
   };
 }
 
@@ -441,7 +466,7 @@ export async function disponiblesEnlace(sq: Sequelize, token: string) {
 /** Ocupa un lugar libre del horario. La base rechaza el duplicado (uq_at_slot / uq_at_dni). */
 async function insertarTurno(sq: Sequelize, t: Transaction, d: {
   agendaId: number; habilitacionId: number | null; dni: number; fecha: string; hora: string; cupo: number;
-  origen: 'ENLACE' | 'INTERNO'; telefono: string | null; observaciones: string | null; userId: number | null;
+  origen: 'ENLACE' | 'INTERNO'; telefono: string | null; observaciones: string | null; userId: number | null; motivo: string | null;
 }): Promise<number> {
   const usados = await sq.query<any>(
     `SELECT lugar FROM agenda_turnos WHERE agenda_id = :a AND fecha = :f AND hora = :h AND estado <> 'CANCELADO'`,
@@ -451,10 +476,10 @@ async function insertarTurno(sq: Sequelize, t: Transaction, d: {
     if (tomados.has(lugar)) continue;
     try {
       const [id] = await sq.query(
-        `INSERT INTO agenda_turnos (agenda_id, habilitacion_id, dni, fecha, hora, lugar, origen, telefono_contacto, observaciones, created_by)
-         VALUES (:a, :hab, :dni, :f, :h, :lugar, :origen, :tel, :obs, :u)`,
+        `INSERT INTO agenda_turnos (agenda_id, habilitacion_id, dni, fecha, hora, lugar, origen, telefono_contacto, observaciones, motivo, created_by)
+         VALUES (:a, :hab, :dni, :f, :h, :lugar, :origen, :tel, :obs, :motivo, :u)`,
         { replacements: { a: d.agendaId, hab: d.habilitacionId, dni: d.dni, f: d.fecha, h: d.hora, lugar,
-          origen: d.origen, tel: d.telefono, obs: d.observaciones, u: d.userId }, transaction: t });
+          origen: d.origen, tel: d.telefono, obs: d.observaciones, motivo: d.motivo, u: d.userId }, transaction: t });
       return Number(id);
     } catch (err: any) {
       if (err?.original?.code !== 'ER_DUP_ENTRY') throw err;
@@ -506,7 +531,7 @@ async function cargarEnJubilacion(sq: Sequelize, t: Transaction, turnoId: number
                                    observaciones, creado_por, creado_por_nombre)
      VALUES (:dni, :ap, :no, :ley, :ocu, :f, :h, :motivo, 'AGENDADA', :obs, :u, :un)`,
     { replacements: { dni: tu.dni, ap: ag.apellido, no: ag.nombre, ley: ag.ley_nombre ?? null, ocu: ag.ocupacion_nombre ?? null,
-      f: tu.fecha, h: tu.hora, motivo: `Turno de ${agendaNombre}`.slice(0, 200),
+      f: tu.fecha, h: tu.hora, motivo: `Turno de Jubilación (${agendaNombre})`.slice(0, 200),
       obs: tu.origen === 'ENLACE' ? 'Pedido por el agente desde el enlace (Agenda de turnos)' : 'Cargado desde Agenda de turnos',
       u: userId, un: userNombre ?? (tu.origen === 'ENLACE' ? 'Agenda de turnos (enlace)' : null) }, transaction: t });
   await sq.query(`UPDATE agenda_turnos SET jubilacion_cita_id = :c WHERE id = :id`, { replacements: { c: Number(citaId), id: turnoId }, transaction: t });
@@ -522,7 +547,7 @@ async function sincronizarJubilacion(sq: Sequelize, t: Transaction, turnoId: num
 }
 
 /** El agente reserva desde su enlace. Consume la habilitación. */
-export async function reservarEnlace(sq: Sequelize, token: string, fecha: any, hora: any, telefono: any) {
+export async function reservarEnlace(sq: Sequelize, token: string, fecha: any, hora: any, telefono: any, motivo?: any, motivoOtro?: any) {
   if (!tokenValido(token)) throw new AgendaError('Enlace inválido', 404);
   const f = esFecha(fecha) ? String(fecha) : null;
   const h = normHora(hora);
@@ -532,7 +557,7 @@ export async function reservarEnlace(sq: Sequelize, token: string, fecha: any, h
   const turnoId = await sq.transaction(async (t) => {
     const hab = (await sq.query<any>(
       `SELECT h.id, h.agenda_id, h.dni, h.estado, DATE_FORMAT(h.vence_el, '%Y-%m-%d') AS vence_el, a.nombre AS agenda_nombre,
-              a.carga_jubilacion, a.activa
+              a.carga_jubilacion, a.activa, h.motivo
          FROM agenda_habilitaciones h JOIN agendas a ON a.id = h.agenda_id
         WHERE h.token = :token FOR UPDATE OF h`,
       { replacements: { token }, type: QueryTypes.SELECT, transaction: t }))[0];
@@ -543,14 +568,16 @@ export async function reservarEnlace(sq: Sequelize, token: string, fecha: any, h
       await sq.query(`UPDATE agenda_habilitaciones SET estado = 'VENCIDO' WHERE id = :id`, { replacements: { id: hab.id }, transaction: t });
       throw new AgendaError('El enlace venció. Pedí uno nuevo a la oficina.', 409, 'VENCIDO');
     }
+    // el motivo de la oficina manda; si no puso, lo elige el agente
+    const mot = hab.motivo ?? normalizarMotivo(motivo, motivoOtro, true);
     const cupo = await cupoDelHorario(sq, hab.agenda_id, f, h, false, t);
     const id = await insertarTurno(sq, t, {
       agendaId: hab.agenda_id, habilitacionId: hab.id, dni: hab.dni, fecha: f, hora: h, cupo,
-      origen: 'ENLACE', telefono: tel, observaciones: null, userId: null,
+      origen: 'ENLACE', telefono: tel, observaciones: null, userId: null, motivo: mot,
     });
     await sq.query(`UPDATE agenda_habilitaciones SET estado = 'USADO', turno_id = :tid, usado_at = NOW() WHERE id = :id`,
       { replacements: { tid: id, id: hab.id }, transaction: t });
-    if (Number(hab.carga_jubilacion)) await cargarEnJubilacion(sq, t, id, hab.agenda_nombre, null, null);
+    if (Number(hab.carga_jubilacion) && esMotivoJubilacion(mot)) await cargarEnJubilacion(sq, t, id, hab.agenda_nombre, null, null);
     return id;
   });
   logger.info({ msg: 'agenda_turnos reserva por enlace', turnoId });
@@ -575,7 +602,7 @@ export async function cancelarEnlace(sq: Sequelize, token: string) {
 
 /** La oficina carga un turno a mano (por teléfono, en ventanilla). No usa habilitación y puede salir de la ventana. */
 export async function reservarInterno(sq: Sequelize, agendaId: number, dni: number, fecha: any, hora: any,
-  observaciones: string | null, userId: number | null, userNombre: string | null) {
+  observaciones: string | null, userId: number | null, userNombre: string | null, motivo: string) {
   const f = esFecha(fecha) ? String(fecha) : null;
   const h = normHora(hora);
   if (!f || !h) throw new AgendaError('Falta día u horario');
@@ -586,13 +613,13 @@ export async function reservarInterno(sq: Sequelize, agendaId: number, dni: numb
   return sq.transaction(async (t) => {
     const cupo = await cupoDelHorario(sq, agendaId, f, h, true, t);
     const id = await insertarTurno(sq, t, {
-      agendaId, habilitacionId: null, dni, fecha: f, hora: h, cupo, origen: 'INTERNO', telefono: null, observaciones, userId,
+      agendaId, habilitacionId: null, dni, fecha: f, hora: h, cupo, origen: 'INTERNO', telefono: null, observaciones, userId, motivo,
     });
     // si tenía un enlace sin usar, queda usado (ya tiene turno)
     await sq.query(`UPDATE agenda_habilitaciones SET estado = 'USADO', turno_id = :tid, usado_at = NOW()
                      WHERE agenda_id = :a AND dni = :dni AND estado = 'HABILITADO'`,
       { replacements: { tid: id, a: agendaId, dni }, transaction: t });
-    if (Number(agenda.carga_jubilacion)) await cargarEnJubilacion(sq, t, id, agenda.nombre, userId, userNombre);
+    if (Number(agenda.carga_jubilacion) && esMotivoJubilacion(motivo)) await cargarEnJubilacion(sq, t, id, agenda.nombre, userId, userNombre);
     return id;
   });
 }
@@ -618,4 +645,62 @@ export async function cambiarEstadoTurno(sq: Sequelize, id: number, estado: stri
     }
     await sincronizarJubilacion(sq, t, id, estado);
   });
+}
+
+// ── Turnos → citaciones (16/11/2026, pedido del usuario) ────────────────────
+// Cada turno reservado aparece también en `citaciones` (página Citaciones / Atención al público).
+// Lo hace el API cada 30 s (no el servidor público: su usuario MySQL no tiene permiso sobre
+// citaciones). Cancelado/atendido/ausente → la citación se cierra; si se mueve, se actualiza.
+
+let sincronizando = false;
+
+// "Turno: Nacimiento — 20/11/2026 10:00 hs" (sin motivo: el nombre de la agenda)
+const motivoTurno = (motivo: string, fecha: string, hora: string) =>
+  `Turno: ${motivo} — ${fecha.slice(8, 10)}/${fecha.slice(5, 7)}/${fecha.slice(0, 4)} ${hora.slice(0, 5)} hs`.slice(0, 255);
+
+export async function sincronizarCitaciones(sq: Sequelize): Promise<{ creadas: number; cerradas: number; movidas: number }> {
+  const res = { creadas: 0, cerradas: 0, movidas: 0 };
+  if (esPublica(sq)) return res;
+  await ensureAgendaTablas(sq);
+  if (sincronizando) return res; // una corrida a la vez (el UPDATE ... citacion_id IS NULL cubre el resto)
+  sincronizando = true;
+  try {
+    // 1) Turnos reservados (de hoy en adelante) sin citación → crear
+    const nuevos = await sq.query<any>(
+      `SELECT t.id, t.dni, DATE_FORMAT(t.fecha, '%Y-%m-%d') AS fecha, TIME_FORMAT(t.hora, '%H:%i:%s') AS hora,
+              t.origen, t.created_by, COALESCE(t.motivo, a.nombre) AS motivo
+         FROM agenda_turnos t JOIN agendas a ON a.id = t.agenda_id
+         JOIN personal p ON p.dni = t.dni
+        WHERE t.estado = 'RESERVADO' AND t.citacion_id IS NULL AND t.fecha >= CURDATE()`,
+      { type: QueryTypes.SELECT });
+    for (const t of nuevos) {
+      await sq.transaction(async (tx) => {
+        const [cid] = await sq.query(
+          `INSERT INTO citaciones (dni, citado_por, motivo, citacion_activa, fecha_citacion, created_by)
+           VALUES (:dni, :por, :motivo, 1, :fh, :u)`,
+          { replacements: { dni: t.dni, por: `Agenda de turnos (${t.origen === 'ENLACE' ? 'pedido por el agente' : 'oficina'})`.slice(0, 255),
+            motivo: motivoTurno(t.motivo, t.fecha, t.hora), fh: `${t.fecha} ${t.hora}`, u: t.created_by ?? null }, transaction: tx });
+        const [, meta]: any = await sq.query(`UPDATE agenda_turnos SET citacion_id = :c WHERE id = :id AND citacion_id IS NULL`,
+          { replacements: { c: Number(cid), id: t.id }, transaction: tx });
+        if (!Number(meta?.affectedRows ?? meta ?? 0)) throw new Error('turno ya sincronizado');
+      }).then(() => { res.creadas++; }).catch((err) => logger.warn({ msg: 'agenda→citaciones crear', turno: t.id, error: err?.message }));
+    }
+    // 2) Turno cancelado/atendido/ausente → cerrar la citación que siga activa
+    const [, m2]: any = await sq.query(
+      `UPDATE citaciones c JOIN agenda_turnos t ON t.citacion_id = c.id
+          SET c.citacion_activa = 0, c.cierre_citacion = NOW()
+        WHERE t.estado <> 'RESERVADO' AND c.citacion_activa = 1 AND c.deleted_at IS NULL`);
+    res.cerradas = Number(m2?.affectedRows ?? m2 ?? 0);
+    // 3) Turno movido de día/hora → actualizar la citación activa
+    const [, m3]: any = await sq.query(
+      `UPDATE citaciones c JOIN agenda_turnos t ON t.citacion_id = c.id JOIN agendas a ON a.id = t.agenda_id
+          SET c.fecha_citacion = TIMESTAMP(t.fecha, t.hora),
+              c.motivo = LEFT(CONCAT('Turno: ', COALESCE(t.motivo, a.nombre), ' — ', DATE_FORMAT(t.fecha, '%d/%m/%Y'), ' ', TIME_FORMAT(t.hora, '%H:%i'), ' hs'), 255)
+        WHERE t.estado = 'RESERVADO' AND c.citacion_activa = 1 AND c.deleted_at IS NULL
+          AND (c.fecha_citacion <> TIMESTAMP(t.fecha, t.hora) OR c.motivo <> LEFT(CONCAT('Turno: ', COALESCE(t.motivo, a.nombre), ' — ', DATE_FORMAT(t.fecha, '%d/%m/%Y'), ' ', TIME_FORMAT(t.hora, '%H:%i'), ' hs'), 255))`);
+    res.movidas = Number(m3?.affectedRows ?? m3 ?? 0);
+  } finally {
+    sincronizando = false;
+  }
+  return res;
 }

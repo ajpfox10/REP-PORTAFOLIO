@@ -36094,6 +36094,9 @@ components:
         anulado_by:
           type: number
           nullable: true
+        motivo:
+          type: string
+          nullable: true
       required:
         - id
         - agenda_id
@@ -36140,6 +36143,9 @@ components:
           nullable: true
         anulado_by:
           type: number
+          nullable: true
+        motivo:
+          type: string
           nullable: true
       required:
         - agenda_id
@@ -36188,6 +36194,9 @@ components:
           nullable: true
         anulado_by:
           type: number
+          nullable: true
+        motivo:
+          type: string
           nullable: true
     Table_agenda_turnos:
       type: object
@@ -36255,6 +36264,12 @@ components:
         gcal_pendiente:
           type: number
         gcal_error:
+          type: string
+          nullable: true
+        citacion_id:
+          type: number
+          nullable: true
+        motivo:
           type: string
           nullable: true
       required:
@@ -36329,6 +36344,12 @@ components:
         gcal_error:
           type: string
           nullable: true
+        citacion_id:
+          type: number
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
       required:
         - agenda_id
         - dni
@@ -36400,6 +36421,12 @@ components:
         gcal_pendiente:
           type: number
         gcal_error:
+          type: string
+          nullable: true
+        citacion_id:
+          type: number
+          nullable: true
+        motivo:
           type: string
           nullable: true
     Table_agendas:
@@ -66795,6 +66822,9 @@ components:
         atendido_por:
           type: string
           nullable: true
+        pedido_id:
+          type: number
+          nullable: true
       required:
         - id
         - telefono
@@ -66823,6 +66853,9 @@ components:
           nullable: true
         atendido_por:
           type: string
+          nullable: true
+        pedido_id:
+          type: number
           nullable: true
       required:
         - telefono
@@ -66853,6 +66886,9 @@ components:
           nullable: true
         atendido_por:
           type: string
+          nullable: true
+        pedido_id:
+          type: number
           nullable: true
     Table_whatsapp_recibidos:
       type: object
