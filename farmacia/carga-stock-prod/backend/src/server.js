@@ -873,7 +873,7 @@ app.post('/api/codigos-equiv/unificar', requireAuth, requireAdmin, async (req, r
 
 app.post('/api/codigos-equiv/descartar', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    await codigosEquiv.descartar({ codigo: req.body?.codigo, con: req.body?.con }, req.user.sub);
+    await codigosEquiv.descartar({ codigo: req.body?.codigo, con: req.body?.con, nota: req.body?.revisado === true ? 'revisado-requerimiento' : null }, req.user.sub);
     res.json({ ok: true });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ error: error.message });

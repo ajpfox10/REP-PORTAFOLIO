@@ -13,6 +13,7 @@ interface Agenda {
   id: number; nombre: string; descripcion: string | null; lugar: string | null;
   anticipacion_dias: number; ventana_dias: number; vence_dias: number; cancelar_horas: number;
   carga_jubilacion: number; mensaje_whatsapp: string | null; activa: number;
+  turnos_desde?: string | null; turnos_desde_activo?: number;
   habilitados?: number; proximos?: number; franjas: Franja[];
 }
 interface Turno {
@@ -548,6 +549,15 @@ function ConfigTab({ agenda, cfg, onGuardado, onCfg }: {
   );
 
   const guardar = async () => {
+    // El input date deja tipear años de 5+ cifras (p.ej. 20226): avisar claro antes de mandar.
+    if (a.turnos_desde_activo) {
+      const f = String(a.turnos_desde || '');
+      if (!f) { toast.error('Agenda', 'Elegí la fecha de "Dar turnos a partir del" (o destildalo).'); return; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) {
+        toast.error('Agenda', `La fecha de "Dar turnos a partir del" está mal escrita (año ${f.split('-')[0]}). Corregí el año.`);
+        return;
+      }
+    }
     try {
       const r = await apiFetch<any>(agenda ? `/agenda-turnos/agendas/${agenda.id}` : '/agenda-turnos/agendas', json(agenda ? 'PUT' : 'POST', a));
       toast.ok('Agenda guardada', a.nombre);
@@ -578,6 +588,18 @@ function ConfigTab({ agenda, cfg, onGuardado, onCfg }: {
           {num('ventana_dias', 'Hasta (días)', 'cuántos días adelante se ofrecen')}
           {num('vence_dias', 'Vence el enlace (días)', 'si no lo usa, deja de servir')}
           {num('cancelar_horas', 'Cancelar hasta (horas antes)', 'después, solo la oficina')}
+          <div style={{ fontSize: '0.82rem' }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input type="checkbox" checked={!!a.turnos_desde_activo}
+                onChange={(e) => setA({ ...a, turnos_desde_activo: e.target.checked ? 1 : 0 })} />
+              Dar turnos a partir del
+            </label>
+            <input type="date" value={a.turnos_desde || ''} disabled={!a.turnos_desde_activo} min="2000-01-01" max="2099-12-31"
+              onChange={(e) => setA({ ...a, turnos_desde: e.target.value || null })} style={{ ...sel, marginTop: 2 }} />
+            <div className="muted" style={{ fontSize: '0.7rem' }}>
+              {a.turnos_desde_activo ? 'el agente no ve días antes; "Hasta" se cuenta desde esa fecha' : 'apagado: cuenta desde hoy'}
+            </div>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
           <label style={{ fontSize: '0.85rem', display: 'flex', gap: 6, alignItems: 'center' }}>

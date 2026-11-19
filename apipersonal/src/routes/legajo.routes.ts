@@ -8,6 +8,7 @@ import { Sequelize, QueryTypes } from 'sequelize';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { logger } from '../logging/logger';
 import { registrarImportFormulario } from './legajoImportForm';
+import { registrarLegajoEnlace } from './legajoEnlace.routes';
 import { generarLegajoPdf, FormatoLegajo } from '../services/legajoPdf';
 import { findFotoPath } from './agentesFoto.routes';
 import { env } from '../config/env';
@@ -93,6 +94,8 @@ const COLUMNAS_NUEVAS: [string, string, string][] = [
   ['legajo_incompatibilidad', 'cargo_municipal',    'VARCHAR(250) NULL'],
   ['legajo_incompatibilidad', 'otro_cargo_horario', 'VARCHAR(200) NULL'],
   ['legajo_familia',          'dni_familiar',       'VARCHAR(15) NULL'],
+  ['legajo_datos_personales', 'titulo_terciario',          'VARCHAR(200) NULL'],   // mig 139
+  ['legajo_datos_personales', 'titulo_terciario_otorgado', 'VARCHAR(200) NULL'],
 ];
 
 // Todas las legajo_* cuelgan de personal(dni)
@@ -151,6 +154,7 @@ const CAMPOS_DATOS_PERSONALES = [
   'clase','dist_militar','cedula_nro','cedula_expedida_por',
   'carta_ciudadania','carta_otorgada_en','carta_fecha','carta_juez_federal',
   'estudios_nivel','estudios_detalle','titulo_secundario','titulo_secundario_otorgado',
+  'titulo_terciario','titulo_terciario_otorgado',
   'titulo_universitario','titulo_universitario_otorgado','aptitud_especial',
   'mil_presto','mil_arma','mil_especialidad','mil_grado','mil_destino','mil_motivo_excepcion',
 ];
@@ -573,6 +577,8 @@ export function buildLegajoRouter(sequelize: Sequelize): Router {
 
   // Respuestas del formulario de Google → legajo
   registrarImportFormulario(router, sequelize, ready, write, userInfo);
+  // Legajo por enlace (mig 138): el agente lo completa desde el celular y la oficina aprueba
+  registrarLegajoEnlace(router, sequelize, read, write, userInfo);
 
   crudSection('legajo_rectificaciones', [
     'seccion','fecha','norma_legal','texto'

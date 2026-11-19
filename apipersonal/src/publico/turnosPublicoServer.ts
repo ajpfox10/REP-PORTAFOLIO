@@ -8,8 +8,13 @@
 //   GET  /api/t/:token/disponibles    → días y horarios libres
 //   POST /api/t/:token/reservar       → { fecha, hora, telefono?, motivo?, motivo_otro? }
 //   POST /api/t/:token/cancelar
+//   GET  /l/:token                    → Legajo por enlace (mig 138): el agente completa sus datos del legajo
+//   GET  /api/l/:token                → estado + preguntas + borrador
+//   PUT  /api/l/:token/borrador       → { respuestas } (también POST, para sendBeacon al cerrar)
+//   POST /api/l/:token/enviar         → { respuestas } queda ENVIADO para que lo revise la oficina
 //   GET  /wa/webhook                  → verificación del webhook de WhatsApp (Meta)
 //   POST /wa/webhook                  → mensajes entrantes del bot de WhatsApp (firma X-Hub-Signature-256)
+//   POST /wa/ycloud                   → lo mismo por YCloud (firma YCloud-Signature); solo anota whatsapp.inbound_message.received
 //
 // Variables (.env): TURNOS_PUBLICO_PORT (3010), TURNOS_PUBLICO_HOST (127.0.0.1),
 //   PUBLICO_DB_USER / PUBLICO_DB_PASSWORD = usuario de MySQL de permisos mínimos (scripts/crear_usuario_publico.cmd).
@@ -30,7 +35,12 @@ import {
   AgendaError, ensureAgendaTablas, estadoEnlace, disponiblesEnlace, reservarEnlace, cancelarEnlace, tokenValido, icsEnlace,
   marcarConexionPublica,
 } from '../services/agendaTurnos';
-import { verificarSuscripcion, firmaValida, anotarEntrada } from '../services/whatsappWebhook';
+import { LEGAJO_HTML, LEGAJO_JS, LEGAJO_CSS } from './legajoPagina';
+import {
+  LegajoEnlaceError, estadoPublico, guardarPublico, enviarPublico, marcarConexionPublicaLegajo,
+  tokenValido as tokenLegajoValido,
+} from '../services/legajoAutocarga';
+import { verificarSuscripcion, firmaValida, firmaYcloudValida, anotarEntrada } from '../services/whatsappWebhook';
 
 // prod 3011 / dev 3010 sin depender de variables de pm2 (el deploy regenera el .env de prod desde el de dev)
 const PORT = Number(process.env.TURNOS_PUBLICO_PORT || (process.env.NODE_ENV === 'production' ? 3011 : 3010));
@@ -41,6 +51,7 @@ const sequelize = USUARIO_PUBLICO
   ? createSequelizeComo(USUARIO_PUBLICO, process.env.PUBLICO_DB_PASSWORD || '')
   : createSequelize();
 marcarConexionPublica(sequelize);
+if (USUARIO_PUBLICO) marcarConexionPublicaLegajo(sequelize);
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 'loopback');
@@ -94,8 +105,29 @@ app.post('/wa/webhook', express.raw({ type: '*/*', limit: '1mb' }), async (req, 
   }
   return res.sendStatus(200); // la API interna lo atiende en ~2 s
 });
+// Mismo bot por YCloud (BSP): firma propia (YCloud-Signature), misma bandeja.
+app.post('/wa/ycloud', express.raw({ type: '*/*', limit: '1mb' }), async (req, res) => {
+  const raw = req.body as Buffer;
+  try {
+    if (!Buffer.isBuffer(raw) || !(await firmaYcloudValida(sequelize, raw, req.get('ycloud-signature')))) return res.sendStatus(401);
+  } catch (err: any) {
+    logger.error({ msg: 'wabot firma ycloud', error: err?.message });
+    return res.sendStatus(500);
+  }
+  try {
+    const ev = JSON.parse(raw.toString('utf8'));
+    // Solo se anotan los mensajes entrantes; estados, ecos, contactos, etc. se aceptan y se descartan
+    if (ev?.type === 'whatsapp.inbound_message.received') await anotarEntrada(sequelize, raw);
+  } catch (err: any) {
+    logger.error({ msg: 'wabot anotar entrada ycloud', error: err?.message });
+    return res.sendStatus(500); // YCloud reintenta
+  }
+  return res.sendStatus(204);
+});
 
 app.use(limite(60_000, 120));
+// el legajo manda todas las respuestas juntas (~10-20 KB): límite propio solo para /api/l
+app.use('/api/l', express.json({ limit: '64kb' }));
 app.use(express.json({ limit: '4kb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -137,6 +169,29 @@ app.get('/api/t/:token/turno.ics', fallos, async (req, res) => {
 app.post('/api/t/:token/reservar', fallos, acciones,
   responder(req => reservarEnlace(sequelize, req.params.token, req.body?.fecha, req.body?.hora, req.body?.telefono, req.body?.motivo, req.body?.motivo_otro)));
 app.post('/api/t/:token/cancelar', fallos, acciones, responder(req => cancelarEnlace(sequelize, req.params.token)));
+
+// ── Legajo por enlace ────────────────────────────────────────────────────────
+app.get('/l.js', (_req, res) => res.type('application/javascript').send(LEGAJO_JS));
+app.get('/l.css', (_req, res) => res.type('text/css').send(LEGAJO_CSS));
+app.get('/l/:token', (req, res) => {
+  if (!tokenLegajoValido(req.params.token)) return res.status(404).type('text/plain').send('Enlace inválido');
+  return res.type('html').send(LEGAJO_HTML);
+});
+const guardadosLegajo = limite(10 * 60_000, 120);   // borrador: cada cambio de paso + cada 20 s
+const responderLegajo = (fn: (req: Request) => Promise<any>) => async (req: Request, res: Response, _next: NextFunction) => {
+  try {
+    return res.json({ ok: true, data: await fn(req) });
+  } catch (err: any) {
+    if (err instanceof LegajoEnlaceError) return res.status(err.status).json({ ok: false, error: err.message, faltan: (err as any).faltan });
+    logger.error({ msg: 'legajo_publico', error: err?.message });
+    return res.status(500).json({ ok: false, error: 'No se pudo completar. Probá de nuevo en un rato.' });
+  }
+};
+const borradorLegajo = responderLegajo(req => guardarPublico(sequelize, req.params.token, req.body?.respuestas));
+app.get('/api/l/:token', fallos, responderLegajo(req => estadoPublico(sequelize, req.params.token)));
+app.put('/api/l/:token/borrador', fallos, guardadosLegajo, borradorLegajo);
+app.post('/api/l/:token/borrador', fallos, guardadosLegajo, borradorLegajo);
+app.post('/api/l/:token/enviar', fallos, acciones, responderLegajo(req => enviarPublico(sequelize, req.params.token, req.body?.respuestas)));
 
 app.use((_req, res) => res.status(404).type('text/plain').send('No encontrado'));
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

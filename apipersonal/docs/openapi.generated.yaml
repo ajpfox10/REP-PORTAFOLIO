@@ -18474,6 +18474,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/legajo_autocarga:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List legajo_autocarga
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_legajo_autocarga"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create legajo_autocarga
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_autocarga_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/legajo_autocarga/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get legajo_autocarga by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update legajo_autocarga by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_autocarga"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch legajo_autocarga by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_autocarga_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete legajo_autocarga by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/legajo_concepto_menciones:
     get:
       tags:
@@ -36474,6 +36606,12 @@ components:
         gcal_calendar_id:
           type: string
           nullable: true
+        turnos_desde:
+          type: string
+          format: date-time
+          nullable: true
+        turnos_desde_activo:
+          type: number
       required:
         - id
         - nombre
@@ -36520,6 +36658,12 @@ components:
         gcal_calendar_id:
           type: string
           nullable: true
+        turnos_desde:
+          type: string
+          format: date-time
+          nullable: true
+        turnos_desde_activo:
+          type: number
       required:
         - nombre
     Table_agendas_Patch:
@@ -36567,6 +36711,12 @@ components:
         gcal_calendar_id:
           type: string
           nullable: true
+        turnos_desde:
+          type: string
+          format: date-time
+          nullable: true
+        turnos_desde_activo:
+          type: number
     Table_agentehistorial:
       type: object
       additionalProperties: false
@@ -52709,6 +52859,208 @@ components:
         at:
           type: string
           format: date-time
+    Table_legajo_autocarga:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        token:
+          type: string
+        nombre_mostrar:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        vence_el:
+          type: string
+          format: date-time
+        respuestas:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        guardado_at:
+          type: string
+          format: date-time
+          nullable: true
+        enviado_at:
+          type: string
+          format: date-time
+          nullable: true
+        devolucion_motivo:
+          type: string
+          nullable: true
+        revisado_at:
+          type: string
+          format: date-time
+          nullable: true
+        revisado_by:
+          type: number
+          nullable: true
+        resumen:
+          type: string
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        anulado_at:
+          type: string
+          format: date-time
+          nullable: true
+        anulado_by:
+          type: number
+          nullable: true
+        abierto_dni:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+        - token
+        - vence_el
+    Table_legajo_autocarga_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        token:
+          type: string
+        nombre_mostrar:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        vence_el:
+          type: string
+          format: date-time
+        respuestas:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        guardado_at:
+          type: string
+          format: date-time
+          nullable: true
+        enviado_at:
+          type: string
+          format: date-time
+          nullable: true
+        devolucion_motivo:
+          type: string
+          nullable: true
+        revisado_at:
+          type: string
+          format: date-time
+          nullable: true
+        revisado_by:
+          type: number
+          nullable: true
+        resumen:
+          type: string
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        anulado_at:
+          type: string
+          format: date-time
+          nullable: true
+        anulado_by:
+          type: number
+          nullable: true
+        abierto_dni:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - token
+        - vence_el
+    Table_legajo_autocarga_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        token:
+          type: string
+        nombre_mostrar:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        vence_el:
+          type: string
+          format: date-time
+        respuestas:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        guardado_at:
+          type: string
+          format: date-time
+          nullable: true
+        enviado_at:
+          type: string
+          format: date-time
+          nullable: true
+        devolucion_motivo:
+          type: string
+          nullable: true
+        revisado_at:
+          type: string
+          format: date-time
+          nullable: true
+        revisado_by:
+          type: number
+          nullable: true
+        resumen:
+          type: string
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        anulado_at:
+          type: string
+          format: date-time
+          nullable: true
+        anulado_by:
+          type: number
+          nullable: true
+        abierto_dni:
+          type: number
+          nullable: true
     Table_legajo_concepto_menciones:
       type: object
       additionalProperties: false
@@ -52907,6 +53259,12 @@ components:
         updated_by:
           type: number
           nullable: true
+        titulo_terciario:
+          type: string
+          nullable: true
+        titulo_terciario_otorgado:
+          type: string
+          nullable: true
       required:
         - dni
     Table_legajo_datos_personales_Create:
@@ -53011,6 +53369,12 @@ components:
         updated_by:
           type: number
           nullable: true
+        titulo_terciario:
+          type: string
+          nullable: true
+        titulo_terciario_otorgado:
+          type: string
+          nullable: true
       required:
         - dni
     Table_legajo_datos_personales_Patch:
@@ -53114,6 +53478,12 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+        titulo_terciario:
+          type: string
+          nullable: true
+        titulo_terciario_otorgado:
+          type: string
           nullable: true
     Table_legajo_declaracion_bienes:
       type: object

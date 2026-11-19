@@ -142,3 +142,27 @@ ConvertTo-Json -InputObject @($res) -Compress -Depth 3
   }
   return { robots, viejas: viejasOut };
 }
+
+/** Estado de las tareas del backup MySQL (carpeta \Backup\, las crea C:\apps\backup_mysql\crear_tareas.ps1). Solo lectura. */
+const CARPETA_BACKUP = '\\Backup\\';
+export async function estadoTareasBackup(): Promise<Record<string, EstadoTarea>> {
+  const out = await ps(`
+$res = @()
+foreach ($t in @(Get-ScheduledTask -TaskPath '${CARPETA_BACKUP}' -ErrorAction SilentlyContinue)) {
+  $i = $t | Get-ScheduledTaskInfo
+  $res += [pscustomobject]@{ nombre=$t.TaskName; estado="$($t.State)"; proxima=$i.NextRunTime; ultima=$i.LastRunTime; resultado=$i.LastTaskResult }
+}
+ConvertTo-Json -InputObject @($res) -Compress -Depth 3
+`, 30000);
+  const fecha = (v: any) => {
+    const m = /Date\((\d+)\)/.exec(String(v ?? ''));
+    if (!m) return null;
+    const d = new Date(Number(m[1]));
+    return d.getFullYear() < 2000 ? null : d.toISOString();
+  };
+  let lista: any[] = [];
+  try { lista = JSON.parse(out.trim() || '[]'); } catch { lista = []; }
+  const r: Record<string, EstadoTarea> = {};
+  for (const t of lista) r[t.nombre] = { existe: true, estado: t.estado, proxima: fecha(t.proxima), ultima: fecha(t.ultima), ultimoResultado: t.resultado ?? null };
+  return r;
+}

@@ -129,7 +129,7 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
       await vencerHabilitaciones(sequelize);
       const hoy = hoyAR();
       const agendas = await q<any>(
-        `SELECT a.*,
+        `SELECT a.*, DATE_FORMAT(a.turnos_desde, '%Y-%m-%d') AS turnos_desde,
                 (SELECT COUNT(*) FROM agenda_habilitaciones h WHERE h.agenda_id = a.id AND h.estado = 'HABILITADO') AS habilitados,
                 (SELECT COUNT(*) FROM agenda_turnos t WHERE t.agenda_id = a.id AND t.estado = 'RESERVADO' AND t.fecha >= :hoy) AS proximos
            FROM agendas a ORDER BY a.activa DESC, a.nombre`, { hoy });
@@ -151,7 +151,14 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
       vence_dias: ent(b.vence_dias, 15, 1, 365), cancelar_horas: ent(b.cancelar_horas, 24, 0, 720),
       carga_jubilacion: b.carga_jubilacion ? 1 : 0, mensaje_whatsapp: txt(b.mensaje_whatsapp, 4000),
       activa: b.activa === undefined ? 1 : (b.activa ? 1 : 0), u: userId(req),
+      turnos_desde: /^\d{4}-\d{2}-\d{2}$/.test(String(b.turnos_desde ?? '')) ? String(b.turnos_desde) : null,
+      turnos_desde_activo: b.turnos_desde_activo ? 1 : 0,
     };
+    if (datos.turnos_desde_activo && !datos.turnos_desde) {
+      throw new AgendaError(String(b.turnos_desde ?? '').trim()
+        ? `La fecha "Dar turnos a partir del" está mal escrita (${String(b.turnos_desde).slice(0, 12)}): revisá el año`
+        : 'Elegí la fecha desde la que se dan turnos');
+    }
     if (datos.mensaje_whatsapp && !datos.mensaje_whatsapp.includes('{LINK}')) throw new AgendaError('El mensaje tiene que tener {LINK}');
     return sequelize.transaction(async (t) => {
       let agendaId = id;
@@ -159,14 +166,15 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
         await sequelize.query(
           `UPDATE agendas SET nombre = :nombre, descripcion = :descripcion, lugar = :lugar, anticipacion_dias = :anticipacion_dias,
                   ventana_dias = :ventana_dias, vence_dias = :vence_dias, cancelar_horas = :cancelar_horas,
-                  carga_jubilacion = :carga_jubilacion, mensaje_whatsapp = :mensaje_whatsapp, activa = :activa, updated_by = :u
+                  carga_jubilacion = :carga_jubilacion, mensaje_whatsapp = :mensaje_whatsapp, activa = :activa,
+                  turnos_desde = :turnos_desde, turnos_desde_activo = :turnos_desde_activo, updated_by = :u
             WHERE id = :id`, { replacements: { ...datos, id: agendaId }, transaction: t });
       } else {
         const [nid] = await sequelize.query(
           `INSERT INTO agendas (nombre, descripcion, lugar, anticipacion_dias, ventana_dias, vence_dias, cancelar_horas,
-                                carga_jubilacion, mensaje_whatsapp, activa, created_by)
+                                carga_jubilacion, mensaje_whatsapp, activa, turnos_desde, turnos_desde_activo, created_by)
            VALUES (:nombre, :descripcion, :lugar, :anticipacion_dias, :ventana_dias, :vence_dias, :cancelar_horas,
-                   :carga_jubilacion, :mensaje_whatsapp, :activa, :u)`, { replacements: datos, transaction: t });
+                   :carga_jubilacion, :mensaje_whatsapp, :activa, :turnos_desde, :turnos_desde_activo, :u)`, { replacements: datos, transaction: t });
         agendaId = Number(nid);
       }
       if (franjas) {
@@ -367,7 +375,8 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
       const turnos = await q<any>(
         `SELECT t.id, t.agenda_id, DATE_FORMAT(t.fecha, '%Y-%m-%d') AS fecha, TIME_FORMAT(t.hora, '%H:%i') AS hora, t.estado, t.origen, t.motivo
            FROM agenda_turnos t
-          WHERE t.dni = :dni AND t.estado = 'RESERVADO'`, { dni });
+          WHERE t.dni = :dni AND t.estado = 'RESERVADO'
+          ORDER BY t.fecha, t.hora`, { dni });
       const cfg = await leerConfig();
       return res.json({
         ok: true,
@@ -377,6 +386,7 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
             id: a.id, nombre: a.nombre, lugar: a.lugar, mensaje_whatsapp: a.mensaje_whatsapp,
             habilitacion: habs.find(h => h.agenda_id === a.id) ?? null,
             turno: turnos.find(t => t.agenda_id === a.id) ?? null,
+            turnos: turnos.filter(t => t.agenda_id === a.id),   // puede tener varios (17/11)
           })),
           url_publica: cfg.url_publica, plantilla: cfg.plantilla, motivos: [...MOTIVOS, MOTIVO_OTRO],
           url_publica_temporal: cfg.url_publica_temporal, url_publica_desde: cfg.url_publica_desde,

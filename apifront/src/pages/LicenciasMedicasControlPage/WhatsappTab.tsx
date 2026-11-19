@@ -10,7 +10,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
-import { COLOR_RES, Licencia, fmtFecha, keyDe } from './shared';
+import { COLOR_RES, Licencia, fmtFecha, keyDe, MSG_SALUD_LABORAL } from './shared';
+
+// Becado con más de 30 días de licencia por enfermedad en el año: va a Salud Laboral, no se le avisa.
+const bloqueada = (l: Licencia) => !!l.salud_laboral;
 import { ContactosWhatsapp } from './ContactosWhatsapp';
 import { NAV } from './ExtensionDescarga';
 
@@ -241,7 +244,7 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
 
   const [tildados, setTildados] = useState<Set<string>>(new Set());
   const [vista, setVista] = useState<string | null>(null);
-  const tildables = filas.filter(l => !omitidoDe(l));
+  const tildables = filas.filter(l => !omitidoDe(l) && !bloqueada(l));
   const todos = tildables.length > 0 && tildables.every(l => tildados.has(keyDe(l)));
   const tildar = (k: string, v: boolean) => setTildados(prev => { const n = new Set(prev); v ? n.add(k) : n.delete(k); return n; });
   const tildarTodos = (v: boolean) => setTildados(v ? new Set(tildables.map(keyDe)) : new Set());
@@ -251,7 +254,7 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
   useEffect(() => {
     const nuevos = licencias.filter(l => {
       const k = keyDe(l);
-      return contactos.get(l.dni)?.dudoso && !avisoDe(l)?.avisado && !omitidoDe(l) && !yaPretildados.current.has(k);
+      return contactos.get(l.dni)?.dudoso && !avisoDe(l)?.avisado && !omitidoDe(l) && !bloqueada(l) && !yaPretildados.current.has(k);
     }).map(keyDe);
     if (!nuevos.length) return;
     nuevos.forEach(k => yaPretildados.current.add(k));
@@ -321,6 +324,11 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
 
   /** Manda (por la extensión) el mensaje de una licencia, lo registra y lo suma al log. */
   const enviarUno = async (l: Licencia): Promise<ResultadoExt> => {
+    if (bloqueada(l)) {
+      const r: ResultadoExt = { ok: false, estado: 'ERROR', detalle: MSG_SALUD_LABORAL } as ResultadoExt;
+      setLog(prev => [...prev, { nombre: l.nombre, r }]);
+      return r; // no se manda ni se registra
+    }
     const obj = objetivoDe(l);
     const texto = mensajeDe(l);
     let r: ResultadoExt;
@@ -334,6 +342,7 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
 
   // ↻ Reenviar / 📲 Enviar una sola licencia (sin tildar ni tanda)
   const reenviar = async (l: Licencia) => {
+    if (bloqueada(l)) { toast.error('No se envía', `${l.nombre}: ${MSG_SALUD_LABORAL}`); return; }
     const verbo = avisoDe(l) ? 'Reenviar' : 'Enviar';
     if (!ext) { toast.error('Sin extensión', `Para ${verbo.toLowerCase()} automático hace falta la extensión; usá "Abrir"`); return; }
     if (!validarPrueba()) return;
@@ -360,7 +369,7 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
   };
 
   const enviarTanda = async () => {
-    const lista = filas.filter(l => tildados.has(keyDe(l)) && !omitidoDe(l));
+    const lista = filas.filter(l => tildados.has(keyDe(l)) && !omitidoDe(l) && !bloqueada(l));
     if (!lista.length || !validarPrueba()) return;
     if (!prueba && !window.confirm(`Se van a mandar ${lista.length} mensajes REALES por WhatsApp. ¿Seguimos?`)) return;
     detener.current = false;
@@ -395,6 +404,7 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
 
   // ── Manual ──
   const abrirManual = async (l: Licencia) => {
+    if (bloqueada(l)) { toast.error('No se envía', `${l.nombre}: ${MSG_SALUD_LABORAL}`); return; }
     if (!validarPrueba()) return;
     const texto = mensajeDe(l);
     const obj = objetivoDe(l);
@@ -409,6 +419,7 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
   // "✓ Enviado" = el usuario afirma que se lo mandó a mano al agente: siempre cuenta como avisado real
   // (aunque esté el modo prueba) y con el número real del agente, no el destino de prueba.
   const marcarManual = async (l: Licencia) => {
+    if (bloqueada(l)) { toast.error('No se envía', `${l.nombre}: ${MSG_SALUD_LABORAL}`); return; }
     const tel = telefonoDe(l.dni);
     const ok = await registrar(l, { modo: 'MANUAL', estado: 'ENVIADO', destino: tel ? `+${tel}` : l.nombre }, mensajeDe(l), false);
     if (!ok) return;
@@ -418,7 +429,7 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
     if (foco) onQuitarFoco?.();
   };
 
-  const nTild = filas.filter(l => tildados.has(keyDe(l)) && !omitidoDe(l)).length;
+  const nTild = filas.filter(l => tildados.has(keyDe(l)) && !omitidoDe(l) && !bloqueada(l)).length;
   const sinCel = filas.filter(l => !telefonoDe(l.dni)).length;
   const filaVista = filas.find(l => keyDe(l) === vista) || filas.find(l => tildados.has(keyDe(l))) || filas[0];
 
@@ -566,6 +577,7 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
             const c = contactos.get(l.dni);
             const av = avisoDe(l);
             const om = omitidoDe(l);
+            const bloq = bloqueada(l);
             const rango = `${fmtFecha(l.desde)}${l.hasta !== l.desde ? ` → ${fmtFecha(l.hasta)}` : ''}`;
             const fechaAviso = av?.ultimo.created_at ? new Date(av.ultimo.created_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
             const extraAviso = [av?.ultimo.destino, av && av.ultimo.estado !== 'ENVIADO' ? av.ultimo.detalle : null].filter(Boolean).join(' · ');
@@ -575,10 +587,11 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
                   borderBottom: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer',
                   background: vista === k ? 'rgba(124,58,237,0.12)' : i % 2 ? 'rgba(255,255,255,0.025)' : undefined,
                   opacity: om ? 0.55 : undefined,
+                  boxShadow: bloq ? 'inset 3px 0 0 #ef4444' : undefined,
                 }}>
                 <td style={TD} onClick={e => e.stopPropagation()}>
-                  <input type="checkbox" checked={!om && tildados.has(k)} onChange={e => tildar(k, e.target.checked)} disabled={enviando || !!om}
-                    title={om ? 'Omitido: no se le avisa' : undefined} style={{ width: 16, height: 16 }} />
+                  <input type="checkbox" checked={!om && !bloq && tildados.has(k)} onChange={e => tildar(k, e.target.checked)} disabled={enviando || !!om || bloq}
+                    title={bloq ? MSG_SALUD_LABORAL : om ? 'Omitido: no se le avisa' : undefined} style={{ width: 16, height: 16 }} />
                 </td>
                 <td style={TD}>
                   <div style={{ ...LINEA, fontWeight: 600 }} title={l.nombre}>
@@ -591,6 +604,14 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
                   <div className="muted" style={{ ...LINEA, fontSize: '0.72rem' }} title={l.servicio || undefined}>
                     DNI {l.dni} · {l.servicio || '—'}
                   </div>
+                  {l.ley !== undefined && (
+                    <div className="muted" style={{ ...LINEA, fontSize: '0.7rem' }} title={`${l.ley || 'sin ley'} · licencias por ENFERMEDAD en ${l.anio_lic}`}>
+                      {l.ley || 'sin ley'} · 🩺 {l.lic_anio ?? 0} lic / {l.dias_anio ?? 0} d
+                    </div>
+                  )}
+                  {bloq && (
+                    <div style={{ ...LINEA, fontSize: '0.7rem', color: '#fca5a5', fontWeight: 700 }} title="Becado con más de 30 días de licencia por enfermedad en el año">⚠️ {MSG_SALUD_LABORAL}</div>
+                  )}
                 </td>
                 <td style={TD}>
                   <div style={LINEA} title={l.novedad}>{l.novedad}</div>
@@ -654,7 +675,9 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
                 </td>
                 <td style={TD} onClick={e => e.stopPropagation()}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {om ? (
+                    {bloq ? (
+                      <span style={{ fontSize: '0.7rem', color: '#fca5a5', fontWeight: 600 }} title="No se le manda WhatsApp">🚫 Sin WhatsApp: Salud Laboral</span>
+                    ) : om ? (
                       <button type="button" className="btn" style={BTN} onClick={() => quitarOmitido(l)} disabled={enviando}
                         title={om.motivo ? `Motivo: ${om.motivo}` : 'Volver a incluirla para avisar'}>↩ Quitar omitido</button>
                     ) : <>

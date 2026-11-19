@@ -20,6 +20,18 @@ export function exportToExcel(filename: string, rows: Row[]) {
   saveAs(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${filename}.xlsx`);
 }
 
+// Varias hojas en un mismo .xlsx. `cols` = ancho de cada columna en caracteres (opcional).
+export function exportToExcelSheets(filename: string, sheets: { name: string; rows: Row[]; cols?: number[] }[]) {
+  const wb = XLSX.utils.book_new();
+  for (const s of sheets) {
+    const ws = XLSX.utils.json_to_sheet(s.rows);
+    if (s.cols) ws['!cols'] = s.cols.map(wch => ({ wch }));
+    XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31));
+  }
+  const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  saveAs(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${filename}.xlsx`);
+}
+
 export function exportToPdf(filename: string, rows: Row[]) {
   const doc = new jsPDF();
   const cols = rows.length ? Object.keys(rows[0]) : [];

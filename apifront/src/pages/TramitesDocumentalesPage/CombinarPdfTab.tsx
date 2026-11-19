@@ -4,50 +4,10 @@
 // el PDF + manifiesto de páginas. Acá se ven las páginas (pdfjs), se reordenan
 // (arrastrar / ↑↓), se hace zoom, y se guarda el combinado en DOCU.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
-
-// Vite empaqueta el worker a partir de este patrón (sin necesitar tipos de "?url").
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).href;
-
-const RENDER_SCALE = 1.3; // resolución de render; el zoom es CSS sobre esto
-
-type TandaAgente = { id: number; tanda: string; dni: number; apellidoNombre: string };
-type PageItem = { id: string; doc: string; rel: string; page: number; archivo: string; origIdx: number };
-
-function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-// Renderiza una página del pdf en un canvas (una sola vez por origIdx).
-function PageCanvas({ pdf, origIdx }: { pdf: any; origIdx: number }) {
-  const ref = useRef<HTMLCanvasElement | null>(null);
-  useEffect(() => {
-    let cancel = false;
-    (async () => {
-      try {
-        const page = await pdf.getPage(origIdx + 1);
-        const viewport = page.getViewport({ scale: RENDER_SCALE });
-        const canvas = ref.current;
-        if (!canvas || cancel) return;
-        canvas.width = Math.ceil(viewport.width);
-        canvas.height = Math.ceil(viewport.height);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        await page.render({ canvasContext: ctx, viewport }).promise;
-      } catch { /* noop */ }
-    })();
-    return () => { cancel = true; };
-  }, [pdf, origIdx]);
-  return <canvas ref={ref} style={{ display: 'block', width: '100%', height: 'auto', background: '#fff', borderRadius: 4 }} />;
-}
+import { pdfjsLib, PageCanvas, base64ToBytes } from './pdfVisor';
+import type { TandaAgente, PageItem } from './pdfVisor';
 
 export function CombinarPdfTab() {
   const toast = useToast();
@@ -61,6 +21,51 @@ export function CombinarPdfTab() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  // Lupa: una hoja en ventana grande (zoom en % del ancho de la ventana).
+  const [lupaIdx, setLupaIdx] = useState<number | null>(null);
+  const [lupaZoom, setLupaZoom] = useState(1);
+  // Ampliar: el visor entero ocupa toda la pantalla.
+  const [ampliado, setAmpliado] = useState(false);
+
+  // Teclado: Esc cierra (primero la lupa), ← → cambian de hoja, + − zoom de la lupa.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (lupaIdx !== null) {
+        if (e.key === 'Escape') setLupaIdx(null);
+        else if (e.key === 'ArrowLeft') setLupaIdx((i) => (i !== null && i > 0 ? i - 1 : i));
+        else if (e.key === 'ArrowRight') setLupaIdx((i) => (i !== null && i < pages.length - 1 ? i + 1 : i));
+        else if (e.key === '+' || e.key === '=') setLupaZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)));
+        else if (e.key === '-') setLupaZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)));
+        else return;
+        e.preventDefault();
+      } else if (ampliado && e.key === 'Escape') {
+        setAmpliado(false);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lupaIdx, ampliado, pages.length]);
+
+  // Ctrl + rueda dentro de la lupa = zoom (listener nativo no-pasivo para frenar el zoom del navegador).
+  const lupaScrollRef = useRef<HTMLDivElement | null>(null);
+  const lupaAbierta = lupaIdx !== null;
+  useEffect(() => {
+    const el = lupaScrollRef.current;
+    if (!el) return undefined;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setLupaZoom((z) => Math.min(4, Math.max(0.5, +(z + (e.deltaY < 0 ? 0.15 : -0.15)).toFixed(2))));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [lupaAbierta]);
+
+  // Si la hoja de la lupa se sacó, se queda en una posición válida (o cierra si no quedan).
+  useEffect(() => {
+    if (lupaIdx !== null && lupaIdx >= pages.length) setLupaIdx(pages.length ? pages.length - 1 : null);
+  }, [pages.length, lupaIdx]);
   const dragIdx = useRef<number | null>(null);
 
   useEffect(() => {
@@ -77,6 +82,17 @@ export function CombinarPdfTab() {
   }, []);
 
   const agentesTanda = agentesPorTanda.get(selectedTanda) || [];
+  // Buscador dentro de la tanda: por DNI (dígitos) o por apellido/nombre (sin tildes ni mayúsculas)
+  const [busqueda, setBusqueda] = useState('');
+  const sinTildes = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  const agentesFiltrados = useMemo(() => {
+    const q = busqueda.trim();
+    if (!q) return agentesTanda;
+    const dig = q.replace(/\D/g, '');
+    if (dig && dig.length === q.replace(/[\s.]/g, '').length) return agentesTanda.filter((a) => String(a.dni).includes(dig));
+    const palabras = sinTildes(q).split(/[\s,]+/).filter(Boolean);
+    return agentesTanda.filter((a) => { const n = sinTildes(a.apellidoNombre || ''); return palabras.every((w) => n.includes(w)); });
+  }, [agentesTanda, busqueda]);
 
   const combinar = useCallback(async (a: TandaAgente) => {
     setAgente(a); setPdf(null); setPages([]); setLoading(true);
@@ -87,7 +103,7 @@ export function CombinarPdfTab() {
       );
       const doc = await pdfjsLib.getDocument({ data: base64ToBytes(res.data.pdfBase64) }).promise;
       setPdf(doc);
-      setPages(res.data.pages.map((p, i) => ({ ...p, origIdx: i })));
+      setPages(res.data.pages.map((p, i) => ({ ...p, origIdx: i, rot: 0 })));
     } catch (e: any) {
       toast.error('No se pudo combinar', e?.message || 'Error');
     } finally { setLoading(false); }
@@ -103,6 +119,38 @@ export function CombinarPdfTab() {
     dragIdx.current = null;
     if (from === null || from === idx) return;
     setPages((prev) => { const n = prev.slice(); const [m] = n.splice(from, 1); n.splice(idx, 0, m); return n; });
+  }
+
+  // Saca la hoja → DOCU\<dni>\Trasladados\<subcarpeta>\ (se recupera en ♻️ Restaurar).
+  async function sacar(p: PageItem) {
+    if (!agente || busyId) return;
+    setBusyId(p.id);
+    try {
+      const res = await apiFetch<{ ok: boolean; data: { modo: 'hoja' | 'archivo'; trasladado: string } }>(
+        '/tramites-documentales/combinar-sacar',
+        { method: 'POST', body: JSON.stringify({ dni: agente.dni, rel: p.rel, page: p.page }) }
+      );
+      setPages((prev) => res.data.modo === 'archivo'
+        ? prev.filter((x) => x.rel !== p.rel)
+        // el original quedó sin esa hoja: las siguientes del mismo archivo corren una posición
+        : prev.filter((x) => x.id !== p.id).map((x) => (x.rel === p.rel && x.page > p.page ? { ...x, page: x.page - 1 } : x)));
+      toast.ok('Hoja trasladada', `→ ${res.data.trasladado} (se recupera en ♻️ Restaurar)`);
+    } catch (e: any) {
+      toast.error('No se pudo sacar la hoja', e?.message || 'Error');
+    } finally { setBusyId(null); }
+  }
+
+  // Rota la hoja en el archivo original.
+  async function rotar(p: PageItem, delta: 90 | -90) {
+    if (!agente || busyId) return;
+    setBusyId(p.id);
+    try {
+      await apiFetch('/tramites-documentales/combinar-rotar',
+        { method: 'POST', body: JSON.stringify({ dni: agente.dni, rel: p.rel, page: p.page, delta }) });
+      setPages((prev) => prev.map((x) => (x.id === p.id ? { ...x, rot: x.rot + delta } : x)));
+    } catch (e: any) {
+      toast.error('No se pudo rotar', e?.message || 'Error');
+    } finally { setBusyId(null); }
   }
 
   async function guardar() {
@@ -136,8 +184,16 @@ export function CombinarPdfTab() {
           ))}
           {!tandas.length && <div style={{ color: '#64748b', fontSize: '0.82rem' }}>No hay tandas.</div>}
         </div>
+        {selectedTanda && (
+          <input type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por DNI o apellido…" aria-label="Buscar agente de la tanda por DNI o apellido"
+            style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: '#e2e8f0', fontSize: '0.84rem' }} />
+        )}
+        {selectedTanda && busqueda.trim() && (
+          <div style={{ color: '#64748b', fontSize: '0.72rem', marginTop: -4 }}>{agentesFiltrados.length} de {agentesTanda.length}</div>
+        )}
         <div style={{ flex: 1, overflow: 'auto', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}>
-          {agentesTanda.map((a) => (
+          {agentesFiltrados.map((a) => (
             <div key={a.id} onClick={() => void combinar(a)}
               style={{ padding: '8px 10px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.06)',
                 background: agente?.id === a.id ? 'rgba(124,58,237,0.22)' : 'transparent' }}>
@@ -145,13 +201,17 @@ export function CombinarPdfTab() {
               <div style={{ color: '#64748b', fontSize: '0.72rem' }}>DNI {a.dni}</div>
             </div>
           ))}
+          {selectedTanda && !!agentesTanda.length && !agentesFiltrados.length && <div style={{ color: '#64748b', fontSize: '0.8rem', padding: 10 }}>Nadie coincide con «{busqueda}».</div>}
           {selectedTanda && !agentesTanda.length && <div style={{ color: '#64748b', fontSize: '0.8rem', padding: 10 }}>Tanda vacía.</div>}
           {!selectedTanda && <div style={{ color: '#64748b', fontSize: '0.8rem', padding: 10 }}>Elegí una tanda.</div>}
         </div>
       </div>
 
-      {/* Derecha: visor */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Derecha: visor (con "Ampliar" pasa a ocupar toda la pantalla) */}
+      <div style={ampliado
+        ? { position: 'fixed', inset: 10, zIndex: 1000, background: '#0b1220', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10,
+            padding: 12, display: 'flex', flexDirection: 'column', gap: 10, boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }
+        : { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {!agente ? (
           <div style={{ color: '#64748b', fontSize: '0.85rem', margin: 'auto' }}>Elegí un agente para combinar sus documentos.</div>
         ) : (
@@ -165,6 +225,10 @@ export function CombinarPdfTab() {
                 <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: 42, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
                 <button type="button" style={iconBtn} onClick={() => setZoom((z) => Math.min(2.5, +(z + 0.15).toFixed(2)))}>+</button>
               </div>
+              <button type="button" onClick={() => setAmpliado((a) => !a)} title={ampliado ? 'Volver (Esc)' : 'Ver el visor a pantalla completa'}
+                style={{ ...iconBtn, width: 'auto', padding: '0 10px' }}>
+                {ampliado ? '✕ Cerrar' : '⛶ Ampliar'}
+              </button>
               <button type="button" onClick={() => void guardar()} disabled={saving || !pages.length}
                 style={{ padding: '8px 16px', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: '0.82rem',
                   background: saving || !pages.length ? 'rgba(255,255,255,0.08)' : '#0f766e', color: saving || !pages.length ? '#64748b' : '#fff',
@@ -189,13 +253,24 @@ export function CombinarPdfTab() {
                       <button type="button" style={{ ...iconBtn, opacity: idx === 0 ? 0.3 : 1 }} disabled={idx === 0} onClick={() => move(idx, -1)}>↑</button>
                       <button type="button" style={{ ...iconBtn, opacity: idx === pages.length - 1 ? 0.3 : 1 }} disabled={idx === pages.length - 1} onClick={() => move(idx, 1)}>↓</button>
                       <span title="Arrastrar" style={{ cursor: 'grab', color: '#64748b', fontSize: '1rem' }}>⠿</span>
+                      <div style={{ height: 6 }} />
+                      <button type="button" title="Lupa: ver esta hoja grande" style={iconBtn}
+                        onClick={() => { setLupaIdx(idx); setLupaZoom(1); }}>🔍</button>
+                      <button type="button" title="Rotar a la izquierda (corrige el archivo original)" style={{ ...iconBtn, opacity: busyId ? 0.4 : 1 }}
+                        disabled={!!busyId} onClick={() => void rotar(p, -90)}>↺</button>
+                      <button type="button" title="Rotar a la derecha (corrige el archivo original)" style={{ ...iconBtn, opacity: busyId ? 0.4 : 1 }}
+                        disabled={!!busyId} onClick={() => void rotar(p, 90)}>↻</button>
+                      <button type="button" title="Sacar esta hoja → carpeta Trasladados (se recupera en ♻️ Restaurar)"
+                        style={{ ...iconBtn, color: '#fca5a5', borderColor: 'rgba(248,113,113,0.4)', opacity: busyId ? 0.4 : 1 }}
+                        disabled={!!busyId} onClick={() => void sacar(p)}>{busyId === p.id ? '…' : '✕'}</button>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ color: '#cbd5e1', fontSize: '0.75rem', marginBottom: 4 }}>
                         <strong style={{ color: '#a5b4fc' }}>{p.doc}</strong> · {p.archivo}{p.page > 0 ? ` (pág ${p.page + 1})` : ''}
                       </div>
-                      <div style={{ maxWidth: 640 * zoom, transition: 'max-width 0.1s' }}>
-                        {pdf && <PageCanvas pdf={pdf} origIdx={p.origIdx} />}
+                      <div style={{ maxWidth: (ampliado ? 900 : 640) * zoom, transition: 'max-width 0.1s', cursor: 'zoom-in' }}
+                        onDoubleClick={() => { setLupaIdx(idx); setLupaZoom(1); }} title="Doble clic: lupa">
+                        {pdf && <PageCanvas pdf={pdf} origIdx={p.origIdx} rot={p.rot} />}
                       </div>
                     </div>
                   </div>
@@ -206,6 +281,50 @@ export function CombinarPdfTab() {
           </>
         )}
       </div>
+
+      {/* Lupa: la hoja en una ventana grande, con zoom, ← → y las mismas acciones */}
+      {lupaIdx !== null && pages[lupaIdx] && pdf && (() => {
+        const p = pages[lupaIdx];
+        return (
+          <div onClick={() => setLupaIdx(null)}
+            style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(2,6,23,0.85)', display: 'flex', alignItems: 'stretch', justifyContent: 'center', padding: 16 }}>
+            <div onClick={(e) => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 1400, display: 'flex', flexDirection: 'column', background: '#0b1220', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <span style={{ color: '#64748b', fontSize: '0.75rem' }}>#{lupaIdx + 1} de {pages.length}</span>
+                <strong style={{ color: '#a5b4fc', fontSize: '0.8rem' }}>{p.doc}</strong>
+                <span style={{ color: '#cbd5e1', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 360 }}>
+                  {p.archivo}{p.page > 0 ? ` (pág ${p.page + 1})` : ''}
+                </span>
+                <div style={{ flex: 1 }} />
+                <button type="button" style={{ ...iconBtn, opacity: lupaIdx === 0 ? 0.3 : 1 }} disabled={lupaIdx === 0} title="Hoja anterior (←)"
+                  onClick={() => setLupaIdx(lupaIdx - 1)}>‹</button>
+                <button type="button" style={{ ...iconBtn, opacity: lupaIdx === pages.length - 1 ? 0.3 : 1 }} disabled={lupaIdx === pages.length - 1} title="Hoja siguiente (→)"
+                  onClick={() => setLupaIdx(lupaIdx + 1)}>›</button>
+                <span style={{ width: 8 }} />
+                <button type="button" style={iconBtn} title="Alejar (−)" onClick={() => setLupaZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}>−</button>
+                <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: 44, textAlign: 'center' }}>{Math.round(lupaZoom * 100)}%</span>
+                <button type="button" style={iconBtn} title="Acercar (+)" onClick={() => setLupaZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))}>+</button>
+                <button type="button" style={{ ...iconBtn, width: 'auto', padding: '0 8px' }} title="Ajustar al ancho" onClick={() => setLupaZoom(1)}>Ajustar</button>
+                <span style={{ width: 8 }} />
+                <button type="button" style={{ ...iconBtn, opacity: busyId ? 0.4 : 1 }} disabled={!!busyId} title="Rotar a la izquierda" onClick={() => void rotar(p, -90)}>↺</button>
+                <button type="button" style={{ ...iconBtn, opacity: busyId ? 0.4 : 1 }} disabled={!!busyId} title="Rotar a la derecha" onClick={() => void rotar(p, 90)}>↻</button>
+                <button type="button" title="Sacar esta hoja → Trasladados"
+                  style={{ ...iconBtn, color: '#fca5a5', borderColor: 'rgba(248,113,113,0.4)', opacity: busyId ? 0.4 : 1 }}
+                  disabled={!!busyId} onClick={() => void sacar(p)}>{busyId === p.id ? '…' : '✕'}</button>
+                <span style={{ width: 8 }} />
+                <button type="button" style={{ ...iconBtn, width: 'auto', padding: '0 10px' }} title="Cerrar (Esc)" onClick={() => setLupaIdx(null)}>Cerrar</button>
+              </div>
+              {/* Ctrl + rueda = zoom; rueda sola = desplazar */}
+              <div ref={lupaScrollRef} style={{ flex: 1, overflow: 'auto', padding: 16, background: '#111827' }}>
+                <div style={{ width: `${lupaZoom * 100}%`, margin: lupaZoom <= 1 ? '0 auto' : 0 }}>
+                  <PageCanvas key={p.id} pdf={pdf} origIdx={p.origIdx} rot={p.rot} scale={2.5} />
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

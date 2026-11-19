@@ -128,3 +128,25 @@ la clave provisoria queda en el **número de documento**. Al terminar, el bot le
 - Los certificados (IOMA y de trabajo) llevan **firma y sello del funcionario certificante**: el PDF sale sin firmar.
 - El primer PDF después de reiniciar la API puede tardar ~1 min (Word arrancando).
 - Deploy (API + servidor público) y túnel a prod (3011).
+
+## Por YCloud (17/11/2026) — proveedor por defecto
+
+YCloud es un proveedor oficial de Meta (BSP). Permite **coexistencia** (el número sigue andando en la app
+WhatsApp Business del celular) y se conecta **por QR, sin cuenta de Facebook**.
+
+1. YCloud → WhatsApp Manager → Crear canal → *WhatsApp Business APP Coexistence* → Conectar por código QR.
+   Nombre = razón social exacta (después piden verificación del negocio). Escanear con la app Business (≥ 2.24.17).
+2. YCloud → Desarrolladores → API Keys → copiar la clave.
+3. /app/whatsapp-bot → 🔌 Conexión → "Por YCloud": número (+549…), API Key, URL pública (ngrok) → Guardar.
+4. YCloud → Desarrolladores → Webhook → Agregar endpoint: URL `<url pública>/wa/ycloud`, evento
+   **whatsapp.inbound_message.received** → copiar el secreto (whsec_…) a "Secreto del webhook" → Guardar.
+5. 🔎 Probar conexión (verifica la clave y que el número esté conectado).
+
+Técnico: envío `POST https://api.ycloud.com/v2/whatsapp/messages/sendDirectly` (X-API-Key), PDFs con
+`POST /v2/whatsapp/media/{numero}/upload` → `document.id`. Webhook `POST /wa/ycloud` en el servidor público:
+valida `YCloud-Signature: t=..,s=..` (HMAC-SHA256 de "t." + cuerpo, ±5 min) y anota solo los mensajes entrantes
+en `whatsapp_bot_entrada`; la API los procesa igual que los de Meta. .env alternativo: YCLOUD_API_KEY,
+YCLOUD_NUMERO, YCLOUD_WEBHOOK_SECRET.
+
+Costo (desde 1/10/2026): respuestas del bot = mensajes de servicio, 1.000 gratis por número por mes y después
+tarifa de utilidad. Lo que se contesta a mano desde la app es gratis.

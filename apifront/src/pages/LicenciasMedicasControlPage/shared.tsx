@@ -83,6 +83,13 @@ export interface Licencia {
   notas: Nota[];
   sigue_sin_otorgar: boolean;
   whatsapp: AvisoWhatsapp | null;
+  // Ley y licencias de ENFERMEDAD del año (SIAPE + Ministerio). Becado con más de 30 días → Salud Laboral, sin WhatsApp.
+  ley?: string | null;
+  es_becado?: boolean;
+  anio_lic?: number;
+  lic_anio?: number;
+  dias_anio?: number;
+  salud_laboral?: boolean;
   detalle: Dia[];
 }
 /** Aviso por WhatsApp de la licencia (solo envíos reales): si alguno salió, datos del último ENVIADO; si no, del último intento. */
@@ -160,6 +167,31 @@ export function txtWhatsapp(w: AvisoWhatsapp | null) {
   return `${TXT_ESTADO_WSP[w.estado] ?? w.estado}${w.fecha ? ` ${new Date(w.fecha).toLocaleDateString('es-AR')}` : ''}`;
 }
 /** Etiqueta 📲 de la fila: verde si se avisó, amarilla/roja si se intentó y no salió. */
+export const MSG_SALUD_LABORAL = 'Agente que debe ver a Salud Laboral del HTAL';
+/** Ley + licencias de enfermedad del año; si es becado y pasa el tope, el cartel de Salud Laboral. */
+export function BadgeLeyLicencias({ l }: { l: Licencia }) {
+  if (l.ley === undefined) return null;
+  const ley = l.ley || 'sin ley';
+  const corta = ley.replace(/^Programa (de )?Becas? (de |De )?/i, 'Beca ').replace(/^LEY /, '');
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+      <span title={ley} style={{ fontSize: '0.66rem', padding: '0 6px', borderRadius: 999, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        border: `1px solid ${l.es_becado ? 'rgba(251,191,36,0.5)' : 'rgba(148,163,184,0.35)'}`, color: l.es_becado ? '#fcd34d' : '#cbd5e1' }}>{corta}</span>
+      <span title={`Licencias por ENFERMEDAD en ${l.anio_lic} (SIAPE + Ministerio)`}
+        style={{ fontSize: '0.66rem', padding: '0 6px', borderRadius: 999, border: '1px solid rgba(148,163,184,0.35)',
+          color: l.salud_laboral ? '#fca5a5' : '#cbd5e1' }}>
+        🩺 {l.lic_anio ?? 0} lic · {l.dias_anio ?? 0} d en {l.anio_lic}
+      </span>
+      {l.salud_laboral && (
+        <span title="Becado con más de 30 días de licencia por enfermedad en el año: no se le manda WhatsApp"
+          style={{ fontSize: '0.66rem', padding: '0 6px', borderRadius: 999, background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.6)', color: '#fecaca', fontWeight: 700 }}>
+          ⚠️ {MSG_SALUD_LABORAL}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function BadgeWhatsapp({ w }: { w: AvisoWhatsapp | null }) {
   if (!w) return null;
   const titulo = [
@@ -453,12 +485,14 @@ export function LicenciasMedicasTabla({
                     <div className="muted" style={{ fontSize: '0.72rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={l.servicio || undefined}>
                       {l.servicio || '—'}
                     </div>
+                    <BadgeLeyLicencias l={l} />
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                       <BadgeWhatsapp w={l.whatsapp} />
                       {onWhatsapp && (
-                        <button type="button" className="btn" style={{ padding: '0 6px', fontSize: '0.68rem', marginTop: 2, lineHeight: 1.4 }}
-                          onClick={e => { e.stopPropagation(); onWhatsapp(l); }}
-                          title={l.whatsapp ? 'Volver a mandar el WhatsApp de esta licencia' : 'Mandar el WhatsApp de esta licencia'}>
+                        <button type="button" className="btn" style={{ padding: '0 6px', fontSize: '0.68rem', marginTop: 2, lineHeight: 1.4, opacity: l.salud_laboral ? 0.4 : 1 }}
+                          disabled={!!l.salud_laboral}
+                          onClick={e => { e.stopPropagation(); if (!l.salud_laboral) onWhatsapp(l); }}
+                          title={l.salud_laboral ? MSG_SALUD_LABORAL : l.whatsapp ? 'Volver a mandar el WhatsApp de esta licencia' : 'Mandar el WhatsApp de esta licencia'}>
                           {l.whatsapp ? '↻ Reenviar' : '📲 Enviar'}
                         </button>
                       )}

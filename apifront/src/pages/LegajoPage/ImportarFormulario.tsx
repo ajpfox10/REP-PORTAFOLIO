@@ -12,6 +12,7 @@ const CAMPOS: Record<string, string> = {
   carta_ciudadania: 'Carta ciudadanía', carta_otorgada_en: 'Carta otorgada en', carta_fecha: 'Fecha carta',
   carta_juez_federal: 'Juez federal', estudios_nivel: 'Nivel estudios', estudios_detalle: 'Detalle estudios',
   titulo_secundario: 'Título sec.', titulo_secundario_otorgado: 'Título sec. otorgado por',
+  titulo_terciario: 'Título terciario', titulo_terciario_otorgado: 'Título terciario otorgado por',
   titulo_universitario: 'Título univ.', titulo_universitario_otorgado: 'Título univ. otorgado por',
   aptitud_especial: 'Aptitud especial', mil_presto: 'Servicio militar', mil_arma: 'Arma',
   mil_especialidad: 'Especialidad mil.', mil_grado: 'Grado', mil_destino: 'Destino mil.',

@@ -241,6 +241,77 @@ async function leerFichadas(dnis: string[], desde: string, hasta: string): Promi
   }
 }
 
+// ── ley + días de licencia en el año (tope de becados) ───────────────────────
+// Becados: hasta 30 días de licencia por ENFERMEDAD en el año; si los pasan tienen que ir a
+// Salud Laboral del hospital y NO se les manda el aviso por WhatsApp.
+export const TOPE_DIAS_BECADO = 30;
+const diasEntre = (a: string, b: string) =>
+  Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5) + 1;
+
+/** Por DNI: licencias de ENFERMEDAD del año y días que caen en él. Une dos fuentes sin contar
+ *  dos veces el mismo día: SIAPE (tabla historial, el año completo) + las OTORGADAS del Excel del
+ *  Ministerio (que trae solo los últimos meses, pero puede tener alguna que SIAPE todavía no tiene).
+ *  Cada licencia se recorta al año. lic = fechas de inicio distintas. */
+async function enfermedadEnAnio(sequelize: Sequelize, licencias: Licencia[], dnis: Set<string>, anio: number) {
+  const ini = `${anio}-01-01`, fin = `${anio}-12-31`;
+  const dias = new Map<string, Set<string>>(), inicios = new Map<string, Set<string>>();
+  const sumar = (dni: string, desde: string, hasta: string) => {
+    const a = desde < ini ? ini : desde, b = hasta > fin ? fin : hasta;
+    if (b < a) return;
+    if (!dias.has(dni)) { dias.set(dni, new Set()); inicios.set(dni, new Set()); }
+    inicios.get(dni)!.add(desde);
+    const set = dias.get(dni)!;
+    for (let d = a, n = 0; d <= b && n < 366; d = sumarDias(d, 1), n++) set.add(d);
+  };
+  for (const l of licencias) {
+    if (!dnis.has(l.dni) || !OTORGADAS.has(l.resolucion) || normTxt(l.novedad) !== 'ENFERMEDAD') continue;
+    if (l.hasta < ini || l.desde > fin) continue;
+    sumar(l.dni, l.desde, l.hasta);
+  }
+  let errorHistorial: string | null = null;
+  if (dnis.size) {
+    try {
+      const rows = await sequelize.query<any>(
+        `SELECT dni, DATE_FORMAT(fecha_desde, '%Y-%m-%d') AS desde, DATE_FORMAT(fecha_hasta, '%Y-%m-%d') AS hasta
+           FROM historial
+          WHERE dni IN (:dnis) AND novedad = 'ENFERMEDAD' AND fecha_desde <= :fin AND fecha_hasta >= :ini`,
+        { replacements: { dnis: [...dnis].map(Number), ini, fin }, type: QueryTypes.SELECT },
+      );
+      for (const r of rows) sumar(normDni(r.dni), String(r.desde), String(r.hasta || r.desde));
+    } catch (e: any) {
+      errorHistorial = e?.message || String(e);
+      logger.warn({ msg: 'licencias-medicas-control: no se pudo leer historial', error: errorHistorial });
+    }
+  }
+  const out = new Map<string, { lic: number; dias: number }>();
+  for (const [dni, set] of dias) out.set(dni, { lic: inicios.get(dni)!.size, dias: set.size });
+  return { porDni: out, errorHistorial };
+}
+
+/** Ley actual de cada DNI (agentes.ley_id → ley; la fila más nueva gana). */
+async function leyesDe(sequelize: Sequelize, dnis: string[]): Promise<Map<string, string>> {
+  const m = new Map<string, string>();
+  if (!dnis.length) return m;
+  const rows = await sequelize.query<any>(
+    `SELECT a.dni, l.nombre AS ley
+       FROM agentes a LEFT JOIN ley l ON l.id = a.ley_id
+      WHERE a.dni IN (:dnis) AND a.deleted_at IS NULL
+      ORDER BY a.id DESC`,
+    { replacements: { dnis: dnis.map(Number) }, type: QueryTypes.SELECT },
+  );
+  for (const r of rows) { const d = normDni(r.dni); if (!m.has(d) && r.ley) m.set(d, String(r.ley)); }
+  return m;
+}
+const esBecado = (ley: string | null | undefined) => /\bbecas?\b/i.test(String(ley || ''));
+
+/** Clase de resolución para el resumen mensual. */
+function claseResolucion(r: string): 'otorgadas' | 'rechazadas' | 'pendientes' | 'otras' {
+  if (OTORGADAS.has(r)) return 'otorgadas';
+  if (r === 'DENEGADA' || r === 'NO JUSTIFICADA') return 'rechazadas';
+  if (r === 'PENDIENTE') return 'pendientes';
+  return 'otras'; // OBSERVADA, NO RESPONDE AL LLAMADO, DOMICILIO ERRONEO, …
+}
+
 // ── router ───────────────────────────────────────────────────────────────────
 const MAX_DIAS_LICENCIA = 400; // tope defensivo del detalle día por día
 
@@ -591,6 +662,14 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
 
       const { map: fichadas, error: errorFichadas } = await leerFichadas(dnis, minDia, maxDia);
 
+      // Ley y días de ENFERMEDAD otorgados en el año del período (tope de becados). Aparte: si la
+      // base falla, la página sigue sin estos datos.
+      const anioLic = Number(hasta.slice(0, 4));
+      const { porDni: enfAnio, errorHistorial } = await enfermedadEnAnio(sequelize, licencias, new Set(dnis), anioLic);
+      let leyes = new Map<string, string>();
+      try { leyes = await leyesDe(sequelize, dnis); }
+      catch (e: any) { logger.warn({ msg: 'licencias-medicas-control: no se pudo leer la ley', error: e?.message }); }
+
       const salida = enPeriodo.map(({ l, rec, resuelta }) => {
         const hor = horarios.get(l.dni);
         const novs = siape.get(l.dni) || [];
@@ -636,6 +715,12 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
           notas,
           sigue_sin_otorgar: !resuelta && reclamo && !!ultimoReclamo && ultimoReclamo < licenciasMtime,
           whatsapp: whatsappDe(enviosWsp, l),
+          ley: leyes.get(l.dni) || null,
+          es_becado: esBecado(leyes.get(l.dni)),
+          anio_lic: anioLic,
+          lic_anio: enfAnio.get(l.dni)?.lic ?? 0,
+          dias_anio: enfAnio.get(l.dni)?.dias ?? 0,
+          salud_laboral: esBecado(leyes.get(l.dni)) && (enfAnio.get(l.dni)?.dias ?? 0) > TOPE_DIAS_BECADO,
           detalle,
         };
       });
@@ -651,6 +736,8 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
         archivos,
         licencias_actualizado: licenciasMtime,
         error_fichadas: errorFichadas,
+        error_historial: errorHistorial,
+        tope_dias_becado: TOPE_DIAS_BECADO,
         resumen: {
           pendientes: pend.length,
           denegadas: den.length,
@@ -721,6 +808,56 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
   }
 
   // Tilde "reclamó". Body: { reclamo_id? | dni, desde, hasta, novedad; reclamo: boolean }
+  // Resumen mensual del año: licencias médicas de NUESTROS agentes por mes (fecha desde),
+  // otorgadas / rechazadas (DENEGADA + NO JUSTIFICADA) / pendientes / otras y % de rechazo
+  // (sobre las resueltas = total − pendientes, y sobre el total).
+  router.get('/resumen-mensual', requirePermission('crud:*:*'), async (req: Request, res: Response) => {
+    try {
+      if (!XLSX) return res.status(503).json({ ok: false, error: 'Módulo xlsx no disponible en el servidor' });
+      const hoy = new Date().toISOString().slice(0, 10);
+      const anio = Number(req.query.anio) || Number(hoy.slice(0, 4));
+      let fuentes;
+      try { fuentes = cargarFuentes(); }
+      catch (e: any) { return res.status(404).json({ ok: false, error: e.message }); }
+      const delAnio = fuentes.licencias.filter(l => l.desde.slice(0, 4) === String(anio));
+      const dnisExcel = [...new Set(delAnio.map(l => l.dni))];
+      let padron: Set<string> | null = null;
+      if (dnisExcel.length) {
+        const rows = await sequelize.query<any>(
+          'SELECT DISTINCT dni FROM agentes WHERE dni IN (:dnis) AND deleted_at IS NULL',
+          { replacements: { dnis: dnisExcel.map(Number) }, type: QueryTypes.SELECT },
+        );
+        padron = new Set(rows.map((r: any) => normDni(r.dni)));
+      }
+      const ultimoMes = String(anio) === hoy.slice(0, 4) ? Number(hoy.slice(5, 7)) : 12;
+      const vacio = () => ({ total: 0, otorgadas: 0, rechazadas: 0, pendientes: 0, otras: 0 });
+      const meses = Array.from({ length: ultimoMes }, (_, i) => ({ mes: i + 1, ...vacio() }));
+      for (const l of delAnio) {
+        if (!padron?.has(l.dni)) continue;
+        const m = meses[Number(l.desde.slice(5, 7)) - 1];
+        if (!m) continue;
+        m.total += 1; m[claseResolucion(l.resolucion)] += 1;
+      }
+      const pct = (r: { total: number; rechazadas: number; pendientes: number }) => ({
+        pct_rechazo_resueltas: r.total - r.pendientes > 0 ? Math.round((r.rechazadas / (r.total - r.pendientes)) * 1000) / 10 : null,
+        pct_rechazo_total: r.total > 0 ? Math.round((r.rechazadas / r.total) * 1000) / 10 : null,
+      });
+      const total = meses.reduce((t, m) => ({
+        total: t.total + m.total, otorgadas: t.otorgadas + m.otorgadas, rechazadas: t.rechazadas + m.rechazadas,
+        pendientes: t.pendientes + m.pendientes, otras: t.otras + m.otras,
+      }), vacio());
+      return res.json({
+        ok: true, anio,
+        licencias_actualizado: fuentes.licenciasMtime,
+        meses: meses.map(m => ({ ...m, ...pct(m) })),
+        total: { ...total, ...pct(total) },
+      });
+    } catch (err: unknown) {
+      logger.error({ msg: 'Error licencias-medicas-control resumen-mensual', err });
+      return res.status(500).json({ ok: false, error: 'Error armando el resumen mensual' });
+    }
+  });
+
   router.put('/reclamo', requirePermission('crud:*:*'), async (req: Request, res: Response) => {
     try {
       await tablaLista;

@@ -475,8 +475,12 @@ async function unificar({ codigo, con, queda, anio, semestre, nota, forzar }, us
     if (filas.length === 2) {
       const trabajo = (f) => Number(f.cantidad) > 0 || Number(f.controlado);
       const [f1, f2] = filas;
-      if (Number(f1.cantidad) > 0 && Number(f2.cantidad) > 0) {
-        throw errorStatus(`Los dos renglones tienen cantidad (${f1.codigo}: ${Number(f1.cantidad)}, ${f2.codigo}: ${Number(f2.cantidad)}). Dejá en 0 el que sobra y volvé a unificar.`, 409);
+      // Misma cantidad en los dos: es el mismo pedido cargado dos veces, queda uno solo
+      if (Number(f1.cantidad) > 0 && Number(f2.cantidad) > 0 && Number(f1.cantidad) !== Number(f2.cantidad)) {
+        throw errorStatus(`Este producto está dos veces en la carga ${anio} con cantidades distintas:
+• ${f1.descripcion || f1.droga}: ${Number(f1.cantidad)}
+• ${f2.descripcion || f2.droga}: ${Number(f2.cantidad)}
+Dejá en 0 el que sobra y volvé a atar.`, 409);
       }
       const sigue = trabajo(f2) && !trabajo(f1) ? f2 : f1;
       const sale = sigue === f1 ? f2 : f1;
@@ -492,6 +496,15 @@ async function unificar({ codigo, con, queda, anio, semestre, nota, forzar }, us
       detalle.sacado = { ...sale, created_at: undefined, updated_at: undefined };
       detalle.renglon = { id: sigue.id, codigoAntes: sigue.codigo, drogaAntes: sigue.droga, descripcionAntes: sigue.descripcion, controladoAntes: Number(sigue.controlado) };
     }
+    // Lo cargado a mano para el año siguiente (mismo semestre) pasa al codigo que queda
+    const otro = queda === con ? codigo : con;
+    const [sig] = await conn.execute('SELECT * FROM requerimiento_manual WHERE anio = ? AND semestre = ? AND codigo IN (?, ?)', [anio + 1, semestre, codigo, con]);
+    const sigOtro = sig.find((f) => f.codigo === otro);
+    const sigQueda = sig.find((f) => f.codigo === queda);
+    if (sigOtro && !sigQueda) {
+      await conn.execute('UPDATE requerimiento_manual SET codigo = ? WHERE id = ?', [queda, sigOtro.id]);
+      detalle.sigMovido = { id: sigOtro.id, desde: otro };
+    }
     await conn.execute(
       `INSERT INTO codigo_equivalencias (codigo_a, codigo_b, estado, nota, detalle, usuario_id) VALUES (?, ?, 'igual', ?, CAST(? AS JSON), ?)
        ON DUPLICATE KEY UPDATE estado = 'igual', nota = VALUES(nota), detalle = VALUES(detalle), usuario_id = VALUES(usuario_id), created_at = CURRENT_TIMESTAMP`,
@@ -502,13 +515,13 @@ async function unificar({ codigo, con, queda, anio, semestre, nota, forzar }, us
   return detalle;
 }
 
-async function descartar({ codigo, con }, usuarioId) {
+async function descartar({ codigo, con, nota }, usuarioId) {
   const [a, b] = par(String(codigo || '').trim(), String(con || '').trim());
   if (!a || !b || a === b) throw errorStatus('Elegí dos códigos distintos');
   await query(
-    `INSERT INTO codigo_equivalencias (codigo_a, codigo_b, estado, usuario_id) VALUES (:a, :b, 'distinto', :u)
-     ON DUPLICATE KEY UPDATE estado = 'distinto', usuario_id = VALUES(usuario_id), created_at = CURRENT_TIMESTAMP`,
-    { a, b, u: usuarioId || null }
+    `INSERT INTO codigo_equivalencias (codigo_a, codigo_b, estado, nota, usuario_id) VALUES (:a, :b, 'distinto', :nota, :u)
+     ON DUPLICATE KEY UPDATE estado = 'distinto', nota = COALESCE(VALUES(nota), nota), usuario_id = VALUES(usuario_id), created_at = CURRENT_TIMESTAMP`,
+    { a, b, nota: nota || null, u: usuarioId || null }
   );
   await audit(usuarioId, 'descartar_equivalencia', 'codigo_equivalencias', `${a}|${b}`, {});
 }
@@ -528,6 +541,9 @@ async function deshacer(id, usuarioId) {
             [det.renglon.codigoAntes, det.renglon.drogaAntes ?? null, det.renglon.descripcionAntes ?? null, det.renglon.id]);
         }
       }
+    }
+    if (det?.sigMovido) {
+      await conn.execute('UPDATE IGNORE requerimiento_manual SET codigo = ? WHERE id = ?', [det.sigMovido.desde, det.sigMovido.id]);
     }
     if (det?.sacado) {
       const s = det.sacado;

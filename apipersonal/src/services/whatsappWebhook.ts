@@ -11,7 +11,7 @@
 import crypto from 'crypto';
 import { Sequelize, QueryTypes } from 'sequelize';
 
-type Claves = { appSecret: string; verifyToken: string };
+type Claves = { appSecret: string; verifyToken: string; ycloudSecret: string };
 const cache = new WeakMap<Sequelize, { hasta: number; claves: Claves }>();
 
 /** Clave secreta de la app y token de verificación (página del bot; si están vacíos, el .env). Cache 20 s. */
@@ -23,6 +23,7 @@ async function claves(sequelize: Sequelize): Promise<Claves> {
   const c: Claves = {
     appSecret: v('wa_app_secret') || process.env.WA_APP_SECRET || '',
     verifyToken: v('wa_verify_token') || process.env.WA_VERIFY_TOKEN || '',
+    ycloudSecret: v('ycloud_webhook_secret') || process.env.YCLOUD_WEBHOOK_SECRET || '',
   };
   cache.set(sequelize, { hasta: Date.now() + 20_000, claves: c });
   return c;
@@ -45,6 +46,23 @@ export async function firmaValida(sequelize: Sequelize, raw: Buffer, header: str
   const esperado = crypto.createHmac('sha256', appSecret).update(raw).digest('hex');
   const recibido = header.slice(7);
   return recibido.length === esperado.length && crypto.timingSafeEqual(Buffer.from(recibido), Buffer.from(esperado));
+}
+
+/**
+ * Firma de YCloud: header `YCloud-Signature: t=<seg>,s=<hex>` con s = HMAC-SHA256(secreto del endpoint,
+ * "<t>." + cuerpo crudo). Se rechaza si t está a más de 5 min del reloj (reenvío de un pedido viejo).
+ * Sin secreto cargado rechaza todo.
+ */
+export async function firmaYcloudValida(sequelize: Sequelize, raw: Buffer, header: string | undefined, ahora = Date.now()): Promise<boolean> {
+  const { ycloudSecret } = await claves(sequelize);
+  if (!ycloudSecret || typeof header !== 'string') return false;
+  const partes = header.split(',').map(p => p.trim().split('='));
+  const ts = partes.filter(([k]) => k === 't').map(([, v]) => v);
+  const firmas = partes.filter(([k]) => k === 's').map(([, v]) => v);
+  if (ts.length !== 1 || !/^\d{1,12}$/.test(ts[0])) return false;
+  if (Math.abs(Math.floor(ahora / 1000) - Number(ts[0])) > 300) return false;
+  const esperado = crypto.createHmac('sha256', ycloudSecret).update(`${ts[0]}.`).update(raw).digest();
+  return firmas.some(f => typeof f === 'string' && /^[a-fA-F0-9]{64}$/.test(f) && crypto.timingSafeEqual(esperado, Buffer.from(f, 'hex')));
 }
 
 /** Anota el cuerpo (ya validado) en la bandeja. Si falla, el webhook responde 500 y Meta reintenta. */

@@ -4,6 +4,7 @@ import { EspecialidadesPanel } from './EspecialidadesPanel';
 import { FichajesRecienteBlock } from './FichajesRecienteBlock';
 import { NovedadesNoTitularBlock } from './NovedadesNoTitularBlock';
 import { AgendaTurnoBlock } from './AgendaTurnoBlock';
+import { LegajoEnlaceBlock } from '../../../LegajoPage/LegajoEnlaceBlock';
 import { type UltimasLicencias, type UltimaLicencia, fmtFechaLic, fmtHoraArchivo } from './UltimasLicenciasCard';
 
 // ─── Rolodex keyframes (inyectados una sola vez) ──────────────────────────────
@@ -408,6 +409,7 @@ export function AgenteInfoCard({ row, onChanged, licencias }: Props) {
                 <div style={{ minWidth: 0 }}>
                   {licencias && <LicenciasBlock licencias={licencias} />}
                   {row?.dni && <AgendaTurnoBlock dni={String(row.dni).replace(/\D/g, '')} />}
+                  {row?.dni && <LegajoEnlaceBlock dni={String(row.dni).replace(/\D/g, '')} />}
                   {row?.dni && <NovedadesNoTitularBlock dni={String(row.dni).replace(/\D/g, '')} />}
                 </div>
                 {row?.dni && <FichajesRecienteBlock dni={String(row.dni).replace(/\D/g, '')} />}

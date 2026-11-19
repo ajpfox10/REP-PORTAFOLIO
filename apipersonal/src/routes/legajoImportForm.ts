@@ -63,7 +63,7 @@ const ESTADO_CIVIL: Record<string, string> = {
   'soltera o': 'SOLTERO', 'casada o': 'CASADO', 'viuda o': 'VIUDO', 'separada o': 'SEPARADO',
 };
 const NIVEL: Record<string, string> = {
-  'primario': 'PRIMARIO', 'secundario o tecnico': 'SECUNDARIO', 'universitario': 'UNIVERSITARIO',
+  'primario': 'PRIMARIO', 'secundario o tecnico': 'SECUNDARIO', 'secundario': 'SECUNDARIO', 'terciario': 'TERCIARIO', 'universitario': 'UNIVERSITARIO',
 };
 const SEXO: Record<string, string> = { 'femenino': 'F', 'masculino': 'M', 'x': 'X' };
 
@@ -85,6 +85,8 @@ const MAPA_DATOS: [string, string, ((v: any) => any)?][] = [
   ['Detalle de estudios', 'estudios_detalle'],
   ['Título secundario o técnico', 'titulo_secundario'],
   ['Título secundario otorgado por', 'titulo_secundario_otorgado'],
+  ['Título terciario', 'titulo_terciario'],                      // solo lo manda el Legajo por enlace
+  ['Título terciario otorgado por', 'titulo_terciario_otorgado'],
   ['Título universitario', 'titulo_universitario'],
   ['Título universitario otorgado por', 'titulo_universitario_otorgado'],
   ['Aptitud especial por profesión u oficio', 'aptitud_especial'],
@@ -187,7 +189,7 @@ function parsear(fila: Fila, idx: number): Parseada {
 const igual = (a: any, b: any) => norm(a) === norm(b);
 
 // Arma el plan por respuesta: estado + qué cambia (lo usan preview y confirmar)
-async function planificar(sequelize: Sequelize, filas: Fila[]) {
+export async function planificar(sequelize: Sequelize, filas: Fila[]) {
   const parseadas = filas.map(parsear);
 
   // última respuesta por DNI
@@ -271,6 +273,66 @@ async function planificar(sequelize: Sequelize, filas: Fila[]) {
   });
 }
 
+/** Escribe en el legajo lo planificado (lo usan el importador del formulario y el Legajo por enlace). */
+export async function aplicarPlan(sequelize: Sequelize, plan: any[], pisar: boolean, uid: number | null, origen: string) {
+  const resumen = { agentes: 0, datos: 0, familiares: 0, incompatibilidad: 0, bienes: 0, nacimiento: 0 };
+  for (const r of plan as any[]) {
+    await sequelize.transaction(async (t: Transaction) => {
+      const q = (sql: string, replacements: any) => sequelize.query(sql, { replacements, transaction: t });
+
+      const datos = { ...r.datosNuevos };
+      if (pisar) r.conflictos.forEach((c: any) => { datos[c.campo] = c.nuevo; });
+      const cols = Object.keys(datos);
+      if (cols.length) {
+        await q(
+          `INSERT INTO legajo_datos_personales (dni, ${cols.map(c => `\`${c}\``).join(', ')}, created_by, updated_by)
+           VALUES (?, ${cols.map(() => '?').join(', ')}, ?, ?)
+           ON DUPLICATE KEY UPDATE ${cols.map(c => `\`${c}\` = VALUES(\`${c}\`)`).join(', ')}, updated_by = VALUES(updated_by)`,
+          [r.dni, ...cols.map(c => datos[c]), uid, uid]);
+        resumen.datos += cols.length;
+      }
+
+      if (r.completarNacimiento) {
+        await q(`UPDATE personal SET fecha_nacimiento = ?, updated_by = ? WHERE dni = ? AND fecha_nacimiento IS NULL`,
+          [r.completarNacimiento, uid, r.dni]);
+        resumen.nacimiento++;
+      }
+
+      for (const f of r.familiaNueva) {
+        await q(
+          `INSERT INTO legajo_familia (dni, parentesco, apellido_nombres, dni_familiar, sexo, vive,
+             fecha_nacimiento, es_empleado, es_jubilado, observaciones, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [r.dni, f.parentesco, f.apellido_nombres, f.dni_familiar, f.sexo, f.vive,
+           f.fecha_nacimiento, f.es_empleado, f.es_jubilado, origen, uid]);
+        resumen.familiares++;
+      }
+
+      if (r.incompatibilidad === 'NUEVA' || (r.incompatibilidad === 'EXISTE' && pisar)) {
+        const inc = { ...r.incompDatos, fecha_declaracion: r.fechaDeclaracion };
+        const icols = Object.keys(inc);
+        if (r.incompatibilidad === 'EXISTE') {
+          await q(`UPDATE legajo_incompatibilidad SET deleted_at = NOW(), updated_by = ? WHERE dni = ? AND deleted_at IS NULL`,
+            [uid, r.dni]);
+        }
+        await q(
+          `INSERT INTO legajo_incompatibilidad (dni, ${icols.map(c => `\`${c}\``).join(', ')}, created_by)
+           VALUES (?, ${icols.map(() => '?').join(', ')}, ?)`,
+          [r.dni, ...icols.map(c => inc[c]), uid]);
+        resumen.incompatibilidad++;
+      }
+
+      for (const b of r.bienesNuevos) {
+        await q(`INSERT INTO legajo_declaracion_bienes (dni, descripcion, fecha, created_by) VALUES (?, ?, ?, ?)`,
+          [r.dni, b, r.fechaDeclaracion, uid]);
+        resumen.bienes++;
+      }
+    });
+    resumen.agentes++;
+  }
+  return resumen;
+}
+
 export function registrarImportFormulario(
   router: Router, sequelize: Sequelize, ready: Promise<void>,
   write: any, userId: (req: Request) => number | null,
@@ -305,61 +367,7 @@ export function registrarImportFormulario(
       // se vuelve a planificar en el servidor: no se confía en lo que devolvió el preview
       const plan = (await planificar(sequelize, filas)).filter((r: any) => r.estado === 'OK' && elegidos.has(r.dni));
 
-      const resumen = { agentes: 0, datos: 0, familiares: 0, incompatibilidad: 0, bienes: 0, nacimiento: 0 };
-      for (const r of plan as any[]) {
-        await sequelize.transaction(async (t: Transaction) => {
-          const q = (sql: string, replacements: any) => sequelize.query(sql, { replacements, transaction: t });
-
-          const datos = { ...r.datosNuevos };
-          if (pisar) r.conflictos.forEach((c: any) => { datos[c.campo] = c.nuevo; });
-          const cols = Object.keys(datos);
-          if (cols.length) {
-            await q(
-              `INSERT INTO legajo_datos_personales (dni, ${cols.map(c => `\`${c}\``).join(', ')}, created_by, updated_by)
-               VALUES (?, ${cols.map(() => '?').join(', ')}, ?, ?)
-               ON DUPLICATE KEY UPDATE ${cols.map(c => `\`${c}\` = VALUES(\`${c}\`)`).join(', ')}, updated_by = VALUES(updated_by)`,
-              [r.dni, ...cols.map(c => datos[c]), uid, uid]);
-            resumen.datos += cols.length;
-          }
-
-          if (r.completarNacimiento) {
-            await q(`UPDATE personal SET fecha_nacimiento = ?, updated_by = ? WHERE dni = ? AND fecha_nacimiento IS NULL`,
-              [r.completarNacimiento, uid, r.dni]);
-            resumen.nacimiento++;
-          }
-
-          for (const f of r.familiaNueva) {
-            await q(
-              `INSERT INTO legajo_familia (dni, parentesco, apellido_nombres, dni_familiar, sexo, vive,
-                 fecha_nacimiento, es_empleado, es_jubilado, observaciones, created_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Formulario Google', ?)`,
-              [r.dni, f.parentesco, f.apellido_nombres, f.dni_familiar, f.sexo, f.vive,
-               f.fecha_nacimiento, f.es_empleado, f.es_jubilado, uid]);
-            resumen.familiares++;
-          }
-
-          if (r.incompatibilidad === 'NUEVA' || (r.incompatibilidad === 'EXISTE' && pisar)) {
-            const inc = { ...r.incompDatos, fecha_declaracion: r.fechaDeclaracion };
-            const icols = Object.keys(inc);
-            if (r.incompatibilidad === 'EXISTE') {
-              await q(`UPDATE legajo_incompatibilidad SET deleted_at = NOW(), updated_by = ? WHERE dni = ? AND deleted_at IS NULL`,
-                [uid, r.dni]);
-            }
-            await q(
-              `INSERT INTO legajo_incompatibilidad (dni, ${icols.map(c => `\`${c}\``).join(', ')}, created_by)
-               VALUES (?, ${icols.map(() => '?').join(', ')}, ?)`,
-              [r.dni, ...icols.map(c => inc[c]), uid]);
-            resumen.incompatibilidad++;
-          }
-
-          for (const b of r.bienesNuevos) {
-            await q(`INSERT INTO legajo_declaracion_bienes (dni, descripcion, fecha, created_by) VALUES (?, ?, ?, ?)`,
-              [r.dni, b, r.fechaDeclaracion, uid]);
-            resumen.bienes++;
-          }
-        });
-        resumen.agentes++;
-      }
+      const resumen = await aplicarPlan(sequelize, plan, pisar, uid, 'Formulario Google');
       return res.json({ ok: true, data: resumen });
     } catch (err: any) {
       logger.error({ msg: 'legajo import confirmar', error: err?.message });

@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../../api/http';
 import { useAuth } from '../../auth/AuthProvider';
 import { useToast } from '../../ui/toast';
-import { exportToExcel, exportToPdf } from '../../utils/export';
+import { exportToExcelSheets, exportToPdf } from '../../utils/export';
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const DEPENDENCIAS = ['HOSPITAL', 'UPA 4', 'UPA 18'];
@@ -55,9 +55,12 @@ export function LicenciasMinisterioTab() {
   const [meta,     setMeta]     = useState<{ descargado_en: string | null } | null>(null);
   const [loading,  setLoading]  = useState(false);
   const [busqueda, setBusqueda] = useState('');
-  const [codFiltro, setCodFiltro] = useState<string | null>(null);
+  const [codsFiltro, setCodsFiltro] = useState<string[]>([]);   // tipos de licencia elegidos (vacío = todos)
   const [verRefs,  setVerRefs]  = useState(false);
+  const [verTipos, setVerTipos] = useState(false);
   const [recarga,  setRecarga]  = useState(0);
+  const [pagina,   setPagina]   = useState(0);
+  const [porPag,   setPorPag]   = useState(50);
 
   const cargarMeses = useCallback(async () => {
     try {
@@ -84,7 +87,9 @@ export function LicenciasMinisterioTab() {
     return () => { vivo = false; };
   }, [sel, dep, toast, recarga]);
 
-  useEffect(() => { setCodFiltro(null); }, [sel, dep]);
+  useEffect(() => { setCodsFiltro([]); }, [sel, dep]);
+  const toggleCod = (c: string) => setCodsFiltro(a => a.includes(c) ? a.filter(x => x !== c) : [...a, c]);
+  const pasaCod = (l: Lic) => !codsFiltro.length || codsFiltro.includes(l.codigo);
 
   // referencias: códigos que aparecen en el mes, con su nombre y cuántos agentes lo tienen
   const referencias = useMemo(() => {
@@ -101,33 +106,68 @@ export function LicenciasMinisterioTab() {
     return [...m.values()].sort((a, b) => b.agentes - a.agentes || a.codigo.localeCompare(b.codigo));
   }, [filas]);
 
+  // filtro por tipo de licencia (sin búsqueda): es lo que baja el Excel
+  const porTipo = useMemo(() =>
+    codsFiltro.length ? filas.filter(f => f.licencias.some(l => codsFiltro.includes(l.codigo))) : filas,
+  [filas, codsFiltro]);
+
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return filas.filter(f =>
-      (!codFiltro || f.licencias.some(l => l.codigo === codFiltro)) &&
-      (!q || String(f.dni).includes(q) || (f.apellido_nombre || '').toLowerCase().includes(q)));
-  }, [filas, busqueda, codFiltro]);
+    return porTipo.filter(f => !q || String(f.dni).includes(q) || (f.apellido_nombre || '').toLowerCase().includes(q));
+  }, [porTipo, busqueda]);
+
+  // paginado
+  useEffect(() => { setPagina(0); }, [sel, dep, busqueda, codsFiltro, porPag]);
+  const totalPag = Math.max(1, Math.ceil(visibles.length / porPag));
+  const pag = Math.min(pagina, totalPag - 1);
+  const enPagina = visibles.slice(pag * porPag, pag * porPag + porPag);
 
   const selMes = meses.find(m => clave(m) === sel);
   const titulo = selMes ? `${MESES[selMes.mes - 1]} ${selMes.anio}` : '';
 
   const exportar = (tipo: 'excel' | 'pdf') => {
     // una fila por licencia, con el nombre de la licencia y las fechas (en el mes y las reales)
-    const file = `samo_licencias_ministerio_${dep.replace(/\s+/g, '')}_${sel}`;
+    const file = `samo_licencias_ministerio_${dep.replace(/\s+/g, '')}_${sel}`
+      + (codsFiltro.length ? `_${codsFiltro.join('-')}` : '');
     if (tipo === 'excel') {
-      // Excel = toda la tabla del mes/dependencia (sin búsqueda ni filtro de código)
-      const rows = filas.flatMap(f => f.licencias
+      // Excel = toda la tabla del mes/dependencia (sin búsqueda), respetando el filtro de tipos de licencia
+      const rows = porTipo.flatMap(f => f.licencias
+        .filter(pasaCod)
         .map(l => ({
-          DNI: f.dni, 'Apellido y nombre': f.apellido_nombre, Legajo: f.legajo || '', Cargo: f.cargo || '',
+          DNI: f.dni, Legajo: f.legajo || '', 'Apellido y nombre': f.apellido_nombre, Cargo: f.cargo || '',
           Código: l.codigo, Licencia: nombreLic(l),
           'Desde (en el mes)': ddmmyyyy(l.desde), 'Hasta (en el mes)': ddmmyyyy(l.hasta), 'Días en el mes': diasLic(l),
           'Desde (real)': ddmmyyyy(l.desde_real), 'Hasta (real)': ddmmyyyy(l.hasta_real),
           ...(isAdmin ? { 'SAMO la ve': l.oculto ? 'NO' : 'SÍ' } : {}),
         })));
-      exportToExcel(file, rows);
+
+      // Hoja 2: grilla — agentes en filas, días del mes en columnas, el código en cada día
+      const [anio, mes] = sel.split('-').map(Number);
+      const diasMes = new Date(anio, mes, 0).getDate();
+      const DOW = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'];
+      // claves "01 Lu" (no numéricas puras, así JS respeta el orden de columnas)
+      const colDia = Array.from({ length: diasMes }, (_, i) =>
+        `${String(i + 1).padStart(2, '0')} ${DOW[new Date(anio, mes - 1, i + 1).getDay()]}`);
+      const grilla = porTipo.map(f => {
+        const celdas: string[][] = Array.from({ length: diasMes }, () => []);
+        for (const l of f.licencias.filter(pasaCod)) {
+          const d1 = Number(l.desde.slice(8, 10)), d2 = Number(l.hasta.slice(8, 10));
+          const cod = l.oculto ? `(${l.codigo})` : l.codigo;   // admin: entre paréntesis = SAMO no la ve
+          for (let d = d1; d <= d2; d++) if (!celdas[d - 1].includes(cod)) celdas[d - 1].push(cod);
+        }
+        const r: Record<string, any> = { DNI: f.dni, Legajo: f.legajo || '', 'Apellido y nombre': f.apellido_nombre, Cargo: f.cargo || '' };
+        colDia.forEach((c, i) => { r[c] = celdas[i].join('/'); });
+        r['Días'] = f.licencias.filter(pasaCod).filter(l => !l.oculto).reduce((s, l) => s + diasLic(l), 0);
+        return r;
+      });
+
+      exportToExcelSheets(file, [
+        { name: 'Licencias', rows },
+        { name: 'Por día', rows: grilla, cols: [10, 9, 32, 28, ...colDia.map(() => 6), 6] },
+      ]);
     } else {
       const rows = visibles.flatMap(f => f.licencias
-        .filter(l => !codFiltro || l.codigo === codFiltro)
+        .filter(pasaCod)
         .map(l => ({
           DNI: f.dni, 'Apellido y nombre': f.apellido_nombre, Código: l.codigo, Licencia: nombreLic(l),
           Desde: ddmmyyyy(l.desde), Hasta: ddmmyyyy(l.hasta), Días: diasLic(l),
@@ -167,8 +207,10 @@ export function LicenciasMinisterioTab() {
         {sel && (
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
             <button className="btn" style={{ fontSize: '0.72rem', background: '#16a34a', color: '#fff' }}
-              onClick={() => exportar('excel')} disabled={loading || !filas.length}
-              title="Baja toda la tabla: una fila por licencia, con el nombre de la licencia y las fechas">📊 Excel</button>
+              onClick={() => exportar('excel')} disabled={loading || !porTipo.length}
+              title={'Hoja 1: una fila por licencia (legajo, cargo, nombre de la licencia y fechas).\n'
+                + 'Hoja 2: agentes × días del mes con el código en cada día.\n'
+                + 'Respeta el filtro de tipos de licencia (no la búsqueda).'}>📊 Excel</button>
             <button className="btn" style={{ fontSize: '0.72rem', background: '#dc2626', color: '#fff' }}
               onClick={() => exportar('pdf')} disabled={loading || !visibles.length}>📕 PDF</button>
           </div>
@@ -190,12 +232,52 @@ export function LicenciasMinisterioTab() {
                 📖 {verRefs ? 'Ocultar' : 'Ver'} referencias de licencias ({referencias.length})
               </button>
             )}
-            {codFiltro && (
-              <button type="button" className="btn" style={{ fontSize: '0.75rem' }} onClick={() => setCodFiltro(null)}>
-                Filtro: <ChipCodigo l={referencias.find(r => r.codigo === codFiltro)?.lic ?? ({ codigo: codFiltro } as Lic)} /> ✕
+            {referencias.length > 0 && (
+              <button type="button" className="btn" onClick={() => setVerTipos(v => !v)}
+                style={{ fontSize: '0.75rem', ...(codsFiltro.length ? { background: 'rgba(124,58,237,0.3)', border: '1px solid #7c3aed' } : {}) }}>
+                🏷️ Tipos de licencia: {codsFiltro.length ? `${codsFiltro.length} elegido${codsFiltro.length !== 1 ? 's' : ''}` : 'todos'} ▾
               </button>
             )}
+            {codsFiltro.length > 0 && (
+              <span style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                {codsFiltro.map(c => (
+                  <span key={c} title="Quitar del filtro" style={{ cursor: 'pointer' }} onClick={() => toggleCod(c)}>
+                    <ChipCodigo l={referencias.find(r => r.codigo === c)?.lic ?? ({ codigo: c } as Lic)} />
+                  </span>
+                ))}
+                <button type="button" className="btn" style={{ fontSize: '0.72rem' }} onClick={() => setCodsFiltro([])}>✕ Limpiar</button>
+              </span>
+            )}
           </div>
+          {verTipos && referencias.length > 0 && (
+            <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(124,58,237,0.35)',
+                          background: 'rgba(124,58,237,0.06)' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                <span className="muted" style={{ fontSize: '0.7rem' }}>
+                  Licencias cargadas en {titulo} · {dep}. Tildá las que querés ver (sin tildar = todas).
+                </span>
+                <button type="button" className="btn" style={{ fontSize: '0.7rem', marginLeft: 'auto' }}
+                  onClick={() => setCodsFiltro(referencias.map(r => r.codigo))}>Todas</button>
+                <button type="button" className="btn" style={{ fontSize: '0.7rem' }} onClick={() => setCodsFiltro([])}>Ninguna</button>
+                <button type="button" className="btn" style={{ fontSize: '0.7rem' }} onClick={() => setVerTipos(false)}>Cerrar</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 4, maxHeight: 320, overflowY: 'auto' }}>
+                {referencias.map(r => {
+                  const on = codsFiltro.includes(r.codigo);
+                  return (
+                    <label key={r.codigo} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
+                      fontSize: '0.76rem', background: on ? colorCodigo(r.codigo).soft : 'transparent',
+                      border: `1px solid ${on ? colorCodigo(r.codigo).borde : 'rgba(255,255,255,0.06)'}` }}>
+                      <input type="checkbox" checked={on} onChange={() => toggleCod(r.codigo)} />
+                      <ChipCodigo l={r.lic} />
+                      <span style={{ flex: 1, opacity: r.oculto ? 0.5 : 1 }}>{r.nombre}</span>
+                      <span className="muted" style={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>{r.agentes} ag.</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {verRefs && referencias.length > 0 && (
             <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)',
                           background: 'rgba(255,255,255,0.03)' }}>
@@ -204,12 +286,12 @@ export function LicenciasMinisterioTab() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 6 }}>
                 {referencias.map(r => (
-                  <button key={r.codigo} type="button" onClick={() => setCodFiltro(c => c === r.codigo ? null : r.codigo)}
+                  <button key={r.codigo} type="button" onClick={() => toggleCod(r.codigo)}
                     title={`${r.agentes} agente${r.agentes !== 1 ? 's' : ''} · ${r.dias} días en el mes`}
                     style={{ display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', cursor: 'pointer', padding: '4px 8px',
                              borderRadius: 6, color: 'inherit', fontSize: '0.76rem',
-                             background: codFiltro === r.codigo ? colorCodigo(r.codigo).soft : 'transparent',
-                             border: `1px solid ${codFiltro === r.codigo ? colorCodigo(r.codigo).borde : 'rgba(255,255,255,0.06)'}` }}>
+                             background: codsFiltro.includes(r.codigo) ? colorCodigo(r.codigo).soft : 'transparent',
+                             border: `1px solid ${codsFiltro.includes(r.codigo) ? colorCodigo(r.codigo).borde : 'rgba(255,255,255,0.06)'}` }}>
                     <ChipCodigo l={r.lic} />
                     <span style={{ flex: 1, opacity: r.oculto ? 0.5 : 1 }}>{r.nombre}</span>
                     {r.oculto && <span style={{ fontSize: '0.65rem', color: '#f87171', whiteSpace: 'nowrap' }}>🙈 SAMO no la ve</span>}
@@ -234,7 +316,7 @@ export function LicenciasMinisterioTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibles.map(f => (
+                  {enPagina.map(f => (
                     <tr key={f.dni} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                       <td style={{ padding: '5px 10px', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{f.dni}</td>
                       <td style={{ padding: '5px 10px', whiteSpace: 'nowrap' }}>{f.apellido_nombre}</td>
@@ -251,7 +333,7 @@ export function LicenciasMinisterioTab() {
                                   + (l.oculto ? '\n🙈 SAMO no ve esta licencia (no suma días)' : '')}
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '2px 8px 2px 2px', borderRadius: 6,
                                          background: c.soft, border: `1px solid ${c.borde}`, whiteSpace: 'nowrap', cursor: 'help',
-                                         opacity: (codFiltro && codFiltro !== l.codigo) || l.oculto ? 0.35 : 1,
+                                         opacity: !pasaCod(l) || l.oculto ? 0.35 : 1,
                                          borderStyle: l.oculto ? 'dashed' : 'solid' }}>
                                 <ChipCodigo l={l} />
                                 <span style={{ fontFamily: 'monospace', fontSize: '0.76rem', textDecoration: l.oculto ? 'line-through' : undefined }}>
@@ -266,6 +348,19 @@ export function LicenciasMinisterioTab() {
                   ))}
                 </tbody>
               </table>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', padding: '10px 0' }}>
+                <button type="button" className="btn" style={{ fontSize: '0.72rem' }} disabled={pag === 0} onClick={() => setPagina(0)}>«</button>
+                <button type="button" className="btn" style={{ fontSize: '0.72rem' }} disabled={pag === 0} onClick={() => setPagina(pag - 1)}>‹ Anterior</button>
+                <span style={{ fontSize: '0.75rem' }}>
+                  Página {pag + 1} de {totalPag} · {pag * porPag + 1}–{Math.min(visibles.length, (pag + 1) * porPag)} de {visibles.length}
+                </span>
+                <button type="button" className="btn" style={{ fontSize: '0.72rem' }} disabled={pag >= totalPag - 1} onClick={() => setPagina(pag + 1)}>Siguiente ›</button>
+                <button type="button" className="btn" style={{ fontSize: '0.72rem' }} disabled={pag >= totalPag - 1} onClick={() => setPagina(totalPag - 1)}>»</button>
+                <select aria-label="Agentes por página" className="input" style={{ fontSize: '0.72rem', padding: '3px 6px', width: 'auto' }}
+                  value={porPag} onChange={e => setPorPag(Number(e.target.value))}>
+                  {[25, 50, 100, 200].map(n => <option key={n} value={n}>{n} por página</option>)}
+                </select>
+              </div>
             </div>
           )}
         </>

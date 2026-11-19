@@ -15,6 +15,7 @@ import { FicheroBanner } from '../FicheroPage';
 import { GuarderiaAlertaBanner } from '../GuarderiaPage';
 import { AlertasAgenteDashboardBanner } from '../AlertasAgentePage';
 import { CumpleanosDashboardBanner } from '../AlertasPage/CumpleanosBanner';
+import { AusentesSeguidosBanner } from '../AusentesSeguidosPage/AusentesSeguidosBanner';
 import { ResidenciasBajaBanner } from '../DuracionResidenciasPage/ResidenciasBajaBanner';
 import { ControlSiapeBanner } from '../ResidentesPage/ControlSiapeBanner';
 import { ReclamosHaberesDashboardBanner } from '../AlertasPage/ReclamosHaberesBanner';
@@ -67,7 +68,7 @@ function GroupTab({ to, children, tooltip }: {
   );
 }
 
-function AsistenciaTile({ canSeePlus }: { canSeePlus: boolean }) {
+function AsistenciaTile({ canSeePlus, canSeeAdmin }: { canSeePlus: boolean; canSeeAdmin: boolean }) {
   return (
     <div className="tile dash-group-tile" style={{ borderLeftColor: '#6366f1', borderLeftWidth: 3 }}>
       <Link className="dash-group-main" to="/app/asistencia">
@@ -81,6 +82,14 @@ function AsistenciaTile({ canSeePlus }: { canSeePlus: boolean }) {
         >
           Ausentes vs Fichajes
         </GroupTab>
+        {canSeeAdmin && (
+          <GroupTab
+            to="/app/ausentes-seguidos"
+            tooltip="Agentes con 3 o más ausentes seguidos en días que les tocaba venir (los días que no le tocan no cortan la racha). Avisa ausentes cargados en días que no le corresponde venir."
+          >
+            Ausentes seguidos
+          </GroupTab>
+        )}
         <GroupTab
           to="/app/reporte-servicio"
           tooltip="Unificado en Asistencia. Resumen mensual por servicio: horas teóricas vs reales, fichajes diarios, feriados y semanas/mes. Adentro: cruce de horarios, licencias y (admin) stress post-vacacional."
@@ -490,6 +499,7 @@ export function DashboardPage() {
       {hasPerm('crud:*:*') && alert('jefaturas', <JefedeptosAlertaBanner />)}
       {hasPerm('crud:*:*') && alert('concursos', <ConcursosFuncionesBanner />)}
       {canSeeAlertasAgente && alert('cumpleanos', <CumpleanosDashboardBanner />)}
+      {hasPerm('crud:*:*') && <AusentesSeguidosBanner />}
       {canSeeAlertasAgente && alert('reclamosHaberes', <ReclamosHaberesDashboardBanner />)}
       {canSeeAlertasAgente && alert('alertasAgente', <AlertasAgenteDashboardBanner />)}
       {canSeeJubilacionCarga && alert('jubilacionCarga', <JubilacionCargaBanner />)}
@@ -533,7 +543,7 @@ export function DashboardPage() {
         </div>
         <div className="grid">
           <Tile to="/app/estadisticas" title="📊 Estadísticas" desc="Agentes por sector, servicio, categoría, ingresos por año, cumpleaños del mes y más." accent="#ec4899" />
-          <AsistenciaTile canSeePlus={canSeeNormativa} />
+          <AsistenciaTile canSeePlus={canSeeNormativa} canSeeAdmin={hasPerm('crud:*:*')} />
           {canSeeJubilablesEstadistica && (
             <Tile to="/app/jubilables-estadistica" title="📈 Jubilables (estadística)" desc="Proyección de jubilables por servicio y ley, sin datos de agentes." accent="#7c3aed" />
           )}

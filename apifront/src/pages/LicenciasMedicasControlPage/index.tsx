@@ -22,6 +22,7 @@ import {
   BadgeWhatsapp, enTab, fmtFecha, hoy, keyDe, noJustificada, normTxt, rangoDe, txtFichada, txtNota, txtTocaba, txtWhatsapp, useReclamoAcciones,
 } from './shared';
 import { WhatsappTab } from './WhatsappTab';
+import { ResumenMensualCard } from './ResumenMensualCard';
 
 export function LicenciasMedicasControlPage() {
   const [anio, setAnio] = useState(ANIO_ACTUAL);
@@ -188,6 +189,7 @@ export function LicenciasMedicasControlPage() {
               <div style={{ fontSize: '1.4rem', fontWeight: 700 }}>{nAvisados}</div>
               <div className="muted" style={{ fontSize: '0.72rem' }}>📲 Avisados por WhatsApp{nIntentados ? ` · ${nIntentados} sin éxito` : ''}</div>
             </div>
+            <ResumenMensualCard anio={anio} mes={mes} recarga={data?.licencias_actualizado} />
           </div>
         )}
 

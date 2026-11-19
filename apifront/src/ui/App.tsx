@@ -72,6 +72,7 @@ import { HistorialEstructuraPage } from '../pages/HistorialEstructuraPage';
 import { useKiosk, setKioskManual } from '../hooks/useKiosk';
 import { HerramientasPage }    from '../pages/HerramientasPage';
 import { LicenciasMedicasControlPage } from '../pages/LicenciasMedicasControlPage';
+import { AusentesSeguidosPage } from '../pages/AusentesSeguidosPage';
 import { CasosViolenciaPage } from '../pages/CasosViolenciaPage';
 import { ConcursosPage }         from '../pages/ConcursosPage';
 import { DirectorEjecutivoPage } from '../pages/DirectorEjecutivoPage';
@@ -941,6 +942,17 @@ export function App() {
                 <Private>
                   <Guard perm="crud:*:*">
                     <CasosViolenciaPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            <Route
+              path="/app/ausentes-seguidos"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <AusentesSeguidosPage />
                   </Guard>
                 </Private>
               }

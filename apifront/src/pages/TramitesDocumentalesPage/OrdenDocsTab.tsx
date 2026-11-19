@@ -26,6 +26,9 @@ export function OrdenDocsTab() {
   const [rows, setRows] = useState<OrdenRow[]>([]); // estado editable
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Alta de documento nuevo
+  const [alta, setAlta] = useState<{ documento: string; observacion: string; otraLey: boolean } | null>(null);
+  const [agregando, setAgregando] = useState(false);
 
   async function load(selLey?: string) {
     setLoading(true);
@@ -113,6 +116,28 @@ export function OrdenDocsTab() {
     }
   }
 
+  async function agregar() {
+    if (!alta) return;
+    const documento = alta.documento.replace(/\s+/g, ' ').trim();
+    if (!documento) { toast.error('Falta el nombre', 'Escribí el nombre del documento'); return; }
+    setAgregando(true);
+    try {
+      const res = await apiFetch<{ ok: boolean; data: { documento: string; leyes: string[]; carpetas: { creadas: number; yaTenian: number; sinCarpeta: number; aprobados: number } } }>(
+        '/tramites-documentales/orden-docs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ proceso, ley, documento, observacion: alta.observacion, otraLey: alta.otraLey }),
+        });
+      const c = res.data.carpetas;
+      toast.ok(`«${res.data.documento}» agregado (ley ${res.data.leyes.join(' y ')})`,
+        `Carpeta creada a ${c.creadas} agente(s) · ${c.yaTenian} ya la tenían · ${c.sinCarpeta} sin carpeta DOCU · ${c.aprobados} aprobados salteados`);
+      setAlta(null);
+      await load(ley);
+    } catch (e: any) {
+      toast.error('No se pudo agregar', e?.message || 'Error');
+    } finally { setAgregando(false); }
+  }
+
   const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.12)', textTransform: 'uppercase', letterSpacing: '0.03em' };
   const td: React.CSSProperties = { padding: '6px 10px', fontSize: '0.82rem', borderBottom: '1px solid rgba(255,255,255,0.06)', verticalAlign: 'middle' };
   const inputStyle: React.CSSProperties = { width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, color: '#e2e8f0', padding: '5px 8px', fontSize: '0.82rem' };
@@ -137,6 +162,16 @@ export function OrdenDocsTab() {
           </button>
         ))}
         <div style={{ flex: 1 }} />
+        <button type="button" disabled={!ley || dirty}
+          title={dirty ? 'Guardá o descartá los cambios antes de agregar' : 'Agregar un documento nuevo al final de esta ley'}
+          onClick={() => setAlta({ documento: '', observacion: '', otraLey: false })}
+          style={{
+            padding: '7px 14px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600,
+            border: '1px solid rgba(124,58,237,0.6)', cursor: !ley || dirty ? 'not-allowed' : 'pointer',
+            background: 'transparent', color: !ley || dirty ? '#64748b' : '#c4b5fd',
+          }}>
+          ➕ Agregar documento
+        </button>
         <button type="button" onClick={save} disabled={!dirty || saving}
           style={{
             padding: '7px 18px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 700,
@@ -195,6 +230,43 @@ export function OrdenDocsTab() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {alta && (
+        <div onClick={() => !agregando && setAlta(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(2,6,23,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <form onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); void agregar(); }}
+            style={{ width: '100%', maxWidth: 480, background: '#0b1220', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: '0.95rem' }}>➕ Agregar documento — ley {ley}</div>
+            <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Nombre del documento (también es el nombre de la carpeta)
+              <input autoFocus style={{ ...inputStyle, marginTop: 4 }} value={alta.documento} maxLength={200}
+                onChange={(e) => setAlta({ ...alta, documento: e.target.value })} placeholder="Ej.: Certificado de domicilio" />
+            </label>
+            <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Observación (opcional)
+              <input style={{ ...inputStyle, marginTop: 4 }} value={alta.observacion}
+                onChange={(e) => setAlta({ ...alta, observacion: e.target.value })} placeholder="—" />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: '#cbd5e1', cursor: 'pointer' }}>
+              <input type="checkbox" checked={alta.otraLey} onChange={(e) => setAlta({ ...alta, otraLey: e.target.checked })} />
+              Agregarlo también a la ley {ley === '10430' ? '10471' : '10430'}
+            </label>
+            <div style={{ fontSize: '0.72rem', color: '#64748b', lineHeight: 1.5 }}>
+              Entra al final de la lista (después lo ubicás con ↑). Se crea la carpeta a todos los agentes de las tandas de esa ley
+              que ya tengan carpeta en DOCU, salvo los aprobados. Combinación de PDF y Documentos lo toman solos; en
+              Documentación incompleta va a figurar como faltante hasta que lo carguen.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" disabled={agregando} onClick={() => setAlta(null)}
+                style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#cbd5e1', cursor: 'pointer' }}>Cancelar</button>
+              <button type="submit" disabled={agregando || !alta.documento.trim()}
+                style={{ padding: '7px 16px', borderRadius: 8, border: 'none', fontWeight: 700,
+                  background: agregando || !alta.documento.trim() ? 'rgba(255,255,255,0.08)' : '#7c3aed',
+                  color: agregando || !alta.documento.trim() ? '#64748b' : '#fff', cursor: agregando ? 'default' : 'pointer' }}>
+                {agregando ? 'Agregando…' : 'Agregar'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

@@ -6,6 +6,7 @@ import { RdamPanel } from './RdamPanel';
 import { FormularioDesignacionPanel } from './FormularioDesignacionPanel';
 import { NotaDesignacionPanel } from './NotaDesignacionPanel';
 import { PasePlantaPanel } from './PasePlantaPanel';
+import { LegajoSiapePanel } from './LegajoSiapePanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Flujo nuevo (2026-08): consulta de interinos 10430 por rango de años -> cuadro
@@ -244,6 +245,7 @@ export function TramitesTab() {
   const [verFormulario, setVerFormulario] = useState(false);
   const [verNotaGdeba, setVerNotaGdeba] = useState(false);
   const [verPasePlanta, setVerPasePlanta] = useState(false);
+  const [verLegajoSiape, setVerLegajoSiape] = useState(false);
 
   // Tandas
   const [tandaRows, setTandaRows] = useState<TandaAgente[]>([]);
@@ -839,6 +841,10 @@ export function TramitesTab() {
         <NotaDesignacionPanel key={selectedTanda} tanda={selectedTanda} onCerrar={() => setVerNotaGdeba(false)} />
       ) : null}
 
+      {verLegajoSiape && selectedTanda ? (
+        <LegajoSiapePanel key={selectedTanda} tanda={selectedTanda} onCerrar={() => setVerLegajoSiape(false)} />
+      ) : null}
+
       {verPasePlanta && selectedTanda ? (
         <PasePlantaPanel key={selectedTanda} tanda={selectedTanda} onCerrar={() => setVerPasePlanta(false)} />
       ) : null}
@@ -925,6 +931,11 @@ export function TramitesTab() {
                 title={`Baja el certificado del RDAM (deudores alimentarios) de los agentes de "${selectedTanda}" con la extensión de Chrome y lo guarda en DOCU\\<dni>\\RDAM`}
                 style={{ ...primaryBtn, ...accionBtn, background: verRdam ? 'rgba(255,255,255,0.08)' : '#6d28d9', cursor: verRdam ? 'default' : 'pointer' }}>
                 ⚖️ RDAM
+              </button>
+              <button type="button" onClick={() => setVerLegajoSiape(true)} disabled={verLegajoSiape}
+                title={`Baja de SIAPE (Legajo Digital, PASE A PLANTA PERMANENTE 2026) el CV y la Planilla de datos personales de los agentes de "${selectedTanda}" a DOCU\\<dni>\\Curriculum y \\Planilla de datos personales`}
+                style={{ ...primaryBtn, ...accionBtn, background: verLegajoSiape ? 'rgba(255,255,255,0.08)' : '#1d4ed8', cursor: verLegajoSiape ? 'default' : 'pointer' }}>
+                ⬇️ Legajo SIAPE
               </button>
               <button type="button" onClick={() => setVerFormulario(true)} disabled={verFormulario}
                 title={`Baja el script del formulario de Google de Designación y manda el link por WhatsApp a los agentes de "${selectedTanda}"`}

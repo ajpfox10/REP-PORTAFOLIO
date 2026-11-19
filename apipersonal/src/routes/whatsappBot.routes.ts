@@ -24,7 +24,7 @@ import { logger } from '../logging/logger';
 import {
   ensureBotTablas, leerEstado, invalidarConfig, CONFIG_DEFAULT, CONFIG_SECRETAS, menuNumerado, textoMenu,
   graph, simularMensaje, limpiarPruebas, dentroDeHorario, avisarResultadosReset, marcarLanzamientoReset, ROBOT_RESET,
-  procesarBandeja, limpiarBandeja,
+  procesarBandeja, limpiarBandeja, ycloud, numeroE164,
 } from '../services/whatsappBot';
 import { ensureVistaPublicaAgenda } from '../services/agendaTurnos';
 import { ejecutarAhora } from '../services/robotsTareasWindows';
@@ -159,11 +159,14 @@ export function buildWhatsappBotRouter(sequelize: Sequelize) {
           credenciales: {
             token: !!e.token, phone_number_id: e.phoneId, app_secret: !!e.appSecret, verify_token: !!e.verifyToken,
             token_origen: e.c.wa_token ? 'pagina' : (process.env.WA_TOKEN ? 'env' : ''),
+            proveedor: e.proveedor,
+            ycloud_api_key: !!e.ycloudKey, ycloud_numero: e.ycloudNumero,
+            ycloud_webhook_secret: !!(e.c.ycloud_webhook_secret || process.env.YCLOUD_WEBHOOK_SECRET),
           },
           modo: e.simular ? 'SIMULADO' : 'REAL',
           activo: e.c.activo === '1',
           en_horario: dentroDeHorario(e.c),
-          webhook: e.c.url_publica ? `${e.c.url_publica.replace(/\/+$/, '')}/wa/webhook` : '',
+          webhook: e.c.url_publica ? `${e.c.url_publica.replace(/\/+$/, '')}/wa/${e.proveedor === 'ycloud' ? 'ycloud' : 'webhook'}` : '',
           hoy: { recibidos: Number(hoy?.recibidos || 0), enviados: Number(hoy?.enviados || 0), errores: Number(hoy?.errores || 0) },
           pedidos_pendientes: Number(ped?.n || 0),
           chats_con_persona: Number(hum?.n || 0),
@@ -193,6 +196,11 @@ export function buildWhatsappBotRouter(sequelize: Sequelize) {
           if (k === 'palabra_menu' && !v.trim()) return res.status(400).json({ ok: false, error: 'La palabra para volver al menú no puede quedar vacía' });
           if (v.length > 4000) return res.status(400).json({ ok: false, error: `${k}: texto demasiado largo` });
           if (secreto || k === 'wa_phone_number_id') v = v.trim();
+          if (k === 'wa_proveedor' && v !== 'ycloud' && v !== 'meta') return res.status(400).json({ ok: false, error: 'Proveedor: ycloud o meta' });
+          if (k === 'ycloud_numero' && v.trim()) {
+            v = numeroE164(v);
+            if (!/^\+\d{10,15}$/.test(v)) return res.status(400).json({ ok: false, error: 'Número de WhatsApp con código de país, ej. +5491112345678' });
+          }
         }
         await sequelize.query(
           `INSERT INTO whatsapp_bot_config (k, valor, updated_by) VALUES (:k, :v, :u)
@@ -209,10 +217,24 @@ export function buildWhatsappBotRouter(sequelize: Sequelize) {
     try {
       invalidarConfig(sequelize);
       const e = await leerEstado(sequelize);
+      if (e.proveedor === 'ycloud') {
+        if (!e.ycloudKey || !e.ycloudNumero) return res.status(400).json({ ok: false, error: 'Faltan la API Key o el número de WhatsApp de YCloud' });
+        const r = await ycloud(e, 'whatsapp/phoneNumbers?limit=100');
+        const nums: any[] = r?.items ?? [];
+        const n = nums.find(x => numeroE164(x?.phoneNumber ?? x?.displayPhoneNumber ?? '') === e.ycloudNumero);
+        if (!n) {
+          const hay = nums.map(x => x?.phoneNumber ?? x?.displayPhoneNumber).filter(Boolean).join(', ');
+          return res.status(400).json({ ok: false, error: `La API Key funciona, pero el número ${e.ycloudNumero} no está conectado en YCloud${hay ? ` (están: ${hay})` : ' (todavía no hay números conectados)'}` });
+        }
+        return res.json({ ok: true, data: {
+          display_phone_number: n.displayPhoneNumber ?? n.phoneNumber, verified_name: n.verifiedName,
+          quality_rating: n.qualityRating, estado: n.status,
+        } });
+      }
       if (!e.token || !e.phoneId) return res.status(400).json({ ok: false, error: 'Faltan el token o el Phone Number ID' });
       const info = await graph(e, `${e.phoneId}?fields=display_phone_number,verified_name,quality_rating,code_verification_status`);
       return res.json({ ok: true, data: info });
-    } catch (err: any) { return res.status(502).json({ ok: false, error: err?.message || 'Meta no respondió' }); }
+    } catch (err: any) { return res.status(502).json({ ok: false, error: err?.message || 'El proveedor no respondió' }); }
   });
 
   // ─── opciones del menú ─────────────────────────────────────────────────────

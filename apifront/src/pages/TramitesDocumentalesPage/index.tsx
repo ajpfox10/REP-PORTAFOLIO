@@ -5,8 +5,10 @@ import { AptosTandaTab } from './AptosTandaTab';
 import { TramitesTab } from './TramitesTab';
 import { OrdenDocsTab } from './OrdenDocsTab';
 import { CombinarPdfTab } from './CombinarPdfTab';
+import { DocumentosAgenteTab } from './DocumentosAgenteTab';
 import { FaltantesTab } from './FaltantesTab';
 import { CombinadosTab } from './CombinadosTab';
+import { RestaurarTab } from './RestaurarTab';
 import { BajarAntecedentesMail } from './BajarAntecedentesMail';
 import './styles/TramitesDocumentalesPage.css';
 
@@ -16,13 +18,13 @@ import './styles/TramitesDocumentalesPage.css';
 // marcados como SIN USO en el backend. La pestana "Aptos" se mantiene intacta.
 
 export function TramitesDocumentalesPage() {
-  const [pageTab, setPageTab] = useState<'tramites' | 'aptos' | 'aptos-tanda' | 'orden' | 'combinar' | 'combinados' | 'faltantes'>('tramites');
+  const [pageTab, setPageTab] = useState<'tramites' | 'aptos' | 'aptos-tanda' | 'orden' | 'combinar' | 'documentos' | 'restaurar' | 'combinados' | 'faltantes'>('tramites');
 
   return (
     <Layout title="Trámites documentales" showBack fluid>
       {/* Pestañas de la página */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        {([['tramites', '📄 Trámites'], ['aptos', '🩺 Aptos'], ['aptos-tanda', '⏳ Aptos × tanda'], ['orden', '📋 Orden de documentos'], ['combinar', '📎 Combinación de PDF'], ['combinados', '📑 Combinados'],['faltantes', '🔴 Documentación incompleta']] as const).map(([key, label]) => (
+        {([['tramites', '📄 Trámites'], ['aptos', '🩺 Aptos'], ['aptos-tanda', '⏳ Aptos × tanda'], ['orden', '📋 Orden de documentos'], ['combinar', '📎 Combinación de PDF'], ['documentos', '🗂️ Documentos'], ['restaurar', '♻️ Restaurar'],['combinados', '📑 Combinados'],['faltantes', '🔴 Documentación incompleta']] as const).map(([key, label]) => (
           <button key={key} type="button" onClick={() => setPageTab(key)}
             style={{
               padding: '7px 18px', fontSize: '0.8rem', fontWeight: pageTab === key ? 700 : 400,
@@ -41,6 +43,8 @@ export function TramitesDocumentalesPage() {
         : pageTab === 'aptos-tanda' ? <AptosTandaTab />
         : pageTab === 'orden' ? <OrdenDocsTab />
         : pageTab === 'combinar' ? <CombinarPdfTab />
+        : pageTab === 'documentos' ? <DocumentosAgenteTab />
+        : pageTab === 'restaurar' ? <RestaurarTab />
         : pageTab === 'combinados' ? <CombinadosTab />
         : pageTab === 'faltantes' ? <FaltantesTab />
         : <TramitesTab />}

@@ -10,9 +10,13 @@
 //               HUMANO (el bot se calla N horas en ese chat; la palabra de menú lo reactiva)
 //   - textos generales, horario de atención, credenciales de Meta, bot encendido/apagado
 //
+// Proveedor (wa_proveedor): 'ycloud' (17/11, BSP YCloud: número Business en coexistencia conectado por QR,
+// sin Facebook) o 'meta' (Cloud API directa). Webhook: YCloud → POST /wa/ycloud (firma YCloud-Signature),
+// Meta → /wa/webhook (X-Hub-Signature-256). Los dos caen en la misma bandeja y mensajesDelWebhook distingue.
 // Credenciales: lo cargado en la página tiene prioridad; si está vacío se usa el .env
-// (WA_TOKEN, WA_PHONE_NUMBER_ID, WA_APP_SECRET, WA_VERIFY_TOKEN, WA_GRAPH_VERSION, WA_BOT_SIMULAR=1).
-// Sin token o sin Phone Number ID el bot SIMULA: registra las respuestas y no envía nada a Meta.
+// (YCLOUD_API_KEY, YCLOUD_NUMERO, YCLOUD_WEBHOOK_SECRET · WA_TOKEN, WA_PHONE_NUMBER_ID, WA_APP_SECRET,
+// WA_VERIFY_TOKEN, WA_GRAPH_VERSION · WA_BOT_SIMULAR=1).
+// Sin las credenciales del proveedor elegido el bot SIMULA: registra las respuestas y no envía nada.
 //
 // Lo usan dos procesos: el servidor público (webhook) y la API (página + simulador). La config se
 // relee de la base cada 20 s, así que los cambios de la página llegan solos al webhook.
@@ -139,7 +143,7 @@ export function ensureBotTablas(sequelize: Sequelize): Promise<void> {
       // Lo único de la config que ve el servidor público: para validar que el webhook viene de Meta
       await sequelize.query(`
         CREATE OR REPLACE SQL SECURITY DEFINER VIEW v_publico_wa_claves AS
-        SELECT k, valor FROM whatsapp_bot_config WHERE k IN ('wa_app_secret', 'wa_verify_token')`);
+        SELECT k, valor FROM whatsapp_bot_config WHERE k IN ('wa_app_secret', 'wa_verify_token', 'ycloud_webhook_secret')`);
       // Menú inicial (solo si la tabla está vacía)
       const [{ n }] = await sequelize.query<any>(`SELECT COUNT(*) AS n FROM whatsapp_bot_opciones`, { type: QueryTypes.SELECT });
       if (!Number(n)) {
@@ -208,8 +212,13 @@ export const CONFIG_DEFAULT: Record<string, string> = {
   wa_app_secret: '',
   wa_verify_token: '',
   wa_graph_version: 'v23.0',
+  wa_proveedor: 'ycloud',
+  ycloud_api_key: '',
+  ycloud_numero: '',
+  ycloud_webhook_secret: '',
 };
-export const CONFIG_SECRETAS = ['wa_token', 'wa_app_secret', 'wa_verify_token'];
+export const CONFIG_SECRETAS = ['wa_token', 'wa_app_secret', 'wa_verify_token', 'ycloud_api_key', 'ycloud_webhook_secret'];
+const YCLOUD_API = 'https://api.ycloud.com/v2';
 
 export type Opcion = {
   id: number; orden: number; titulo: string; palabras: string | null; accion: 'TEXTO' | 'CERT_IOMA' | 'CERT_TRABAJO' | 'HUMANO' | 'RESET_GP';
@@ -219,6 +228,9 @@ export type Opcion = {
 type Estado = {
   c: Record<string, string>; opciones: Opcion[];
   token: string; phoneId: string; appSecret: string; verifyToken: string; graph: string; simular: boolean;
+  proveedor: 'ycloud' | 'meta';
+  /** YCloud: clave de API y número Business en E.164 (+549...). */
+  ycloudKey: string; ycloudNumero: string;
 };
 const cache = new WeakMap<Sequelize, { hasta: number; estado: Estado }>();
 
@@ -236,12 +248,16 @@ export async function leerEstado(sequelize: Sequelize): Promise<Estado> {
        FROM whatsapp_bot_opciones ORDER BY orden, id`, { type: QueryTypes.SELECT });
   const token = c.wa_token || process.env.WA_TOKEN || '';
   const phoneId = c.wa_phone_number_id || process.env.WA_PHONE_NUMBER_ID || '';
+  const proveedor = (c.wa_proveedor || process.env.WA_PROVEEDOR) === 'meta' ? 'meta' : 'ycloud';
+  const ycloudKey = c.ycloud_api_key || process.env.YCLOUD_API_KEY || '';
+  const ycloudNumero = numeroE164(c.ycloud_numero || process.env.YCLOUD_NUMERO || '');
+  const faltan = proveedor === 'meta' ? (!token || !phoneId) : (!ycloudKey || !ycloudNumero);
   const estado: Estado = {
-    c, opciones, token, phoneId,
+    c, opciones, token, phoneId, proveedor, ycloudKey, ycloudNumero,
     appSecret: c.wa_app_secret || process.env.WA_APP_SECRET || '',
     verifyToken: c.wa_verify_token || process.env.WA_VERIFY_TOKEN || '',
     graph: `https://graph.facebook.com/${c.wa_graph_version || process.env.WA_GRAPH_VERSION || 'v23.0'}`,
-    simular: c.simular === '1' || process.env.WA_BOT_SIMULAR === '1' || !token || !phoneId,
+    simular: c.simular === '1' || process.env.WA_BOT_SIMULAR === '1' || faltan,
   };
   cache.set(sequelize, { hasta: Date.now() + 20_000, estado });
   return estado;
@@ -328,6 +344,51 @@ export async function graph(e: Estado, pathUrl: string, init: RequestInit = {}):
   return body;
 }
 
+/** "+54 9 11 1234-5678" → "+5491112345678" ('' si no hay dígitos). */
+export function numeroE164(n: string): string {
+  const d = String(n || '').replace(/\D/g, '');
+  return d ? `+${d}` : '';
+}
+
+/** Llamada a la API de YCloud (X-API-Key). */
+export async function ycloud(e: Estado, pathUrl: string, init: RequestInit = {}): Promise<any> {
+  const res = await fetch(`${YCLOUD_API}/${pathUrl}`, { ...init, headers: { 'X-API-Key': e.ycloudKey, ...(init.headers || {}) } });
+  const body: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`YCloud ${res.status}: ${body?.error?.message || body?.message || JSON.stringify(body).slice(0, 200)}`);
+  if (body?.status === 'failed') throw new Error(`YCloud: ${body?.errorMessage || body?.errorCode || 'envío fallido'}`);
+  return body;
+}
+
+/** Manda un mensaje (cuerpo estilo Cloud API: type + objeto) por el proveedor configurado. */
+async function enviarMensaje(e: Estado, tel: string, msg: Record<string, any>): Promise<void> {
+  if (e.proveedor === 'ycloud') {
+    await ycloud(e, 'whatsapp/messages/sendDirectly', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: e.ycloudNumero, to: numeroE164(tel), ...msg }),
+    });
+  } else {
+    await graph(e, `${e.phoneId}/messages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', to: tel, ...msg }),
+    });
+  }
+}
+
+/** Sube un archivo y devuelve el id de media para usarlo en el mensaje. */
+async function subirMedia(e: Estado, archivo: Buffer, nombre: string, mime: string): Promise<string> {
+  const form = new FormData();
+  form.append('file', new Blob([new Uint8Array(archivo)], { type: mime }), nombre);
+  if (e.proveedor === 'ycloud') {
+    const r = await ycloud(e, `whatsapp/media/${encodeURIComponent(e.ycloudNumero)}/upload`, { method: 'POST', body: form });
+    if (!r?.id) throw new Error('YCloud no devolvió el id del archivo subido');
+    return String(r.id);
+  }
+  form.append('messaging_product', 'whatsapp');
+  form.append('type', mime);
+  const r = await graph(e, `${e.phoneId}/media`, { method: 'POST', body: form });
+  return String(r.id);
+}
+
 /** Contexto de una conversación: real (webhook) o prueba (simulador de la página). */
 type Ctx = {
   sequelize: Sequelize; e: Estado; tel: string;
@@ -349,13 +410,7 @@ async function enviarTexto(ctx: Ctx, texto: string, opcion: string | null = null
   try {
     if (ctx.prueba) ctx.salida.push({ tipo: 'text', texto });
     else if (ctx.e.simular) logger.info({ msg: 'wabot SIMULADO texto', to: ctx.tel, texto });
-    else {
-      await graph(ctx.e, `${ctx.e.phoneId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messaging_product: 'whatsapp', to: ctx.tel, type: 'text', text: { body: texto, preview_url: false } }),
-      });
-    }
+    else await enviarMensaje(ctx.e, ctx.tel, { type: 'text', text: { body: texto, preview_url: false } });
     await registrarSalida(ctx, 'text', texto, opcion, dni, modo(ctx));
   } catch (err: any) {
     await registrarSalida(ctx, 'text', texto, opcion, dni, 'ERROR', err?.message);
@@ -373,16 +428,8 @@ async function enviarPdf(ctx: Ctx, pdf: Buffer, nombreArchivo: string, caption: 
       fs.writeFileSync(path.join(dir, `${Date.now()}_${nombreArchivo}`), pdf);
       logger.info({ msg: 'wabot SIMULADO pdf', to: ctx.tel, nombreArchivo });
     } else {
-      const form = new FormData();
-      form.append('messaging_product', 'whatsapp');
-      form.append('type', 'application/pdf');
-      form.append('file', new Blob([new Uint8Array(pdf)], { type: 'application/pdf' }), nombreArchivo);
-      const media = await graph(ctx.e, `${ctx.e.phoneId}/media`, { method: 'POST', body: form });
-      await graph(ctx.e, `${ctx.e.phoneId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messaging_product: 'whatsapp', to: ctx.tel, type: 'document', document: { id: media.id, filename: nombreArchivo, caption } }),
-      });
+      const mediaId = await subirMedia(ctx.e, pdf, nombreArchivo, 'application/pdf');
+      await enviarMensaje(ctx.e, ctx.tel, { type: 'document', document: { id: mediaId, filename: nombreArchivo, caption } });
     }
     await registrarSalida(ctx, 'document', `${nombreArchivo} — ${caption}`, opcion, dni, modo(ctx));
   } catch (err: any) {
@@ -815,9 +862,30 @@ export async function limpiarPruebas(sequelize: Sequelize) {
 // La verificación del webhook y la firma de Meta están en services/whatsappWebhook.ts (servidor público):
 // ese proceso solo anota el cuerpo crudo en whatsapp_bot_entrada; acá se procesa.
 
-/** Saca los mensajes entrantes del cuerpo del webhook (ignora estados, ecos de la app, etc.). */
-export function mensajesDelWebhook(body: any, phoneId: string): MensajeEntrante[] {
+/** Texto de un mensaje (texto común, botón o elección de lista): mismo formato en Meta y YCloud. */
+const textoDe = (msg: any): string => msg?.text?.body
+  ?? msg?.interactive?.button_reply?.title ?? msg?.interactive?.list_reply?.title
+  ?? msg?.button?.text ?? '';
+
+/**
+ * Saca los mensajes entrantes del cuerpo del webhook (ignora estados, ecos de la app, etc.).
+ * Entiende los dos formatos: evento de YCloud ({ type: 'whatsapp.inbound_message.received',
+ * whatsappInboundMessage }) y el de Meta ({ entry[].changes[].value.messages }).
+ */
+export function mensajesDelWebhook(body: any, phoneId: string, ycloudNumero = ''): MensajeEntrante[] {
   const out: MensajeEntrante[] = [];
+  if (typeof body?.type === 'string' && !Array.isArray(body?.entry)) {
+    // YCloud: un evento por pedido. Solo interesan los mensajes que la persona le manda al número.
+    if (body.type !== 'whatsapp.inbound_message.received') return out;
+    const msg = body.whatsappInboundMessage ?? {};
+    if (ycloudNumero && msg.to && numeroE164(msg.to) !== ycloudNumero) return out; // otro número de la cuenta
+    if (!msg.from) return out; // p. ej. cambio de BSUID sin teléfono
+    out.push({
+      id: String(msg.wamid || msg.id || body.id), from: String(msg.from).replace(/\D/g, ''),
+      tipo: String(msg.type || 'unknown'), texto: textoDe(msg), nombre: msg.customerProfile?.name ?? undefined,
+    });
+    return out;
+  }
   for (const entry of body?.entry ?? []) {
     for (const ch of entry?.changes ?? []) {
       if (ch?.field !== 'messages') continue;
@@ -825,10 +893,7 @@ export function mensajesDelWebhook(body: any, phoneId: string): MensajeEntrante[
       if (phoneId && v?.metadata?.phone_number_id && v.metadata.phone_number_id !== phoneId) continue;
       const nombres = new Map<string, string>((v.contacts ?? []).map((c: any) => [String(c.wa_id), c?.profile?.name ?? '']));
       for (const msg of v.messages ?? []) {
-        const texto = msg.text?.body
-          ?? msg.interactive?.button_reply?.title ?? msg.interactive?.list_reply?.title
-          ?? msg.button?.text ?? '';
-        out.push({ id: String(msg.id), from: String(msg.from), tipo: String(msg.type || 'unknown'), texto, nombre: nombres.get(String(msg.from)) });
+        out.push({ id: String(msg.id), from: String(msg.from), tipo: String(msg.type || 'unknown'), texto: textoDe(msg), nombre: nombres.get(String(msg.from)) });
       }
       for (const st of v.statuses ?? []) {
         if (st?.status === 'failed') logger.warn({ msg: 'wabot entrega fallida', to: st.recipient_id, errores: st.errors });
@@ -846,7 +911,7 @@ const colas = new Map<string, Promise<unknown>>();
 export async function recibirWebhook(sequelize: Sequelize, body: any): Promise<void> {
   const e = await leerEstado(sequelize);
   const tareas: Promise<unknown>[] = [];
-  for (const m of mensajesDelWebhook(body, e.phoneId)) {
+  for (const m of mensajesDelWebhook(body, e.phoneId, e.ycloudNumero)) {
     const previa = colas.get(m.from) ?? Promise.resolve();
     const tarea = previa.then(() => procesarMensaje(sequelize, m)).catch((err: any) => {
       logger.error({ msg: 'wabot procesar', from: m.from, error: err?.message });

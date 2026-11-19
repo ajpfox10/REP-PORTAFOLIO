@@ -7,6 +7,9 @@ agentes y los deja en el legajo digital:
   D:\\G\\DOCU\\<dni>\\Certificado ant. Provinciales\\Antecedentes Provinciales <fecha>.pdf
   D:\\G\\DOCU\\<dni>\\Etico (si lo tuviere)\\Antecedentes Eticos <fecha>.pdf
   D:\\G\\DOCU\\<dni>\\Matricula (si la tuviere)\\Matricula <fecha>.pdf
+  D:\\G\\DOCU\\<dni>\\Buena Salud\\Buena Salud <fecha>.jpg|pdf
+
+Las fotos (JPG/PNG) se guardan tal cual vinieron, sin pasarlas a PDF (17/11/2026).
 
 (mismas subcarpetas que usa el clasificador de DOCU / Trámites). Ético = certificado de
 ética / pronunciamiento ético del colegio; matrícula = RUPS / Fiscalización Sanitaria / colegio.
@@ -67,6 +70,9 @@ TIPOS = {
     "provincial": ("Certificado ant. Provinciales", "Antecedentes Provinciales", "antecedentes_provinciales", "provincial"),
     "etico":      ("Etico (si lo tuviere)", "Antecedentes Eticos", "pronunciamiento_etico", "ético"),
     "matricula":  ("Matricula (si la tuviere)", "Matricula", "matricula", "matrícula"),
+    # 17/11/2026: certificado de buena salud (apto psicofísico de un médico, casi siempre a mano en
+    # un recetario). Carpeta nueva: se crea si no existe; lo anterior va a "viejos" como en los demás.
+    "buena_salud": ("Buena Salud", "Buena Salud", "certificado_buena_salud", "buena salud"),
 }
 
 
@@ -85,6 +91,10 @@ _ETICO_CTX = r"TRIBUNAL|DISCIPLIN|SANCION|PRONUNCIAMIENTO|COLEGIO|CONSEJO|CERTIF
 _LIBRE_SANCION_TXT = r"LIBRE DE SANCION|NO OBRANDO EN NUESTROS REGISTROS SANCIONES"
 _MATRICULA_TXT = (r"REGISTRO UNICO DE PROFESIONES DE LA SALUD|FISCALIZACION SANITARIA|MATRICULA (VALIDA|PROFESIONAL|N\b|NRO|NUMERO)"
                   r"|COLEGIO DE (MEDICOS|PSICOLOGOS|ENFERMER|FARMAC|KINESI|NUTRICI|TRABAJADORES|OBSTETR|ODONTOLOG|BIOQUIM)")
+# Buena salud: "apto psico-físicamente" / "buena salud" (OCR de letra a mano: "APTO Psico -FisicAmente",
+# Encinas 14/11/2026). Va antes que matrícula: el sello del médico puede decir "matrícula".
+_BUENA_SALUD_TXT = r"BUENA SALUD|APTO\s*(PARA\s*)?PSICO|PSICO\s*-?\s*FISICAMENTE"
+_BUENA_SALUD_PISTA = r"BUENA SALUD|APTO\s*PSICO|PSICOFISIC|CERTIFICADO MEDICO"
 
 
 def _tipo_por_pista(p):
@@ -97,6 +107,8 @@ def _tipo_por_pista(p):
         return ["etico"]
     if matric:
         return ["matricula"]
+    if re.search(_BUENA_SALUD_PISTA, p):
+        return ["buena_salud"]
     if re.search(r"PROVINCIAL|PCIAL|PROVINCIA", p):
         return ["provincial"]
     if re.search(r"NACIONAL|REINCIDENCIA", p):
@@ -122,6 +134,8 @@ def tipos_de(texto_pdf_norm, pistas_norm, nombre_norm=""):
     # VIGENTE" (no dice "ético" pero es el ético; Acuña 12/11/2026). Va antes que matrícula.
     if re.search(_LIBRE_SANCION_TXT, texto_pdf_norm):
         return ["etico"]
+    if re.search(_BUENA_SALUD_TXT, texto_pdf_norm):
+        return ["buena_salud"]
     if re.search(_MATRICULA_TXT, texto_pdf_norm) or (
             # credencial digital del RUPS: "MATRICULA ... VENCIMIENTO ... PARA VERIFICAR ESTA CREDENCIAL"
             re.search(r"MATRICULA", texto_pdf_norm) and re.search(r"CREDENCIAL|VENCIMIENTO", texto_pdf_norm)):
@@ -169,7 +183,11 @@ def por_nombre(cn, texto):
         if ape and nom and all(p in palabras for p in ape) and nom[0] in palabras:
             puntaje[(dni, etiqueta)] = sum(p in palabras for p in nom)
     if not puntaje:
-        return []
+        # Apellido compuesto: el remitente firma "Anabella Lambertini" y en personal es "LAMBERTINI
+        # OVIEDO" (12/11/2026). Segunda vuelta con el 1er apellido + 1er nombre; solo sirve si es uno solo.
+        cand = [(dni, etiqueta) for dni, ape, nom, etiqueta in _PERSONAL
+                if len(ape) > 1 and len(ape[0]) >= 4 and nom and ape[0] in palabras and nom[0] in palabras]
+        return cand if len(cand) == 1 else []
     mejor = max(puntaje.values())
     return [k for k, v in puntaje.items() if v == mejor]
 
@@ -270,15 +288,15 @@ def cuerpo_texto(payload):
 
 # ───────────────────────── guardado ─────────────────────────
 
-def guardar(carpeta, nombre_base, datos):
+def guardar(carpeta, nombre_base, datos, ext="pdf"):
     """Guarda sin pisar; si ya hay un archivo idéntico no duplica. Devuelve (ruta, nuevo)."""
     carpeta.mkdir(parents=True, exist_ok=True)
     h = hashlib.sha256(datos).hexdigest()
-    destino, n = carpeta / f"{nombre_base}.pdf", 2
+    destino, n = carpeta / f"{nombre_base}.{ext}", 2
     while destino.exists():
         if hashlib.sha256(destino.read_bytes()).hexdigest() == h:
             return destino, False
-        destino, n = carpeta / f"{nombre_base} ({n}).pdf", n + 1
+        destino, n = carpeta / f"{nombre_base} ({n}).{ext}", n + 1
     destino.write_bytes(datos)
     return destino, True
 
@@ -364,16 +382,25 @@ def procesar_mail(svc, cn, msg_id, dry_run):
         formato = ("JPG" if ext in ("jpg", "jpeg") else "PNG" if ext == "png" else "FOTO") if es_imagen else "PDF"
         datos = base64.urlsafe_b64decode(
             svc.users().messages().attachments().get(userId="me", messageId=msg_id, id=att_id).execute()["data"])
+        # La foto se GUARDA tal cual vino (17/11/2026: pasarla a PDF y después Pase a planta a JPG la
+        # degradaba). Solo para leerla (OCR) se arma un PDF en memoria.
+        guardar_datos, guardar_ext = datos, "pdf"
         if es_imagen:
+            guardar_ext = "jpg" if ext in ("jpg", "jpeg") or formato == "FOTO" else ext
             try:
                 datos = imagen_a_pdf(datos)
             except Exception as ex:
-                print(f"  AVISO: no pude convertir la imagen {nombre}: {ex}")
+                print(f"  AVISO: no pude leer la imagen {nombre}: {ex}")
                 continue
         texto = texto_pdf(datos)
         ocr = len(texto.strip()) < 60          # escaneado / foto: sin capa de texto útil
         if ocr:
             texto = texto_ocr(datos)
+        elif not dnis_en(texto):
+            # PDF con texto pero sin el DNI (Reincidencia: nombre y DNI van en la imagen, solo el pie
+            # es texto; Lambertini 12/11/2026) -> OCR también, sumado al texto.
+            texto = f"{texto}\n{texto_ocr(datos)}"
+            ocr = True
         pistas = f"{asunto}\n{cuerpo}\n{nombre}\n{remitente}"
         tipos = tipos_de(MN.norm(texto), MN.norm(pistas), MN.norm(nombre))
         dni, agente, detalle = elegir_dni(cn, texto, pistas, ocr=ocr)
@@ -385,15 +412,15 @@ def procesar_mail(svc, cn, msg_id, dry_run):
             estado = "ok" if "no está en personal" not in detalle else "aviso"
         else:
             if dni and not tipos:
-                detalle += " · no pude saber qué certificado es (nacional, provincial, ético o matrícula)"
+                detalle += " · no pude saber qué certificado es (nacional, provincial, ético, matrícula o buena salud)"
             destinos = [(SIN_IDENTIFICAR, limpio(f"{fecha:%Y-%m-%d %H%M} {remitente.split('<')[0].strip() or 'sin remitente'} - {Path(nombre).stem}"), None)]
             estado = "aviso"
 
         for carpeta, nombre_base, tipo in destinos:
             if dry_run:
-                ruta, nuevo = carpeta / f"{nombre_base}.pdf", True
+                ruta, nuevo = carpeta / f"{nombre_base}.{guardar_ext}", True
             else:
-                ruta, nuevo = guardar(carpeta, nombre_base, datos)
+                ruta, nuevo = guardar(carpeta, nombre_base, guardar_datos, guardar_ext)
             txt = f"{tipo or '?'} -> {ruta}{'' if nuevo else ' (ya estaba)'} · vino en {formato} · {detalle} · de {remitente}"
             if tipo and nuevo:
                 movidos = pasar_viejos(cn, carpeta, nombre_base, fecha, dry_run)
@@ -433,7 +460,7 @@ def ordenar_viejos(dry_run):
             cur.execute("SELECT DISTINCT detalle FROM script_run_items WHERE script=%s AND estado IN ('ok','aviso')", (SCRIPT_ID,))
             carpetas = set()
             for r in cur.fetchall():
-                m = re.match(r"\w+ -> (.+?\.pdf)", r["detalle"] or "")
+                m = re.match(r"\w+ -> (.+?\.(?:pdf|jpg|jpeg|png))", r["detalle"] or "")
                 if m and Path(m.group(1)).parent.is_dir() and DOCU in Path(m.group(1)).parents:
                     carpetas.add(Path(m.group(1)).parent)
         for c in sorted(carpetas):

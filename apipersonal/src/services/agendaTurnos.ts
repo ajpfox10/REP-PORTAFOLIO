@@ -27,7 +27,7 @@ export class AgendaError extends Error {
 
 const listas = new WeakMap<Sequelize, Promise<void>>();
 
-const MIGRACIONES = ['122__agenda_turnos.sql', '123__agenda_google_calendar.sql', '135__agenda_motivo.sql'];
+const MIGRACIONES = ['122__agenda_turnos.sql', '123__agenda_google_calendar.sql', '135__agenda_motivo.sql', '137__agenda_desde_fecha_varios_turnos.sql'];
 
 // ── Motivo del turno (lista fija + "Otro" escrito) ─────────────────────────
 export const MOTIVO_JUBILACION = 'Jubilación';
@@ -95,6 +95,7 @@ export function ensureAgendaTablas(sequelize: Sequelize): Promise<void> {
         catch (err: any) {
           const code = err?.original?.code ?? err?.parent?.code;
           if (code === 'ER_DUP_FIELDNAME') continue;                         // columna ya agregada
+          if (code === 'ER_CANT_DROP_FIELD_OR_KEY' && /DROP INDEX/i.test(s)) continue; // índice ya quitado
           if (code === 'ER_DUP_ENTRY' && /UPDATE agendas/i.test(s)) continue; // nombre ya usado
           if (code === 'ER_NO_SUCH_TABLE' && /robots_config/i.test(s)) continue; // base sin página Robots
           throw err;
@@ -127,6 +128,13 @@ const diaSemana = (f: string) => new Date(`${f}T12:00:00Z`).getUTCDay();
 const aMin = (h: string) => { const [a, b] = h.split(':').map(Number); return a * 60 + (b || 0); };
 const aHora = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 export const esFecha = (v: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(v ?? ''));
+/** DATE de MySQL → 'YYYY-MM-DD' (viene como string o como Date según la conexión). */
+const fechaStr = (v: any): string | null => {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+  const m = String(v).match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
 export const normHora = (v: any): string | null => {
   const m = /^(\d{1,2}):(\d{2})/.exec(String(v ?? ''));
   return m && Number(m[1]) < 24 && Number(m[2]) < 60 ? `${m[1].padStart(2, '0')}:${m[2]}` : null;
@@ -150,6 +158,7 @@ export interface Agenda {
   id: number; nombre: string; descripcion: string | null; lugar: string | null;
   anticipacion_dias: number; ventana_dias: number; vence_dias: number; cancelar_horas: number;
   carga_jubilacion: number; mensaje_whatsapp: string | null; activa: number;
+  turnos_desde: string | null; turnos_desde_activo: number;
 }
 export interface Franja { id?: number; dia_semana: number; hora_desde: string; hora_hasta: string; duracion_min: number; cupo: number }
 
@@ -184,10 +193,13 @@ export async function disponibilidad(sq: Sequelize, agendaId: number,
   let desde = p.desde && esFecha(p.desde) ? p.desde : sumarDias(now.fecha, agenda.anticipacion_dias);
   let hasta = p.hasta && esFecha(p.hasta) ? p.hasta : sumarDias(now.fecha, agenda.ventana_dias);
   if (!p.sinVentana) {
-    const min = sumarDias(now.fecha, Math.max(0, agenda.anticipacion_dias));
-    const max = sumarDias(now.fecha, agenda.ventana_dias);
+    let min = sumarDias(now.fecha, Math.max(0, agenda.anticipacion_dias));
+    // "Dar turnos a partir del ...": arranca ahí y la ventana se cuenta desde esa fecha
+    const td = Number(agenda.turnos_desde_activo) && agenda.turnos_desde ? fechaStr(agenda.turnos_desde) : null;
+    if (td && td > min) min = td;
+    const max = sumarDias(min, Math.max(0, agenda.ventana_dias - Math.max(0, agenda.anticipacion_dias)));
     if (desde < min) desde = min;
-    if (hasta > max) hasta = max;
+    if (hasta > max || !(p.hasta && esFecha(p.hasta))) hasta = max;
   }
   if (hasta < desde) return [];
   if (Date.parse(hasta) - Date.parse(desde) > 400 * 86400000) throw new AgendaError('Rango demasiado largo');
@@ -334,10 +346,7 @@ export async function habilitar(sq: Sequelize, agendaId: number, dnis: number[],
     if (!ag[0]) { out.push({ dni, ok: false, motivo: 'No está en el sistema' }); continue; }
     const base = { dni, apellido: ag[0].apellido, nombre: ag[0].nombre };
     if (!Number(ag[0].activo)) { out.push({ ...base, ok: false, motivo: 'No es agente activo' }); continue; }
-    const turno = await sq.query<any>(
-      `SELECT id FROM agenda_turnos WHERE agenda_id = :a AND dni = :dni AND estado = 'RESERVADO'`,
-      { replacements: { a: agendaId, dni }, type: QueryTypes.SELECT });
-    if (turno[0]) { out.push({ ...base, ok: false, motivo: 'Ya tiene un turno reservado en esta agenda' }); continue; }
+    // (17/11) puede tener varios turnos reservados: ya no se rechaza al que tiene uno
     const vig = await sq.query<any>(
       `SELECT id, token FROM agenda_habilitaciones WHERE agenda_id = :a AND dni = :dni AND estado = 'HABILITADO'`,
       { replacements: { a: agendaId, dni }, type: QueryTypes.SELECT });
@@ -463,7 +472,7 @@ export async function disponiblesEnlace(sq: Sequelize, token: string) {
 
 // ── Reservar ────────────────────────────────────────────────────────────────
 
-/** Ocupa un lugar libre del horario. La base rechaza el duplicado (uq_at_slot / uq_at_dni). */
+/** Ocupa un lugar libre del horario. La base rechaza el horario duplicado (uq_at_slot). */
 async function insertarTurno(sq: Sequelize, t: Transaction, d: {
   agendaId: number; habilitacionId: number | null; dni: number; fecha: string; hora: string; cupo: number;
   origen: 'ENLACE' | 'INTERNO'; telefono: string | null; observaciones: string | null; userId: number | null; motivo: string | null;
@@ -484,7 +493,6 @@ async function insertarTurno(sq: Sequelize, t: Transaction, d: {
     } catch (err: any) {
       if (err?.original?.code !== 'ER_DUP_ENTRY') throw err;
       const msg = String(err?.original?.sqlMessage ?? '');
-      if (msg.includes('uq_at_dni')) throw new AgendaError('Ya tiene un turno reservado en esta agenda', 409, 'YA_TIENE');
       // otro tomó ese lugar en el mismo instante → probar el siguiente
     }
   }
@@ -615,10 +623,7 @@ export async function reservarInterno(sq: Sequelize, agendaId: number, dni: numb
     const id = await insertarTurno(sq, t, {
       agendaId, habilitacionId: null, dni, fecha: f, hora: h, cupo, origen: 'INTERNO', telefono: null, observaciones, userId, motivo,
     });
-    // si tenía un enlace sin usar, queda usado (ya tiene turno)
-    await sq.query(`UPDATE agenda_habilitaciones SET estado = 'USADO', turno_id = :tid, usado_at = NOW()
-                     WHERE agenda_id = :a AND dni = :dni AND estado = 'HABILITADO'`,
-      { replacements: { tid: id, a: agendaId, dni }, transaction: t });
+    // (17/11) un enlace sin usar queda vigente: puede pedir otro turno aparte de este
     if (Number(agenda.carga_jubilacion) && esMotivoJubilacion(motivo)) await cargarEnJubilacion(sq, t, id, agenda.nombre, userId, userNombre);
     return id;
   });
@@ -640,7 +645,7 @@ export async function cambiarEstadoTurno(sq: Sequelize, id: number, estado: stri
           WHERE id = :id`,
         { replacements: { e: estado, u: userId, obs: observaciones ?? null, id }, transaction: t });
     } catch (err: any) {
-      if (err?.original?.code === 'ER_DUP_ENTRY') throw new AgendaError('El agente ya tiene otro turno reservado en esta agenda', 409);
+      if (err?.original?.code === 'ER_DUP_ENTRY') throw new AgendaError('Ese horario ya está ocupado', 409);
       throw err;
     }
     await sincronizarJubilacion(sq, t, id, estado);
@@ -697,7 +702,8 @@ export async function sincronizarCitaciones(sq: Sequelize): Promise<{ creadas: n
           SET c.fecha_citacion = TIMESTAMP(t.fecha, t.hora),
               c.motivo = LEFT(CONCAT('Turno: ', COALESCE(t.motivo, a.nombre), ' — ', DATE_FORMAT(t.fecha, '%d/%m/%Y'), ' ', TIME_FORMAT(t.hora, '%H:%i'), ' hs'), 255)
         WHERE t.estado = 'RESERVADO' AND c.citacion_activa = 1 AND c.deleted_at IS NULL
-          AND (c.fecha_citacion <> TIMESTAMP(t.fecha, t.hora) OR c.motivo <> LEFT(CONCAT('Turno: ', COALESCE(t.motivo, a.nombre), ' — ', DATE_FORMAT(t.fecha, '%d/%m/%Y'), ' ', TIME_FORMAT(t.hora, '%H:%i'), ' hs'), 255))`);
+          AND (c.fecha_citacion <> TIMESTAMP(t.fecha, t.hora) OR c.motivo COLLATE utf8mb4_bin <> LEFT(CONCAT('Turno: ', COALESCE(t.motivo, a.nombre), ' — ', DATE_FORMAT(t.fecha, '%d/%m/%Y'), ' ', TIME_FORMAT(t.hora, '%H:%i'), ' hs'), 255) COLLATE utf8mb4_bin)`);
+    // (citaciones.motivo es 0900_ai_ci y agenda_* unicode_ci: sin el COLLATE explícito → "Illegal mix of collations")
     res.movidas = Number(m3?.affectedRows ?? m3 ?? 0);
   } finally {
     sincronizando = false;

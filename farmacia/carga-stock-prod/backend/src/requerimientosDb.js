@@ -265,11 +265,13 @@ async function columnasManual(anio, semestre) {
     FROM trimestre_items ti JOIN trimestre_importaciones i ON i.id = ti.trimestre_importacion_id
     WHERE ti.codigo_articulo IN (${inCod}) AND i.anio BETWEEN :a0 AND :a1
     GROUP BY ti.codigo_articulo, i.anio, i.trimestre
-  `, { ...pc, a0: anio - 1, a1: anio + 1 });
+  `, { ...pc, a0: anio - 3, a1: anio + 1 });
   for (const r of cons) {
     const q = Number(r.cantidad || 0);
     if (r.anio === anio && trims.includes(r.trimestre)) sumarA(r.codigo, 'consumoSem', q);
     if (r.anio === anio - 1 && trims.includes(r.trimestre)) sumarA(r.codigo, 'consumoSemAnt', q);
+    if (r.anio === anio - 2 && trims.includes(r.trimestre)) sumarA(r.codigo, 'consumoSemAnt2', q);
+    if (r.anio === anio - 3 && trims.includes(r.trimestre)) sumarA(r.codigo, 'consumoSemAnt3', q);
     if (r.anio === anio + 1) sumarA(r.codigo, 'consumoAnioSig', q);
   }
   // Meses con datos en el semestre (para el promedio mensual)
@@ -292,6 +294,20 @@ async function columnasManual(anio, semestre) {
       sumarA(r.codigo, Number(r.sem) === 1 ? 'reqSigSem1' : 'reqSigSem2', q);
     }
     if (r.anio === anio + 2) sumarA(r.codigo, 'reqAnioSig2', q);
+  }
+  // Carga manual del anio siguiente (lo que se carga a mano en la columna «Pedido ... anio siguiente»),
+  // por codigo exacto; el frontend lo suma a lo de los PDF.
+  const manSig = await query(`
+    SELECT id, codigo, semestre, cantidad FROM requerimiento_manual
+    WHERE anio = :anioSig AND codigo IN (${codigos.map((_, i) => ':m' + i).join(', ')})
+  `, { ...Object.fromEntries(codigos.map((c, i) => ['m' + i, c])), anioSig: anio + 1 });
+  for (const r of manSig) {
+    const q = Number(r.cantidad || 0);
+    const sem = Number(r.semestre) === 1 ? 1 : 2;
+    if (out[r.codigo]) {
+      out[r.codigo][`manSigSem${sem}`] = q;
+      out[r.codigo][`manSigSem${sem}Id`] = r.id;
+    }
   }
   // Justiprecio: el del requerimiento mas reciente que lo tenga
   const precios = await query(`
@@ -378,7 +394,10 @@ async function comparacionManual(anio, semestre) {
   const hasta = `${sig}-${semestre === 1 ? '06-30' : '12-31'}`;
   const manual = await query('SELECT codigo, droga, descripcion, cantidad FROM requerimiento_manual WHERE anio = :anio AND semestre = :semestre', { anio, semestre });
   const pdf = await query(`
-    SELECT ri.codigo, MAX(ri.droga) droga, MAX(LEFT(ri.descripcion, 500)) descripcion, SUM(ri.cantidad) cantidad
+    SELECT ri.codigo, MAX(ri.droga) droga, MAX(LEFT(ri.descripcion, 500)) descripcion, SUM(ri.cantidad) cantidad,
+      GROUP_CONCAT(DISTINCT i.archivo_nombre ORDER BY i.archivo_nombre SEPARATOR ', ') archivos,
+      GROUP_CONCAT(CONCAT(REPLACE(i.archivo_nombre, '.pdf', ''), IF(ri.hoja IS NULL, '', CONCAT(' · hoja ', ri.hoja)), ' · ítem ', ri.item_nro)
+        ORDER BY i.archivo_nombre, ri.item_nro SEPARATOR ' | ') donde
     FROM requerimiento_items ri JOIN requerimiento_importaciones i ON i.id = ri.importacion_id
     WHERE i.periodo_desde BETWEEN :desde AND :hasta GROUP BY ri.codigo
   `, { desde, hasta });
@@ -393,8 +412,21 @@ async function comparacionManual(anio, semestre) {
   const noEs = new Set((await query("SELECT codigo_a, codigo_b FROM codigo_equivalencias WHERE estado = 'distinto'"))
     .flatMap((r) => [`${r.codigo_a}|${r.codigo_b}`, `${r.codigo_b}|${r.codigo_a}`]));
   const marcadoNoEs = (c1, c2) => grupo(c1).some((x) => grupo(c2).some((y) => noEs.has(`${x}|${y}`)));
+  // Solo los marcados con «No es la misma droga» desde la carga del requerimiento cuentan como revisados (no se pide)
+  const revisado = new Set((await query("SELECT codigo_a, codigo_b FROM codigo_equivalencias WHERE estado = 'distinto' AND nota = 'revisado-requerimiento'"))
+    .flatMap((r) => [`${r.codigo_a}|${r.codigo_b}`, `${r.codigo_b}|${r.codigo_a}`]));
+  const marcadoRevisado = (c1, c2) => grupo(c1).some((x) => grupo(c2).some((y) => revisado.has(`${x}|${y}`)));
   const qPdf = new Map(pdf.map((p) => [p.codigo, Number(p.cantidad || 0)]));
-  const qPdfFam = (c) => grupo(c).reduce((s, x) => s + (qPdf.get(x) || 0), 0);
+  // Lo cargado a mano para el mismo semestre de anio + 1 REEMPLAZA a lo de los PDF (tambien un 0)
+  const qMan = new Map();
+  for (const m of await query('SELECT codigo, cantidad FROM requerimiento_manual WHERE anio = :sig AND semestre = :semestre', { sig, semestre })) {
+    qMan.set(m.codigo, (qMan.get(m.codigo) || 0) + Number(m.cantidad));
+  }
+  const qPdfFam = (c) => {
+    const g = grupo(c);
+    const m = g.some((x) => qMan.has(x));
+    return g.reduce((s, x) => s + ((m ? qMan.get(x) : qPdf.get(x)) || 0), 0);
+  };
   const minPorCod = new Map(minItems.map((m) => [m.codigo, m]));
   const minFam = (c) => grupo(c).map((x) => minPorCod.get(x)).find(Boolean) || null;
 
@@ -417,11 +449,16 @@ async function comparacionManual(anio, semestre) {
   const fmt = (n) => Number(n || 0).toLocaleString('es-AR');
   const desc = (x) => String(x.descripcion || x.droga || '').slice(0, 90);
 
-  const soloEste = manual.filter((f) => Number(f.cantidad) > 0 && qPdfFam(f.codigo) === 0);
+  // Para el motivo se mira solo el PDF: asi un renglon con presentacion nueva cargada a mano sigue mostrando las otras presentaciones
+  const qSoloPdfFam = (c) => grupo(c).reduce((s, x) => s + (qPdf.get(x) || 0), 0);
+  // En la lista: sin nada en el PDF, o puesto en 0 a mano para el año siguiente aunque el PDF lo pida
+  const ceroAMano = (c) => grupo(c).some((x) => qMan.has(x)) && qPdfFam(c) === 0 && qSoloPdfFam(c) > 0;
+  const soloEste = manual.filter((f) => Number(f.cantidad) > 0 && (qSoloPdfFam(f.codigo) === 0 || ceroAMano(f.codigo)));
   const soloSig = manual.filter((f) => Number(f.cantidad) === 0 && qPdfFam(f.codigo) > 0);
   const out = {};
 
   for (const f of soloEste) {
+    if (ceroAMano(f.codigo)) { out[f.codigo] = { lado: 'soloEste', motivo: 'ceroAMano', rel: `El PDF ${sig} pide ${fmt(qSoloPdfFam(f.codigo))}; lo pusiste en 0 a mano.` }; continue; }
     const a = pf(f.codigo, f.droga, f.descripcion);
     const enFam = new Set(grupo(f.codigo));
     const mi = minFam(f.codigo);
@@ -429,22 +466,81 @@ async function comparacionManual(anio, semestre) {
     const cands = pdf.filter((p) => !enFam.has(p.codigo) && Number(p.cantidad) > 0).map((p) => { const b = pf(p.codigo, p.droga, p.descripcion); return { p, b, r: comparar(a, b) }; })
       .filter((x) => x.r.droga === 'si');
     const mismos = cands.filter((x) => !marcadoNoEs(f.codigo, x.p.codigo) && (mismoProducto(x.r) || mismaCantidad(a, x.b, x.p.cantidad, f.cantidad)));
-    let motivo; let rel = '';
+    let motivo; let rel = ''; let codigos;
     if (mi && mi.decision === 'no') { motivo = 'minNo'; rel = `Ministerio: «${mi.habilitado}» (${mi.codigo})`; }
     else if (mismos.length) {
       motivo = 'cambioCodigo';
       rel = mismos.map((x) => `${x.p.codigo} ${desc(x.p)} (${sig}: ${fmt(x.p.cantidad)})`).join(' · ');
+      codigos = mismos.map((x) => ({ codigo: x.p.codigo, cantidad: Number(x.p.cantidad), descripcion: String(x.p.descripcion || x.p.droga || ''), archivos: x.p.archivos || '', donde: x.p.donde || '' }));
     } else {
       const minMismos = minItems.filter((m) => m.decision === 'no' && !enFam.has(m.codigo)).map((m) => ({ m, r: comparar(a, pfMin(m)) })).filter((x) => mismoProducto(x.r));
       if (minMismos.length) { motivo = 'minNoNuevo'; rel = minMismos.map((x) => `${x.m.codigo} ${x.m.medicamento} → Ministerio: «${x.m.habilitado}»`).join(' · '); }
-      else if (cands.length) { motivo = 'otraConc'; rel = cands.map((x) => `${x.p.codigo} ${desc(x.p)} (${sig}: ${fmt(x.p.cantidad)})`).join(' · '); }
+      else if (cands.length) {
+        // Si ya se marco «No es la misma droga» con todos los candidatos: revisado, no se pide en anio + 1
+        const noEsTodos = cands.every((x) => marcadoRevisado(f.codigo, x.p.codigo));
+        motivo = noEsTodos ? 'revisadoNo' : 'otraConc';
+        rel = cands.map((x) => `${x.p.codigo} ${desc(x.p)} (${sig}: ${fmt(x.p.cantidad)})`).join(' · ');
+        codigos = cands.map((x) => ({ codigo: x.p.codigo, cantidad: Number(x.p.cantidad), descripcion: String(x.p.descripcion || x.p.droga || ''), archivos: x.p.archivos || '', donde: x.p.donde || '', noEs: marcadoRevisado(f.codigo, x.p.codigo) }));
+      }
       else {
         motivo = 'sinNada';
         const minDroga = minItems.map((m) => ({ m, r: comparar(a, pfMin(m)) })).filter((x) => x.r.droga === 'si');
         if (minDroga.length) rel = `Ministerio menciona otra presentación: ${minDroga.map((x) => `${x.m.codigo} ${x.m.medicamento} «${x.m.habilitado}»`).join(' · ')}`;
       }
     }
-    out[f.codigo] = { lado: 'soloEste', motivo, rel };
+    out[f.codigo] = { lado: 'soloEste', motivo, rel, ...(codigos ? { codigos } : {}) };
+  }
+  // Stock actual del producto del PDF (sumando sus codigos atados), para verlo antes de atarlo
+  const conCodigos = Object.values(out).flatMap((o) => o.codigos || []);
+  if (conCodigos.length) {
+    const [stk] = await query("SELECT id FROM stock_actual_descargas WHERE estado = 'ok' ORDER BY id DESC LIMIT 1");
+    const todos = Array.from(new Set(conCodigos.flatMap((c) => grupo(c.codigo))));
+    const porCod = new Map();
+    if (stk) {
+      const ph = todos.map((_, i) => ':s' + i).join(', ');
+      for (const r of await query(`SELECT codigo, SUM(stock) stock FROM stock_actual_items WHERE descarga_id = :id AND codigo IN (${ph}) GROUP BY codigo`,
+        { id: stk.id, ...Object.fromEntries(todos.map((c, i) => ['s' + i, c])) })) porCod.set(r.codigo, Number(r.stock || 0));
+    }
+    // Consumo del mismo semestre por año (Analisis Trimestral) y como se llama cada codigo atado, para comparar antes de atar
+    const trims = semestre === 1 ? [1, 2] : [3, 4];
+    const phT = todos.map((_, i) => ':t' + i).join(', ');
+    const pT = Object.fromEntries(todos.map((c, i) => ['t' + i, c]));
+    const consumo = new Map(); // codigo -> {anio: cantidad}
+    const nombres = new Map(); // codigo -> {nombre, sectores:Set}
+    for (const r of await query(`
+      SELECT ti.codigo_articulo codigo, i.anio, i.trimestre, i.sector, SUM(ti.cantidad) cantidad,
+        MAX(TRIM(CONCAT_WS(' ', ti.nombre_generico, ti.concentracion, ti.forma))) nombre
+      FROM trimestre_items ti JOIN trimestre_importaciones i ON i.id = ti.trimestre_importacion_id
+      WHERE ti.codigo_articulo IN (${phT}) AND i.anio BETWEEN :a0 AND :a1
+      GROUP BY ti.codigo_articulo, i.anio, i.trimestre, i.sector
+    `, { ...pT, a0: anio - 3, a1: anio })) {
+      if (!nombres.has(r.codigo)) nombres.set(r.codigo, { nombre: r.nombre, sectores: new Set() });
+      const n = nombres.get(r.codigo);
+      if (Number(r.cantidad) > 0) n.sectores.add(String(r.sector || '').toLowerCase());
+      if (!trims.includes(Number(r.trimestre))) continue;
+      if (!consumo.has(r.codigo)) consumo.set(r.codigo, {});
+      const m = consumo.get(r.codigo);
+      m[r.anio] = (m[r.anio] || 0) + Number(r.cantidad || 0);
+    }
+    const descReq = new Map((await query(`SELECT codigo, MAX(LEFT(descripcion, 200)) d FROM requerimiento_items WHERE codigo IN (${phT}) GROUP BY codigo`, pT)).map((r) => [r.codigo, r.d]));
+    const descMan = new Map((await query(`SELECT codigo, MAX(COALESCE(descripcion, droga)) d FROM requerimiento_manual WHERE codigo IN (${phT}) GROUP BY codigo`, pT)).map((r) => [r.codigo, r.d]));
+    const descStk = new Map((await query(`SELECT codigo, MAX(TRIM(CONCAT_WS(' ', nombre_generico, concentracion, forma))) d FROM stock_actual_items WHERE codigo IN (${phT}) GROUP BY codigo`, pT)).map((r) => [r.codigo, r.d]));
+    const descDe = (x) => nombres.get(x)?.nombre || descReq.get(x) || descMan.get(x) || descStk.get(x) || `sin descripción (código ${x})`;
+    for (const c of conCodigos) {
+      const g = grupo(c.codigo);
+      c.atados = g.filter((x) => x !== c.codigo);
+      c.stock = stk && g.some((x) => porCod.has(x)) ? g.reduce((sum, x) => sum + (porCod.get(x) || 0), 0) : null;
+      c.consumo = {};
+      for (let y = anio - 3; y <= anio; y++) {
+        const tiene = g.some((x) => consumo.get(x)?.[y] != null);
+        c.consumo[y] = tiene ? g.reduce((sum, x) => sum + (consumo.get(x)?.[y] || 0), 0) : null;
+      }
+      c.productos = g.map((x) => ({
+        descripcion: descDe(x),
+        sectores: Array.from(nombres.get(x)?.sectores || []),
+        consumo: Object.fromEntries(Array.from({ length: 4 }, (_, i) => anio - 3 + i).map((y) => [y, consumo.get(x)?.[y] ?? null]))
+      }));
+    }
   }
 
   for (const f of soloSig) {

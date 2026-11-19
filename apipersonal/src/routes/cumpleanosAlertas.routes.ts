@@ -205,6 +205,15 @@ async function ensureFelicitacionTables(sequelize: Sequelize) {
   // imagen pasó de VARCHAR(40) a 255 para guardar 'carpeta:<nombre de archivo>'
   await sequelize.query(`ALTER TABLE cumpleanos_felicitacion_config MODIFY imagen VARCHAR(255) NOT NULL DEFAULT 'diseno:globos'`);
   await sequelize.query(`ALTER TABLE cumpleanos_felicitacion_envios MODIFY imagen VARCHAR(255) NULL`);
+  // Texto para cuando el cumpleaños ya pasó (se felicita atrasado)
+  const [col] = await sequelize.query<any>(
+    `SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cumpleanos_felicitacion_config' AND COLUMN_NAME = 'plantilla_atrasado'`,
+    { type: QueryTypes.SELECT },
+  );
+  if (!Number(col?.n)) {
+    await sequelize.query(`ALTER TABLE cumpleanos_felicitacion_config ADD COLUMN plantilla_atrasado TEXT NULL AFTER plantilla`);
+  }
   felicitacionInit.add(sequelize);
 }
 
@@ -244,6 +253,9 @@ function archivoTarjeta(nombre: string) {
 const PLANTILLA_FELICITACION_DEFAULT =
   '¡Feliz cumpleaños, {nombre}! 🎂🎉\n\nDe parte de todo el equipo de Personal te deseamos un día hermoso, rodeado de afecto. ¡Que lo disfrutes mucho!';
 
+const PLANTILLA_ATRASADO_DEFAULT =
+  '¡Hola, {nombre}! 🎂\n\nSabemos que {fecha} fue tu cumpleaños y lamentamos no haber podido saludarte a tiempo. De parte de todo el equipo de Personal te deseamos un muy feliz cumpleaños. ¡Esperamos que hayas pasado un día hermoso, rodeado de afecto!';
+
 const imagenUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
 
 async function leerConfigFelicitacion(sequelize: Sequelize) {
@@ -251,6 +263,7 @@ async function leerConfigFelicitacion(sequelize: Sequelize) {
   const [c] = await sequelize.query<any>(`SELECT * FROM cumpleanos_felicitacion_config WHERE id = 1`, { type: QueryTypes.SELECT });
   return {
     plantilla: c?.plantilla || PLANTILLA_FELICITACION_DEFAULT,
+    plantilla_atrasado: c?.plantilla_atrasado || PLANTILLA_ATRASADO_DEFAULT,
     imagen: c?.imagen || 'diseno:globos',
     nombre_en_imagen: !!Number(c?.nombre_en_imagen ?? 1),
     automatico: !!Number(c?.automatico ?? 0),
@@ -452,7 +465,7 @@ export function buildCumpleanosAlertasRouter(sequelize: Sequelize) {
       try { carpeta = listarCarpetaTarjetas(); } catch (e: any) {
         carpeta = { ruta: TARJETAS_DIR, uncRel: '', existe: false, imagenes: [], error: e?.message || 'No se pudo leer la carpeta' };
       }
-      return res.json({ ok: true, data: { config, imagenes, carpeta, plantilla_default: PLANTILLA_FELICITACION_DEFAULT } });
+      return res.json({ ok: true, data: { config, imagenes, carpeta, plantilla_default: PLANTILLA_FELICITACION_DEFAULT, plantilla_atrasado_default: PLANTILLA_ATRASADO_DEFAULT } });
     } catch (err: any) {
       logger.error({ msg: 'felicitacion config', err: err?.message });
       return res.status(500).json({ ok: false, error: 'No se pudo leer la configuración' });
@@ -469,12 +482,13 @@ export function buildCumpleanosAlertasRouter(sequelize: Sequelize) {
         ? img : 'diseno:globos';
       const modo = ['TELEFONO', 'NOMBRE_TELEFONO'].includes(String(b.modo)) ? String(b.modo) : 'TELEFONO';
       const plantilla = String(b.plantilla ?? '').slice(0, 2000).trim() || null;
+      const plantillaAtrasado = String(b.plantilla_atrasado ?? '').slice(0, 2000).trim() || null;
       await sequelize.query(
-        `UPDATE cumpleanos_felicitacion_config SET plantilla = :plantilla, imagen = :imagen, nombre_en_imagen = :nei,
+        `UPDATE cumpleanos_felicitacion_config SET plantilla = :plantilla, plantilla_atrasado = :pat, imagen = :imagen, nombre_en_imagen = :nei,
             automatico = :auto, hora = :hora, prueba = :prueba, destino_prueba = :dp, modo = :modo, updated_by = :uid
           WHERE id = 1`,
         { replacements: {
-          plantilla, imagen, nei: b.nombre_en_imagen === false ? 0 : 1, auto: b.automatico ? 1 : 0, hora,
+          plantilla, pat: plantillaAtrasado, imagen, nei: b.nombre_en_imagen === false ? 0 : 1, auto: b.automatico ? 1 : 0, hora,
           prueba: b.prueba === false ? 0 : 1, dp: String(b.destino_prueba || '').slice(0, 50) || null, modo,
           uid: (req as any).auth?.principalId ?? null,
         } },

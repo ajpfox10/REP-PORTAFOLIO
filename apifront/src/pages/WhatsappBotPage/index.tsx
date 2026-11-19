@@ -18,7 +18,10 @@ interface Estado {
   config: Record<string, string>;
   opciones: Opcion[];
   vista_menu: string;
-  credenciales: { token: boolean; phone_number_id: string; app_secret: boolean; verify_token: boolean; token_origen: string };
+  credenciales: {
+    token: boolean; phone_number_id: string; app_secret: boolean; verify_token: boolean; token_origen: string;
+    proveedor: 'ycloud' | 'meta'; ycloud_api_key: boolean; ycloud_numero: string; ycloud_webhook_secret: boolean;
+  };
   modo: 'SIMULADO' | 'REAL';
   activo: boolean;
   en_horario: boolean;
@@ -115,7 +118,7 @@ export function WhatsappBotPage() {
           <Pestaña t="resets">🔑 Reseteos de clave</Pestaña>
           <Pestaña t="chats">💬 Conversaciones</Pestaña>
           <Pestaña t="probar">🧪 Probar</Pestaña>
-          <Pestaña t="conexion">🔌 Conexión con Meta</Pestaña>
+          <Pestaña t="conexion">🔌 Conexión</Pestaña>
           <span style={{ flex: 1 }} />
           {estado && (
             <>
@@ -148,10 +151,17 @@ function EstadoTab({ e, guardar, ir }: { e: Estado; guardar: (v: Record<string, 
       <div style={{ fontSize: '1.5rem', fontWeight: 700, color }}>{valor}</div>
     </div>
   );
-  const pasos = [
-    { ok: e.credenciales.token && !!e.credenciales.phone_number_id, txt: 'Token y Phone Number ID cargados' },
-    { ok: e.credenciales.app_secret, txt: 'App Secret cargado (valida que los mensajes vengan de Meta)' },
-    { ok: e.credenciales.verify_token, txt: 'Token de verificación del webhook' },
+  const cr = e.credenciales;
+  const esYcloud = cr.proveedor === 'ycloud';
+  const pasos = esYcloud ? [
+    { ok: !!cr.ycloud_numero, txt: 'Número de WhatsApp cargado' },
+    { ok: cr.ycloud_api_key, txt: 'API Key de YCloud cargada' },
+    { ok: cr.ycloud_webhook_secret, txt: 'Secreto del webhook (valida que los mensajes vengan de YCloud)' },
+    { ok: !!e.webhook, txt: 'URL pública (ngrok) cargada' },
+  ] : [
+    { ok: cr.token && !!cr.phone_number_id, txt: 'Token y Phone Number ID cargados' },
+    { ok: cr.app_secret, txt: 'App Secret cargado (valida que los mensajes vengan de Meta)' },
+    { ok: cr.verify_token, txt: 'Token de verificación del webhook' },
     { ok: !!e.webhook, txt: 'URL pública (ngrok) cargada' },
   ];
   return (
@@ -182,11 +192,11 @@ function EstadoTab({ e, guardar, ir }: { e: Estado; guardar: (v: Record<string, 
 
       <div className="card" style={{ marginTop: 12, padding: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
         <div>
-          <h3 style={{ marginTop: 0 }}>Conexión con Meta</h3>
+          <h3 style={{ marginTop: 0 }}>Conexión ({esYcloud ? 'YCloud' : 'Meta directo'})</h3>
           {pasos.map(p => <div key={p.txt} style={{ fontSize: '0.88rem', margin: '4px 0' }}>{p.ok ? '✅' : '⬜'} {p.txt}</div>)}
           {e.modo === 'SIMULADO' && (
             <p style={{ fontSize: '0.85rem', color: '#fbbf24' }}>
-              Mientras falten el token o el Phone Number ID, el bot está en <b>simulación</b>: registra lo que contestaría pero no envía nada.
+              Mientras falten {esYcloud ? 'el número o la API Key' : 'el token o el Phone Number ID'}, el bot está en <b>simulación</b>: registra lo que contestaría pero no envía nada.
             </p>
           )}
           <button type="button" className="btn" onClick={() => ir('conexion')}>🔌 Configurar conexión</button>
@@ -694,15 +704,23 @@ function ConexionTab({ e, guardar }: { e: Estado; guardar: (v: Record<string, st
   const [v, setV] = useState<Record<string, string>>({
     wa_phone_number_id: e.config.wa_phone_number_id || '', url_publica: e.config.url_publica || '',
     wa_graph_version: e.config.wa_graph_version || 'v23.0', wa_token: '', wa_app_secret: '', wa_verify_token: '',
+    wa_proveedor: e.credenciales.proveedor || 'ycloud', ycloud_numero: e.config.ycloud_numero || '',
+    ycloud_api_key: '', ycloud_webhook_secret: '',
   });
   const [prueba, setPrueba] = useState<string>('');
+  const esYcloud = v.wa_proveedor === 'ycloud';
 
   const guardarTodo = async () => {
     const ok = await guardar({
-      wa_phone_number_id: v.wa_phone_number_id, url_publica: v.url_publica, wa_graph_version: v.wa_graph_version,
-      wa_token: v.wa_token, wa_app_secret: v.wa_app_secret, wa_verify_token: v.wa_verify_token,
+      wa_proveedor: v.wa_proveedor, url_publica: v.url_publica,
+      ...(esYcloud
+        ? { ycloud_numero: v.ycloud_numero, ycloud_api_key: v.ycloud_api_key, ycloud_webhook_secret: v.ycloud_webhook_secret }
+        : {
+          wa_phone_number_id: v.wa_phone_number_id, wa_graph_version: v.wa_graph_version,
+          wa_token: v.wa_token, wa_app_secret: v.wa_app_secret, wa_verify_token: v.wa_verify_token,
+        }),
     }, 'Conexión guardada');
-    if (ok) setV(x => ({ ...x, wa_token: '', wa_app_secret: '', wa_verify_token: '' }));
+    if (ok) setV(x => ({ ...x, wa_token: '', wa_app_secret: '', wa_verify_token: '', ycloud_api_key: '', ycloud_webhook_secret: '' }));
   };
   const probar = async () => {
     setPrueba('Probando…');
@@ -738,7 +756,11 @@ function ConexionTab({ e, guardar }: { e: Estado; guardar: (v: Record<string, st
   return (
     <div className="card" style={{ marginTop: 12, padding: 16 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <h3 style={{ margin: 0, flex: 1 }}>Conexión con Meta (API oficial)</h3>
+        <h3 style={{ margin: 0, flex: 1 }}>Conexión (API oficial de WhatsApp)</h3>
+        <select style={{ ...input, width: 'auto' }} value={v.wa_proveedor} onChange={ev => { setV({ ...v, wa_proveedor: ev.target.value }); setPrueba(''); }}>
+          <option value="ycloud">Por YCloud (coexistencia por QR)</option>
+          <option value="meta">Directo con Meta</option>
+        </select>
         <button type="button" className="btn" onClick={() => void probar()}>🔎 Probar conexión</button>
         <button type="button" className="btn" style={{ background: '#16a34a', color: '#fff' }} onClick={() => void guardarTodo()}>💾 Guardar</button>
       </div>
@@ -748,7 +770,23 @@ function ConexionTab({ e, guardar }: { e: Estado; guardar: (v: Record<string, st
         La guía completa está en <code>apipersonal/docs/WHATSAPP_BOT.md</code>.
       </p>
 
+      {v.wa_proveedor !== e.credenciales.proveedor && (
+        <p style={{ fontSize: '0.85rem', color: '#fbbf24' }}>Cambiaste el proveedor: se aplica al tocar 💾 Guardar.</p>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+        {esYcloud ? <>
+          <div>
+            <label style={label}>Número de WhatsApp {e.credenciales.ycloud_numero ? <span style={{ color: '#4ade80' }}>✓</span> : <span style={{ color: '#f87171' }}>falta</span>}</label>
+            <input style={input} value={v.ycloud_numero} placeholder="+5491112345678" onChange={ev => setV({ ...v, ycloud_numero: ev.target.value })} />
+            <div className="muted" style={{ fontSize: '0.75rem', marginTop: 4 }}>El número del WhatsApp Business conectado en YCloud, con +54 9 y código de área, sin el 15.</div>
+          </div>
+          {secreto({ k: 'ycloud_api_key', titulo: 'API Key', cargado: e.credenciales.ycloud_api_key, ayuda: 'YCloud → Desarrolladores → API Keys.' })}
+          {secreto({
+            k: 'ycloud_webhook_secret', titulo: 'Secreto del webhook', cargado: e.credenciales.ycloud_webhook_secret,
+            ayuda: 'YCloud lo muestra al crear el webhook (empieza con whsec_). Sin él se rechazan todos los mensajes.',
+          })}
+        </> : <>
         <div>
           <label style={label}>Phone Number ID {e.credenciales.phone_number_id ? <span style={{ color: '#4ade80' }}>✓</span> : <span style={{ color: '#f87171' }}>falta</span>}</label>
           <input style={input} value={v.wa_phone_number_id} onChange={ev => setV({ ...v, wa_phone_number_id: ev.target.value.replace(/\D/g, '') })} />
@@ -764,6 +802,7 @@ function ConexionTab({ e, guardar }: { e: Estado; guardar: (v: Record<string, st
           ayuda: 'Lo inventamos nosotros. Generalo, guardalo y pegá el MISMO en Meta al configurar el webhook.',
           extra: <button type="button" className="btn" onClick={generarVerify}>🎲 Generar</button>,
         })}
+        </>}
         <div>
           <label style={label}>URL pública (ngrok)</label>
           <input style={input} value={v.url_publica} placeholder="https://tu-dominio.ngrok-free.app" onChange={ev => setV({ ...v, url_publica: ev.target.value })} />
@@ -777,12 +816,27 @@ function ConexionTab({ e, guardar }: { e: Estado; guardar: (v: Record<string, st
             </div>
           )}
         </div>
-        <div>
-          <label style={label}>Versión de la API de Meta</label>
-          <input style={input} value={v.wa_graph_version} onChange={ev => setV({ ...v, wa_graph_version: ev.target.value })} />
-        </div>
+        {!esYcloud && (
+          <div>
+            <label style={label}>Versión de la API de Meta</label>
+            <input style={input} value={v.wa_graph_version} onChange={ev => setV({ ...v, wa_graph_version: ev.target.value })} />
+          </div>
+        )}
       </div>
 
+      {esYcloud ? (
+        <div className="card" style={{ marginTop: 16, padding: 12, background: 'rgba(22,163,74,0.08)' }}>
+          <b>Para cargar en YCloud</b> (Desarrolladores → Webhook → Agregar endpoint):
+          <div style={{ marginTop: 8, fontSize: '0.88rem' }}>
+            URL del endpoint:{' '}
+            {e.webhook && e.credenciales.proveedor === 'ycloud'
+              ? <><code>{e.webhook}</code> <button type="button" className="btn" style={{ padding: '2px 8px' }} onClick={() => copiar(e.webhook)}>📋</button></>
+              : <span className="muted">cargá la URL pública y guardá con YCloud elegido</span>}
+          </div>
+          <div style={{ marginTop: 4, fontSize: '0.88rem' }}>Eventos: solo <b>whatsapp.inbound_message.received</b>.</div>
+          <div style={{ marginTop: 4, fontSize: '0.88rem' }}>Después copiá el <b>secreto</b> que te muestra YCloud y pegalo arriba en “Secreto del webhook”.</div>
+        </div>
+      ) : (
       <div className="card" style={{ marginTop: 16, padding: 12, background: 'rgba(22,163,74,0.08)' }}>
         <b>Para cargar en Meta</b> (tu app → WhatsApp → Configuración → Webhook):
         <div style={{ marginTop: 8, fontSize: '0.88rem' }}>
@@ -792,6 +846,7 @@ function ConexionTab({ e, guardar }: { e: Estado; guardar: (v: Record<string, st
         <div style={{ marginTop: 4, fontSize: '0.88rem' }}>Token de verificación: el que guardaste arriba.</div>
         <div style={{ marginTop: 4, fontSize: '0.88rem' }}>Campos del webhook: suscribirse a <b>messages</b>.</div>
       </div>
+      )}
     </div>
   );
 }

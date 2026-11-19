@@ -130,10 +130,11 @@ async function build(dniFilter = null, force = false) {
       `${fr?.horas ?? '?'} hs > ${TA_MAX_HORAS}). No armo la cola ni cargo.`);
   }
   const [ta] = await cn.query(
-    `SELECT dni, anio, licencia, dias, en_ultima_bajada FROM tiempo_acumulado
+    `SELECT dni, anio, licencia, dias, en_ultima_bajada, pasa FROM tiempo_acumulado
       WHERE anio <= ? AND UPPER(licencia) LIKE 'ANUAL%'`, [ANIO]);
   // Por DNI: tiene ANUAL del año, saldo VIGENTE de ANUAL (ultima bajada, año <= ANIO:
-  // si le queda ANUAL de un año anterior tampoco corresponde), regimenes de SIAPE
+  // si le queda ANUAL de un año anterior tampoco corresponde, PERO solo si esa fila
+  // tiene PASA = SI; con PASA = NO el saldo esta vencido y no cuenta), regimenes de SIAPE
   // (10.430 / 10.471 / BECARIOS / RESIDENTES) y si ya tiene alguna ANUAL COMPLEMENTARIA
   // del año en CUALQUIER bajada (aunque sea en 0 o ya no venga) -> no se vuelve a cargar.
   const tieneAnual = new Set(), saldoVig = new Map(), regSiape = new Map(), yaTieneComp = new Set();
@@ -141,7 +142,9 @@ async function build(dniFilter = null, force = false) {
     const dni = Number(r.dni);
     const tipo = String(r.licencia ?? '').trim().toUpperCase();
     if (tipo.startsWith('ANUAL COMPLEMENTARIA')) { if (r.anio === ANIO) yaTieneComp.add(dni); continue; }
-    if (r.en_ultima_bajada) saldoVig.set(dni, (saldoVig.get(dni) ?? 0) + Number(r.dias || 0));
+    // Saldo de años anteriores: cuenta solo con PASA = SI; con PASA = NO esta vencido.
+    const pasaSi = String(r.pasa ?? '').trim().toUpperCase() === 'SI';
+    if (r.en_ultima_bajada && (r.anio === ANIO || pasaSi)) saldoVig.set(dni, (saldoVig.get(dni) ?? 0) + Number(r.dias || 0));
     if (r.anio !== ANIO) continue;
     tieneAnual.add(dni);
     const m = tipo.match(/\(([^)]+)\)/);
@@ -223,6 +226,21 @@ async function build(dniFilter = null, force = false) {
     for (const r of ings) ingMap.set(r.dni, r.ing);
   }
 
+  // Agentes de BAJA (todas sus filas en agentes = BAJA) no se cargan en SIAPE, salvo que
+  // el usuario los habilite en siape_baja_autorizados (misma regla que el robot de francos).
+  const deBaja = new Set();
+  if (dnis.length) {
+    const [bj] = await cn.query(
+      `SELECT dni FROM agentes WHERE dni IN (?) AND deleted_at IS NULL
+        GROUP BY dni HAVING SUM(estado_empleo IS NULL OR estado_empleo <> 'BAJA') = 0`, [dnis]);
+    for (const r of bj) deBaja.add(Number(r.dni));
+    try {
+      const [au] = await cn.query(`SELECT dni FROM siape_baja_autorizados WHERE dni IN (?)`, [dnis]);
+      for (const r of au) deBaja.delete(Number(r.dni));
+    } catch { /* tabla inexistente: nadie autorizado */ }
+    if (deBaja.size) console.log(`De BAJA (no se cargan): ${[...deBaja].join(', ')}`);
+  }
+
   const [led] = await cn.query(`SELECT dni FROM stress_cargados WHERE anio=?`, [ANIO]);
   const yaCargado = force ? new Set() : new Set(led.map(r => r.dni));
   if (force) console.log('FORCE: ignorando ledger (permite recargar aunque figure cargado)');
@@ -247,6 +265,7 @@ async function build(dniFilter = null, force = false) {
     const lic = variante(leyId);
     let estado = 'pendiente', motivo = null;
     if (yaCargado.has(e.dni)) { estado = 'cargado'; motivo = 'ya en ledger'; dup++; }
+    else if (deBaja.has(e.dni)) { estado = 'omitido'; motivo = 'agente de BAJA: no se carga en SIAPE'; omit++; }
     else if (mixto) { estado = 'omitido'; motivo = `regimen mixto en SIAPE (${regs.join(' + ')}): revisar a mano`; omit++; }
     else if (!lic) { estado = 'omitido'; motivo = `ley sin regla de variante (ley_id=${leyId} ${ley})`; omit++; }
     else if (!dias) { estado = 'omitido'; motivo = 'sin dias de stress (antiguedad/ley)'; omit++; }

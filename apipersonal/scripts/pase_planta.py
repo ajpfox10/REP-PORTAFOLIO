@@ -49,10 +49,10 @@ ESTADO = Path(__file__).resolve().parent / "logs" / "pase_planta_estado.json"
 VIEJOS = "viejos"
 
 
-def D(etiqueta, subs, nombre, ya, no=None, opcional=False, filtro=None, solo_anio=False):
+def D(etiqueta, subs, nombre, ya, no=None, opcional=False, filtro=None, solo_anio=False, una_hoja=False):
     return {"etiqueta": etiqueta, "subs": subs, "nombre": nombre, "ya": re.compile(ya, re.I),
             "no": re.compile(no, re.I) if no else None, "opcional": opcional,
-            "filtro": re.compile(filtro, re.I) if filtro else None, "solo_anio": solo_anio}
+            "filtro": re.compile(filtro, re.I) if filtro else None, "solo_anio": solo_anio, "una_hoja": una_hoja}
 
 
 # Orden del trámite (PASE A TRANSITORIA, leyes 10430 y 10471). subs = carpetas de DOCU (las del botón
@@ -70,7 +70,7 @@ DOCS = [
     D("CUIL", ["CUIL"], "CUIL", r"cuil"),
     D("Curriculum", ["Curriculum"], "CURRICULUM", r"curr[ií]cul|^cv\b"),
     D("Título", ["Titulo"], "TITULO", r"t[ií]tulo"),
-    D("Ético", ["Etico (si lo tuviere)", "Etico"], "ETICO", r"[eé]tic", opcional=True, filtro=r"^Antecedentes Eticos"),
+    D("Ético", ["Etico (si lo tuviere)", "Etico"], "ETICO", r"[eé]tic", opcional=True, filtro=r"^Antecedentes Eticos", una_hoja=True),
     D("Matrícula", ["Matricula (si la tuviere)", "Matricula"], "MATRICULA", r"matr[ií]cula", opcional=True),
     D("Carnet de conducir", ["Carnet de conducir (Solo choferes)"], "CARNET DE CONDUCIR", r"carnet|^licencia", opcional=True),
     D("DDJJ habilitación para conducir", ["Declaracion Jurada Habilitacion para conducir (Solo Chofer)"], "DDJJ CONDUCIR",
@@ -79,8 +79,8 @@ DOCS = [
       r"dispo|autorizaci[oó]n manejo", opcional=True),
     D("Declaración jurada", ["Declaracion jurada"], "DECLARACION JURADA", r"declaraci[oó]n jurada|^ddjj", no=r"salud|conduc"),
     D("Planilla de compatibilidad", ["Planilla de incompatibilidad"], "PLANILLA DE COMPATIBILIDAD", r"compatib", solo_anio=True),
-    D("Antecedentes provinciales", ["Certificado ant. Provinciales"], "PROVINCIAL", r"provincial"),
-    D("Antecedentes nacionales", ["Certificado ant. Nacionales"], "NACIONAL", r"nacional"),
+    D("Antecedentes provinciales", ["Certificado ant. Provinciales"], "PROVINCIAL", r"provincial", una_hoja=True),
+    D("Antecedentes nacionales", ["Certificado ant. Nacionales"], "NACIONAL", r"nacional", una_hoja=True),
     D("DDJJ condiciones de salud", ["DDJJ Cond. De Salud"], "DDJJ SALUD", r"salud"),
     D("Certificado de discapacidad", ["Certificado de discapacidad (Terminos Ley 10592)"], "CERTIFICADO DE DISCAPACIDAD",
       r"discapac", opcional=True),
@@ -152,7 +152,7 @@ def es_de(doc, nombre_archivo):
     return bool(doc["ya"].search(nombre_archivo)) and not (doc["no"] and doc["no"].search(nombre_archivo))
 
 
-def elegir_origen(carpetas, filtro=None, solo_anio=None):
+def elegir_origen(carpetas, filtro=None, solo_anio=None, una_hoja=False):
     """Lista de archivos a pasar (en orden) según la regla de la cabecera, o []."""
     fs = []
     for c in carpetas:
@@ -164,13 +164,46 @@ def elegir_origen(carpetas, filtro=None, solo_anio=None):
     if not fs:
         return []
     nuevo = max(fs, key=mtime)
-    if nuevo.suffix.lower() in IMAGEN:
-        return sorted([f for f in fs if f.suffix.lower() in IMAGEN and f.parent == nuevo.parent], key=orden_natural)
-    return [nuevo]
+    dia = datetime.fromtimestamp(mtime(nuevo)).date()
+
+    def imagenes_del_dia(carpeta):
+        return sorted([f for f in fs if f.suffix.lower() in IMAGEN and f.parent == carpeta
+                       and datetime.fromtimestamp(mtime(f)).date() == dia], key=orden_natural)
+
+    if not una_hoja:
+        return imagenes_del_dia(nuevo.parent) if nuevo.suffix.lower() in IMAGEN else [nuevo]
+    # Certificado (una_hoja): si el mismo día llegó dos veces (la foto de una hoja y el PDF original
+    # partido en 4 páginas, Lambertini 12/11/2026) gana la versión con menos hojas útiles;
+    # a igual cantidad, la más nueva.
+    opciones = [[f] for f in fs if f.suffix.lower() == ".pdf" and datetime.fromtimestamp(mtime(f)).date() == dia]
+    for c in {f.parent for f in fs if f.suffix.lower() in IMAGEN}:
+        imgs = imagenes_del_dia(c)
+        if imgs:
+            opciones.append(imgs)
+    return min(opciones, key=lambda o: (contar_paginas(o), -max(mtime(f) for f in o)))
 
 
-def paginas_jpg(origenes):
-    """Devuelve lista de bytes JPG, una por hoja."""
+def pagina_vacia(pg):
+    """Hoja del PDF sin contenido útil: casi sin tinta oscura (el PDF de la Policía trae una hoja que solo
+    tiene la "D" gris clarito de la marca de agua "DRA", Lambertini 12/11/2026). Se mira la hoja
+    renderizada chica: menos de 0,2 % de píxeles oscuros = vacía."""
+    try:
+        import pymupdf
+        pix = pg.get_pixmap(matrix=pymupdf.Matrix(0.5, 0.5), colorspace=pymupdf.csGRAY)
+        datos = pix.samples
+        oscuros = sum(1 for v in datos if v < 160)
+        return oscuros < len(datos) * 0.002
+    except Exception:
+        return False
+
+
+def hojas_utiles(doc):
+    utiles = [pg for pg in doc if not pagina_vacia(pg)]
+    return utiles or list(doc)
+
+
+def paginas_jpg(origenes, una_hoja=False):
+    """Devuelve lista de bytes JPG, una por hoja (una_hoja: todas juntas, una debajo de la otra)."""
     from PIL import Image
     out = []
     for f in origenes:
@@ -178,7 +211,7 @@ def paginas_jpg(origenes):
         if ext == ".pdf":
             import pymupdf
             with pymupdf.open(f) as doc:
-                for pg in doc:
+                for pg in hojas_utiles(doc):
                     zoom = min(DPI / 72, ANCHO_MAX / max(pg.rect.width, 1))
                     out.append(pg.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom)).tobytes("jpg", jpg_quality=85))
         elif ext in (".jpg", ".jpeg"):
@@ -188,7 +221,31 @@ def paginas_jpg(origenes):
                 b = io.BytesIO()
                 im.convert("RGB").save(b, "JPEG", quality=88)
                 out.append(b.getvalue())
+    if una_hoja and len(out) > 1:
+        out = [unir_vertical(out)]
     return out
+
+
+def unir_vertical(hojas):
+    """Varias hojas JPG -> una sola imagen (sin el blanco de arriba y abajo de cada hoja)."""
+    from PIL import Image, ImageChops
+    ims = []
+    for datos in hojas:
+        im = Image.open(io.BytesIO(datos)).convert("RGB")
+        caja = ImageChops.difference(im, Image.new("RGB", im.size, (255, 255, 255))).convert("L").point(
+            lambda v: 255 if v > 24 else 0).getbbox()
+        if caja:
+            im = im.crop((0, max(0, caja[1] - 20), im.width, min(im.height, caja[3] + 20)))
+        ims.append(im)
+    ancho = max(i.width for i in ims)
+    total = Image.new("RGB", (ancho, sum(i.height for i in ims)), (255, 255, 255))
+    y = 0
+    for i in ims:
+        total.paste(i, ((ancho - i.width) // 2, y))
+        y += i.height
+    b = io.BytesIO()
+    total.save(b, "JPEG", quality=85)
+    return b.getvalue()
 
 
 def contar_paginas(origenes):
@@ -197,7 +254,7 @@ def contar_paginas(origenes):
         if f.suffix.lower() == ".pdf":
             import pymupdf
             with pymupdf.open(f) as doc:
-                n += doc.page_count
+                n += len(hojas_utiles(doc))
         else:
             n += 1
     return n
@@ -256,7 +313,9 @@ def pasar(dry_run=False, tanda=None, log=print):
                     existentes[norm(e.name)] = e
 
     with MN.conn() as cn, cn.cursor() as cur:
-        cur.execute(SQL.format(where="WHERE t.tanda = %s" if tanda else ""), (tanda,) if tanda else ())
+        # Las tandas de renovación (becarios de radicación, 17/11/2026) no van a Pase a planta.
+        cur.execute(SQL.format(where="WHERE t.tanda = %s" if tanda else "WHERE t.tanda NOT LIKE '%%RENOVACI%%'"),
+                    (tanda,) if tanda else ())
         agentes = cur.fetchall()
 
     for a in agentes:
@@ -321,7 +380,7 @@ def pasar(dry_run=False, tanda=None, log=print):
         for doc in DOCS:
             subs = [DOCU / str(dni) / s for s in doc["subs"]]
             hay = [f for f in en_destino if es_de(doc, f)]
-            origenes = elegir_origen(subs, doc["filtro"], anio if doc["solo_anio"] else None)
+            origenes = elegir_origen(subs, doc["filtro"], anio if doc["solo_anio"] else None, doc["una_hoja"])
             if doc["opcional"] and not hay and not origenes:
                 continue   # opcional que el agente no tiene: no figura
             item = {"doc": doc["etiqueta"], "estado": "", "origen": None, "destino": None, "detalle": None}
@@ -332,7 +391,11 @@ def pasar(dry_run=False, tanda=None, log=print):
                 item["destino"] = ", ".join(hay)
                 nuevo_docu = origenes and max(mtime(f) for f in origenes) > max(mtime(carpeta / f) for f in hay) + MARGEN_SEG
                 nuevo_docu = nuevo_docu and not mismas_imagenes(origenes, carpeta, hay)
-                if not nuevo_docu:
+                # Certificado que quedó partido en varios JPG (PROVINCIAL 1..4) por una copia vieja del
+                # robot: se rehace en uno solo y las partes van a viejos (17/11/2026).
+                partido = bool(doc["una_hoja"] and len(hay) > 1 and origenes
+                               and all(re.fullmatch(re.escape(doc["nombre"]) + r" \d+\.jpg", f, re.I) for f in hay))
+                if not nuevo_docu and not partido:
                     item["estado"] = "ya_esta"
                     tot["ya_esta"] += 1
                     continue
@@ -349,14 +412,15 @@ def pasar(dry_run=False, tanda=None, log=print):
             try:
                 if dry_run:
                     item["estado"] = accion
-                    nuevos = nombres_destino(doc["nombre"], contar_paginas(origenes))
-                    item["detalle"] = (f"en DOCU hay uno más nuevo: {', '.join(hay)} va a viejos -> {', '.join(nuevos)}"
+                    nuevos = nombres_destino(doc["nombre"], 1 if doc["una_hoja"] else contar_paginas(origenes))
+                    item["detalle"] = (f"{'estaba partido en varias hojas' if partido else 'en DOCU hay uno más nuevo'}: "
+                                       f"{', '.join(hay)} va a viejos -> {', '.join(nuevos)}"
                                        if accion == "reemplazar" else None)
                     if accion == "copiar":
                         item["destino"] = ", ".join(nuevos)
                     tot[accion] += 1
                     continue
-                hojas = paginas_jpg(origenes)
+                hojas = paginas_jpg(origenes, doc["una_hoja"])
                 destinos = nombres_destino(doc["nombre"], len(hojas))
                 if accion == "reemplazar":
                     for f in hay:

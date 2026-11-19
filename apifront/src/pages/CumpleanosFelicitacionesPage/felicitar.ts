@@ -37,6 +37,7 @@ function celularPrueba(s: string) {
 
 export interface ConfigFelicitacion {
   plantilla: string;
+  plantilla_atrasado: string; // se usa cuando el cumpleaños ya pasó (ayer o antes)
   imagen: string;            // 'diseno:globos' | 'subida:12' | 'carpeta:<archivo>'
   nombre_en_imagen: boolean;
   automatico: boolean;
@@ -57,6 +58,8 @@ export interface CumpleFelicitable {
   anio: number;
   apellido: string;
   nombre: string;
+  fecha_cumple?: string;     // 'YYYY-MM-DD' del cumpleaños de este año
+  dias?: number;             // 0 = hoy, -1 = ayer, ...
   celular?: string | null;
   celular_dudoso?: boolean;
   whatsapp?: { real: EnvioResumen | null; prueba: EnvioResumen | null; intentos: number } | null;
@@ -83,10 +86,40 @@ export function nombreTarjeta(row: { nombre: string; apellido: string }) {
   return capital([palabras(row.nombre).join(' '), palabras(row.apellido)[0] || ''].filter(Boolean).join(' '));
 }
 
-export function armarTexto(plantilla: string, row: { nombre: string; apellido: string }) {
+export function armarTexto(plantilla: string, row: { nombre: string; apellido: string; fecha_cumple?: string; dias?: number }) {
   return plantilla
     .replace(/\{nombre\}/gi, primerNombre(row))
-    .replace(/\{apellido\}/gi, capital(palabras(row.apellido).join(' ')));
+    .replace(/\{apellido\}/gi, capital(palabras(row.apellido).join(' ')))
+    .replace(/\{fecha\}/gi, fechaCumpleTexto(row));
+}
+
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+/** Días desde el cumpleaños: 0 = hoy, negativo = ya pasó. Usa `dias` del back; si no está, lo calcula por la fecha. */
+export function diasCumple(row: { fecha_cumple?: string; dias?: number }): number {
+  if (typeof row.dias === 'number' && Number.isFinite(row.dias)) return row.dias;
+  const [y, m, d] = String(row.fecha_cumple || '').slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return 0;
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  return Math.round((new Date(y, m - 1, d).getTime() - hoy.getTime()) / 86400000);
+}
+
+/** "ayer" o "el sábado 15/11" (para {fecha} del mensaje atrasado). */
+export function fechaCumpleTexto(row: { fecha_cumple?: string; dias?: number }): string {
+  const [y, m, d] = String(row.fecha_cumple || '').slice(0, 10).split('-').map(Number);
+  if (diasCumple(row) === -1) return 'ayer';
+  if (!y || !m || !d) return 'hace unos días';
+  const f = new Date(y, m - 1, d);
+  return `el ${DIAS_SEMANA[f.getDay()]} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+}
+
+/** El cumpleaños ya pasó → se usa el mensaje de atrasado. */
+export function esAtrasado(row: { fecha_cumple?: string; dias?: number }) { return diasCumple(row) < 0; }
+
+/** Texto final que se manda: el de hoy o el de atrasado, según la fecha del cumpleaños. */
+export function textoFelicitacion(cfg: ConfigFelicitacion, row: { nombre: string; apellido: string; fecha_cumple?: string; dias?: number }) {
+  const plantilla = esAtrasado(row) && cfg.plantilla_atrasado?.trim() ? cfg.plantilla_atrasado : cfg.plantilla;
+  return armarTexto(plantilla, row);
 }
 
 /** A dónde se manda: en prueba al número/nombre de prueba; si no, al agente. */
@@ -120,7 +153,7 @@ export async function enviarFelicitacion(row: CumpleFelicitable, cfg: ConfigFeli
       r = { ok: false, estado: 'ERROR', detalle: `No se pudo armar la tarjeta: ${e?.message || e}` };
     }
     if (imagen) {
-      r = await aExtension('ENVIAR', { ...dest, texto: armarTexto(cfg.plantilla, row), imagen }, 180000);
+      r = await aExtension('ENVIAR', { ...dest, texto: textoFelicitacion(cfg, row), imagen }, 180000);
     }
   }
   try {
@@ -137,7 +170,7 @@ export async function enviarFelicitacion(row: CumpleFelicitable, cfg: ConfigFeli
 
 export async function leerConfigFelicitacion() {
   const r = await apiFetch<any>('/alertas-cumpleanos/felicitacion/config');
-  return r.data as { config: ConfigFelicitacion; imagenes: { id: number; nombre: string; mime: string; bytes: number; created_at: string }[]; carpeta: CarpetaTarjetas; plantilla_default: string };
+  return r.data as { config: ConfigFelicitacion; imagenes: { id: number; nombre: string; mime: string; bytes: number; created_at: string }[]; carpeta: CarpetaTarjetas; plantilla_default: string; plantilla_atrasado_default: string };
 }
 
 /** Pide la versión de la extensión instalada (null si no hay). */

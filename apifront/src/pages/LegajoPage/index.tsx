@@ -8,6 +8,8 @@ import { searchPersonal }                from '../../api/searchPersonal';
 import { useToast }                     from '../../ui/toast';
 import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 import { ImportarFormulario } from './ImportarFormulario';
+import { RecibidosEnlace } from './RecibidosEnlace';
+import { LegajoEnlaceBlock } from './LegajoEnlaceBlock';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -51,6 +53,7 @@ const CAMPOS_DATOS_LEGAJO = [
   'clase','dist_militar','cedula_nro','cedula_expedida_por',
   'carta_ciudadania','carta_otorgada_en','carta_fecha','carta_juez_federal',
   'estudios_nivel','estudios_detalle','titulo_secundario','titulo_secundario_otorgado',
+  'titulo_terciario','titulo_terciario_otorgado',
   'titulo_universitario','titulo_universitario_otorgado','aptitud_especial',
   'mil_presto','mil_arma','mil_especialidad','mil_grado','mil_destino','mil_motivo_excepcion',
 ];
@@ -317,11 +320,13 @@ function SeccionDatosPersonales({ d, dl, agente, dni, onRefresh }: {
           <SubTitulo>c) Aptitud</SubTitulo>
           {F('Estudios cursados — Nivel', 'estudios_nivel', 'select', [
             { value: 'PRIMARIO', label: 'Primario' }, { value: 'SECUNDARIO', label: 'Secundario o técnico' },
-            { value: 'UNIVERSITARIO', label: 'Universitario' },
+            { value: 'TERCIARIO', label: 'Terciario' }, { value: 'UNIVERSITARIO', label: 'Universitario' },
           ])}
           {F('Detalle de estudios', 'estudios_detalle')}
           {F('Título Secundario o Técnico', 'titulo_secundario')}
           {F('Otorgado por', 'titulo_secundario_otorgado')}
+          {F('Título Terciario', 'titulo_terciario')}
+          {F('Otorgado por (instituto)', 'titulo_terciario_otorgado')}
           {F('Título Universitario', 'titulo_universitario')}
           {F('Otorgado por', 'titulo_universitario_otorgado')}
           {F('Aptitud especial por Prof. u Oficio', 'aptitud_especial')}
@@ -1304,6 +1309,7 @@ export function LegajoPage() {
   const [hojaImprimir, setHojaImprimir] = useState<number>(0);  // 0 = legajo completo, -1 = hojas 2 y 3 (doble faz)
   const [conFoto, setConFoto] = useState(true);  // foto de la credencial en el cuadro de la hoja 2
   const [importando, setImportando] = useState(false);
+  const [recibidos, setRecibidos] = useState(false);   // Legajo por enlace (mig 138)
 
   // refrescar = recarga tras guardar: no vacía la pantalla ni cambia de pestaña
   const cargar = useCallback(async (dniNum: number, refrescar = false) => {
@@ -1428,6 +1434,10 @@ export function LegajoPage() {
           style={{ background: '#7c3aed', color: '#fff', height: 38 }}>
           Buscar apellido
         </button>
+        <button className="btn" onClick={() => setRecibidos(true)} style={{ height: 38, background: '#4338ca', color: '#fff' }}
+          title="Lo que completaron los agentes desde el enlace del legajo: revisar y aprobar. También mandar enlaces por tanda">
+          📥 Recibidos por enlace
+        </button>
         <button className="btn" onClick={() => setImportando(true)} style={{ height: 38 }}
           title="Importar respuestas del formulario de Google">
           📥 Importar formulario
@@ -1512,6 +1522,10 @@ export function LegajoPage() {
       {/* Legajo cargado */}
       {d && (
         <>
+          {/* Enlace para que el agente complete sus datos desde el celular */}
+          <div className="card" style={{ marginBottom: 8, padding: '8px 16px' }}>
+            <LegajoEnlaceBlock dni={String(activeDni)} />
+          </div>
           {/* Encabezado del agente */}
           <div className="card" style={{ marginBottom: 8, padding: '12px 16px',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -1614,6 +1628,9 @@ export function LegajoPage() {
       )}
       {importando && (
         <ImportarFormulario onClose={() => setImportando(false)} onImportado={refresh} />
+      )}
+      {recibidos && (
+        <RecibidosEnlace onClose={() => setRecibidos(false)} onAprobado={dniAprobado => { if (dniAprobado === activeDni) refresh(); }} />
       )}
     </Layout>
   );

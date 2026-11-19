@@ -9,7 +9,7 @@ import { cargarCumpleanosAlertas, cumpleNombre, fmtCumpleFecha, marcarCumpleanos
 import { DISENOS, dibujarTarjeta, olvidarImagenSubida, olvidarImagenesCarpeta } from './tarjeta';
 import { copiarTexto, lanzarExplorador } from '../../utils/abrirCarpeta';
 import {
-  VERSION_EXT_IMAGEN, TXT_ESTADO_WSP, armarTexto, destinoDe, enviarFelicitacion, esPcAutomatica, leerConfigFelicitacion,
+  VERSION_EXT_IMAGEN, TXT_ESTADO_WSP, textoFelicitacion, esAtrasado, fechaCumpleTexto, destinoDe, enviarFelicitacion, esPcAutomatica, leerConfigFelicitacion,
   nombreTarjeta, setPcAutomatica, versionExtension, type CarpetaTarjetas, type ConfigFelicitacion, type CumpleFelicitable,
 } from './felicitar';
 
@@ -46,7 +46,9 @@ function Explicacion() {
             felicita, se los marca como <i>Avisado</i> o se los <i>Omite</i>. Si un día no se mandó, siguen apareciendo como
             “hace N días”.</p>
           <p style={P}><b>2. El texto.</b> Se escribe una sola vez en “Mensaje”. <code>{'{nombre}'}</code> se reemplaza por el primer
-            nombre del agente y <code>{'{apellido}'}</code> por el apellido. Los emojis y los renglones se respetan tal cual.</p>
+            nombre del agente y <code>{'{apellido}'}</code> por el apellido. Los emojis y los renglones se respetan tal cual.
+            Si el cumpleaños <b>ya pasó</b> (ayer, antes de ayer…) se manda en cambio el “Mensaje si el cumpleaños ya pasó”, donde{' '}
+            <code>{'{fecha}'}</code> se reemplaza por “ayer” o por el día, por ejemplo “el sábado 15/11”.</p>
           <p style={P}><b>3. La tarjeta.</b> En “Imagen” se elige uno de los diseños que trae la app (Globos, Confeti, Torta, Flores) o
             una <b>tarjeta propia</b>. Las propias se agregan de dos formas: <b>(a) guardándolas en la carpeta</b>{' '}
             <code>{'G\\TARJETAS CUMPLEANOS'}</code> del servidor (botón <b>📂 Abrir carpeta</b>) y tocando <b>↻ Actualizar carpeta</b>:
@@ -106,6 +108,7 @@ export function CumpleanosFelicitacionesPage() {
   const [carpeta, setCarpeta] = useState<CarpetaTarjetas | null>(null);
   const [leeme, setLeeme] = useState<{ archivo: string; texto: string } | null>(null);
   const [plantillaDefault, setPlantillaDefault] = useState('');
+  const [atrasadoDefault, setAtrasadoDefault] = useState('');
   const [miniaturas, setMiniaturas] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<string | null>(null);
   const [filas, setFilas] = useState<Fila[]>([]);
@@ -132,6 +135,7 @@ export function CumpleanosFelicitacionesPage() {
       setImagenes(d.imagenes);
       setCarpeta(d.carpeta);
       setPlantillaDefault(d.plantilla_default);
+      setAtrasadoDefault(d.plantilla_atrasado_default);
     } catch (e: any) {
       toast.error('No se pudo leer la configuración', e?.message);
     }
@@ -322,7 +326,8 @@ export function CumpleanosFelicitacionesPage() {
 
   if (!cfg) return <Layout title="Felicitaciones de cumpleaños"><div className="muted">Cargando…</div></Layout>;
 
-  const textoMuestra = armarTexto(cfg.plantilla, muestra);
+  const textoMuestra = textoFelicitacion(cfg, muestra);
+  const muestraAtrasada = esAtrasado(muestra);
   const destMuestra = destinoDe(muestra as CumpleFelicitable, cfg);
   const pendientesLista = filas.filter((f) => f.estado_aviso === 'PENDIENTE').length;
 
@@ -357,6 +362,16 @@ export function CumpleanosFelicitacionesPage() {
                 <button className="btn" style={{ fontSize: '0.74rem', padding: '2px 8px' }} onClick={() => set('plantilla', plantillaDefault)}>Volver al texto original</button>
               </div>
               <textarea className="input" rows={5} style={{ width: '100%', resize: 'vertical' }} value={cfg.plantilla} onChange={(e) => set('plantilla', e.target.value)} />
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                <b>Mensaje si el cumpleaños ya pasó</b>
+                <span className="muted" style={{ fontSize: '0.78rem' }}>usa {'{nombre}'}, {'{apellido}'} y {'{fecha}'} (“ayer” o “el sábado 15/11”)</span>
+                <span style={{ flex: 1 }} />
+                <button className="btn" style={{ fontSize: '0.74rem', padding: '2px 8px' }} onClick={() => set('plantilla_atrasado', atrasadoDefault)}>Volver al texto original</button>
+              </div>
+              <textarea className="input" rows={5} style={{ width: '100%', resize: 'vertical' }} value={cfg.plantilla_atrasado ?? ''} onChange={(e) => set('plantilla_atrasado', e.target.value)} />
             </div>
 
             <div>
@@ -478,7 +493,7 @@ export function CumpleanosFelicitacionesPage() {
 
           {/* Vista previa */}
           <div style={{ ...CAJA, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <h3 style={H3}>👀 Vista previa {filas[0] ? <span className="muted" style={{ fontSize: '0.8rem' }}>({cumpleNombre(filas[0])})</span> : <span className="muted" style={{ fontSize: '0.8rem' }}>(ejemplo)</span>}</h3>
+            <h3 style={H3}>👀 Vista previa {filas[0] ? <span className="muted" style={{ fontSize: '0.8rem' }}>({cumpleNombre(filas[0])})</span> : <span className="muted" style={{ fontSize: '0.8rem' }}>(ejemplo)</span>}{muestraAtrasada && <span style={{ fontSize: '0.78rem', color: '#fde68a' }}> · atrasado: fue {fechaCumpleTexto(muestra)}</span>}</h3>
             <div style={{ background: '#0b141a', borderRadius: 12, padding: 12 }}>
               <div style={{ marginLeft: 'auto', maxWidth: 340, background: '#005c4b', borderRadius: 10, padding: 5, color: '#e9edef' }}>
                 {preview ? <img src={preview} alt="Tarjeta" style={{ width: '100%', borderRadius: 7, display: 'block' }} />

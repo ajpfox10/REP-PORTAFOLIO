@@ -242,13 +242,22 @@ export async function generarLegajoPdf(d: any, hojas?: number[], formato: Format
     campo(pg, c, dl.carta_juez_federal, 558, 813, 284.3);
     const niv: Record<string, [number, number]> = {
       PRIMARIO: [190, 227], SECUNDARIO: [238.4, 330.6], UNIVERSITARIO: [342.6, 397] };
-    const nv = niv[s(dl.estudios_nivel).toUpperCase()];
+    // el formulario oficial no tiene casilla de terciario: se tilda Secundario y el detalle lo aclara
+    const nv = niv[s(dl.estudios_nivel).toUpperCase() === 'TERCIARIO' ? 'SECUNDARIO' : s(dl.estudios_nivel).toUpperCase()];
     if (nv) marcar(pg, nv[0], nv[1], 231.9, 239.5);
     campo(pg, c, dl.estudios_detalle, 403, 812, 232);
     campo(pg, c, dl.titulo_secundario, 198, 379, 206.5);
     campo(pg, c, dl.titulo_secundario_otorgado, 441, 810, 206.5);
-    campo(pg, c, dl.titulo_universitario ?? pd.especialidad_nombre, 160, 374, 181.1);
-    campo(pg, c, dl.titulo_universitario_otorgado, 439, 810, 181.1);
+    // sin universitario (vacío o "—") → en ese renglón va el terciario, aclarado (no hay renglón de terciario)
+    const hayUniv = !!dl.titulo_universitario && !/^[-—\s]+$/.test(String(dl.titulo_universitario));
+    const hayTerc = !!dl.titulo_terciario && !/^[-—\s]+$/.test(String(dl.titulo_terciario));
+    if (!hayUniv && hayTerc) {
+      campo(pg, c, `${dl.titulo_terciario} (Terciario)`, 160, 374, 181.1);
+      campo(pg, c, dl.titulo_terciario_otorgado, 439, 810, 181.1);
+    } else {
+      campo(pg, c, dl.titulo_universitario ?? pd.especialidad_nombre, 160, 374, 181.1);
+      campo(pg, c, dl.titulo_universitario_otorgado, 439, 810, 181.1);
+    }
     campo(pg, c, dl.aptitud_especial, 227, 810, 155.7);
     campo(pg, c, dl.mil_presto === null || dl.mil_presto === undefined ? '' : (Number(dl.mil_presto) ? 'Sí' : 'No'), 214, 262, 103.3);
     campo(pg, c, dl.mil_arma, 288, 406, 103.3);

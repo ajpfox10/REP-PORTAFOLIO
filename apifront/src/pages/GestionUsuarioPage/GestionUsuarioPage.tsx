@@ -6,6 +6,7 @@ import { apiFetch, apiFetchBlob } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { TablesContent } from '../TablesPage';
 import { InfoContent } from '../InfoPage/components/InfoContent';
+import { BackupPanel } from './BackupPanel';
 
 type MeResponse = {
   ok: boolean;
@@ -19,7 +20,7 @@ type MeResponse = {
   error?: any;
 };
 
-type TabKey = 'perfil' | 'seguridad' | 'permisos' | 'preferencias' | 'tablas' | 'informacion';
+type TabKey = 'perfil' | 'seguridad' | 'permisos' | 'preferencias' | 'tablas' | 'informacion' | 'backup';
 
 // ── Helper para obtener un track de música como blob URL autenticado ──────────
 import { getApiBaseUrl } from '../../api/env';
@@ -74,6 +75,7 @@ export default function GestionUsuarioPage({ initialTab = 'perfil' }: { initialT
 
   const headerEmail = me?.email ?? session?.user?.email ?? '';
   const canTables = hasPerm('crud:*:read') || hasPerm('crud:*:*');
+  const isAdmin = hasPerm('crud:*:*');
 
   return (
     <Layout title="Mi cuenta" showBack>
@@ -107,6 +109,11 @@ export default function GestionUsuarioPage({ initialTab = 'perfil' }: { initialT
             <button className={`btn ${tab === 'informacion' ? 'active' : ''}`} onClick={() => setTab('informacion')}>
               Informacion
             </button>
+            {isAdmin && (
+              <button className={`btn ${tab === 'backup' ? 'active' : ''}`} onClick={() => setTab('backup')}>
+                💾 Backup
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -115,6 +122,8 @@ export default function GestionUsuarioPage({ initialTab = 'perfil' }: { initialT
         <TablesContent />
       ) : tab === 'informacion' ? (
         <InfoContent />
+      ) : tab === 'backup' ? (
+        isAdmin ? <BackupPanel /> : null
       ) : loadingMe ? (
         <div className="card" style={{ marginTop: 12 }}>
           <div className="muted">Cargando tu información…</div>

@@ -149,6 +149,28 @@ export function buildSamoMinisterioRouter(sequelize: Sequelize): Router {
         // días = lo que ve SAMO (las ocultas no suman, tampoco para el admin)
         if (!oculto) ag.dias += Math.round((Date.parse(r.hasta) - Date.parse(r.desde)) / 86400000) + 1;
       }
+      // Cargo (ocupación) y legajo de nuestra base: el Ministerio no manda cargo.
+      // Por DNI se toma el tramo ACTIVO; si no hay, el más reciente.
+      const dnis = [...porDni.values()].map(a => Number(a.dni)).filter(n => Number.isFinite(n));
+      if (dnis.length) {
+        const nuestros = await sequelize.query<any>(
+          `SELECT a.dni, a.legajo, o.nombre AS ocupacion
+             FROM agentes a
+             LEFT JOIN ocupaciones o ON o.id = a.ocupacion_id
+            WHERE a.deleted_at IS NULL AND a.dni IN (:dnis)
+            ORDER BY a.dni, (a.estado_empleo = 'ACTIVO') DESC, a.fecha_ingreso DESC, a.id DESC`,
+          { replacements: { dnis }, type: QueryTypes.SELECT });
+        const vistos = new Set<string>();
+        for (const n of nuestros) {
+          const k = String(n.dni);
+          if (vistos.has(k)) continue;
+          vistos.add(k);
+          const ag = porDni.get(k);
+          if (!ag) continue;
+          if (!ag.cargo && n.ocupacion) ag.cargo = String(n.ocupacion).trim();
+          if (!ag.legajo && n.legajo) ag.legajo = String(n.legajo);
+        }
+      }
       const ult = await sequelize.query<any>(
         `SELECT MAX(descargado_en) AS d FROM ministerio_novedades_anual WHERE dependencia = :dep`,
         { replacements: { dep }, type: QueryTypes.SELECT });

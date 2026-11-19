@@ -80,6 +80,9 @@ const GRANTS = [
   `GRANT SELECT (id, fecha_cita, hora_cita, estado, deleted_at),
          INSERT (dni, apellido, nombre, ley_nombre, ocupacion_nombre, fecha_cita, hora_cita, motivo, estado, observaciones, creado_por, creado_por_nombre),
          UPDATE (estado) ON \`${DB}\`.\`jubilacion_citas\``,
+  // Legajo por enlace (mig 138): solo la tabla de espera, sin el DNI; lo carga al legajo la oficina
+  `GRANT SELECT (id, token, estado, vence_el, nombre_mostrar, respuestas, devolucion_motivo, enviado_at),
+         UPDATE (respuestas, guardado_at, estado, enviado_at, telefono) ON \`${DB}\`.\`legajo_autocarga\``,
 ];
 
 (async () => {
@@ -90,9 +93,9 @@ const GRANTS = [
   // 1) Las tablas y vistas las crea la API al arrancar: tienen que existir antes de dar permisos
   const app = await mysql2.createConnection({ host: HOST, port: PORT, user: envApp.DB_USER, password: envApp.DB_PASSWORD, database: DB });
   const [ex] = await app.query(
-    `SELECT table_name AS t FROM information_schema.tables WHERE table_schema = ? AND table_name IN ('v_publico_wa_claves','whatsapp_bot_entrada','v_publico_agenda_agente')`, [DB]);
+    `SELECT table_name AS t FROM information_schema.tables WHERE table_schema = ? AND table_name IN ('v_publico_wa_claves','whatsapp_bot_entrada','v_publico_agenda_agente','legajo_autocarga')`, [DB]);
   await app.end();
-  if (ex.length < 3) {
+  if (ex.length < 4) {
     console.error(`En ${DB} faltan la bandeja o las vistas públicas (${ex.map(r => r.t).join(', ') || 'ninguna'}). ` +
       (modo === 'prod' ? 'Primero hacé el deploy y esperá que arranque la API de prod.' : 'Reiniciá la API de dev y volvé a correr esto.'));
     process.exit(1);
@@ -132,10 +135,10 @@ const GRANTS = [
   // 3) Comprobar: puede lo que necesita, no puede leer personal
   const pub = await mysql2.createConnection({ host: HOST, port: PORT, user: USUARIO, password: clave, database: DB });
   const pruebas = [];
-  for (const q of ['SELECT COUNT(*) FROM v_publico_wa_claves', 'SELECT COUNT(*) FROM v_publico_agenda_agente', 'SELECT COUNT(*) FROM agenda_habilitaciones']) {
+  for (const q of ['SELECT COUNT(*) FROM v_publico_wa_claves', 'SELECT COUNT(*) FROM v_publico_agenda_agente', 'SELECT COUNT(*) FROM agenda_habilitaciones', 'SELECT COUNT(id) FROM legajo_autocarga']) {
     try { await pub.query(q); pruebas.push(`OK   ${q}`); } catch (e) { pruebas.push(`FALLA ${q}: ${e.message}`); }
   }
-  for (const q of ['SELECT dni FROM personal LIMIT 1', 'SELECT * FROM whatsapp_bot_entrada LIMIT 1', 'SELECT * FROM whatsapp_bot_pedidos LIMIT 1', 'SELECT * FROM whatsapp_bot_config LIMIT 1']) {
+  for (const q of ['SELECT dni FROM personal LIMIT 1', 'SELECT * FROM whatsapp_bot_entrada LIMIT 1', 'SELECT * FROM whatsapp_bot_pedidos LIMIT 1', 'SELECT * FROM whatsapp_bot_config LIMIT 1', 'SELECT dni FROM legajo_autocarga LIMIT 1', 'SELECT * FROM legajo_datos_personales LIMIT 1']) {
     try { await pub.query(q); pruebas.push(`MAL  ${q} (no debería poder)`); } catch { pruebas.push(`OK   bloqueado: ${q}`); }
   }
   await pub.end();

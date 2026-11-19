@@ -94,6 +94,7 @@ import { buildAlertasAgenteRouter } from '../routes/alertasAgente.routes';
 import { buildCumpleanosAlertasRouter } from '../routes/cumpleanosAlertas.routes';
 import { buildReclamosHaberesRouter } from '../routes/reclamosHaberes.routes';
 import { buildScriptRunsRouter } from '../routes/scriptRuns.routes';
+import { buildBackupEstadoRouter } from '../routes/backupEstado.routes';
 import { buildResolucionesSinArchivoRouter } from '../routes/resolucionesSinArchivo.routes';
 import { buildFeriadosRouter } from '../routes/feriados.routes';
 import { buildBecariosArtRouter }   from '../routes/becariosArt.routes';
@@ -282,6 +283,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/nombramiento`,       ...protect, requireAny([ADMIN]), buildNombramientoRouter(sequelize));
   app.use(`${apiPrefix}/tramites-documentales`, ...protect, requireAny(['documents:read', ADMIN]), buildTramitesDocumentalesRouter(sequelize));
   app.use(`${apiPrefix}/script-runs`,        ...protect, buildScriptRunsRouter(sequelize));
+  app.use(`${apiPrefix}/backup-estado`,      ...protect, requireAny([ADMIN]), buildBackupEstadoRouter(sequelize));
   app.use(`${apiPrefix}/resoluciones-sin-archivo`, ...protect, requireAny(['crud:resoluciones:read', ADMIN]), buildResolucionesSinArchivoRouter(sequelize));
   app.use(`${apiPrefix}/feriados`,           ...protect, buildFeriadosRouter(sequelize));
 

@@ -5,7 +5,7 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, degrees } from 'pdf-lib';
 import * as XLSX from 'xlsx';
 import { QueryTypes, Sequelize } from 'sequelize';
 import { env } from '../config/env';
@@ -723,6 +723,71 @@ async function appendPaginasAlMerged(
     return 1;
   }
   return 0;
+}
+
+// ── Sacar / rotar hojas del combinado + carpeta "Trasladados" ────────────────
+// "Sacar" una hoja la lleva a DOCU\<dni>\Trasladados\<subcarpeta>\ (nunca se borra):
+// si el archivo tiene varias hojas, se separa SOLO esa hoja en un PDF aparte y el
+// original queda sin ella; si tiene una sola (o es imagen/TIFF), se mueve el archivo.
+// "Restaurar" lo devuelve a su subcarpeta de origen (la misma que está bajo Trasladados).
+const TRASLADADOS_DIR = 'Trasladados';
+
+// Nombre que no pise nada en `dir`: "x.pdf" → "x (2).pdf", "x (3).pdf"…
+function nombreLibre(dir: string, fileName: string): string {
+  const ext = path.extname(fileName);
+  const base = fileName.slice(0, fileName.length - ext.length);
+  let cand = fileName;
+  for (let n = 2; fs.existsSync(path.join(dir, cand)); n += 1) cand = `${base} (${n})${ext}`;
+  return cand;
+}
+
+function moverArchivo(from: string, to: string): void {
+  try {
+    fs.renameSync(from, to);
+  } catch (e: any) {
+    if (e?.code !== 'EXDEV') throw e;
+    fs.copyFileSync(from, to);
+    fs.unlinkSync(from);
+  }
+}
+
+// Escribe por archivo temporal + rename para no dejar el original a medio escribir.
+function escribirAtomico(fp: string, buf: Buffer | Uint8Array): void {
+  const tmp = `${fp}.tmp-${Date.now()}`;
+  fs.writeFileSync(tmp, buf);
+  try { fs.renameSync(tmp, fp); } catch (e) { try { fs.unlinkSync(tmp); } catch { /* noop */ } throw e; }
+}
+
+// "<subcarpeta>/<archivo>" de una fuente del combinado (no puede estar en Trasladados).
+function fuenteCombinarRel(dni: number, relRaw: unknown): { carpeta: string; archivo: string; fp: string } {
+  const partes = String(relRaw || '').replace(/\\/g, '/').split('/').filter(Boolean);
+  if (partes.length !== 2 || partes[0].toLowerCase() === TRASLADADOS_DIR.toLowerCase()) {
+    throw Object.assign(new Error('Archivo inválido'), { status: 400 });
+  }
+  const carpeta = safeSegment(partes[0]);
+  const archivo = safeSegment(partes[1]);
+  const fp = resolveInsideDocu(dni, `${carpeta}/${archivo}`);
+  if (!fs.existsSync(fp)) throw Object.assign(new Error('El archivo ya no existe'), { status: 404 });
+  return { carpeta, archivo, fp };
+}
+
+// "Trasladados/<subcarpeta>/<archivo>" → ruta validada.
+function trasladadoRel(dni: number, relRaw: unknown): { carpeta: string; archivo: string; fp: string } {
+  const partes = String(relRaw || '').replace(/\\/g, '/').split('/').filter(Boolean);
+  if (partes.length !== 3 || partes[0].toLowerCase() !== TRASLADADOS_DIR.toLowerCase()) {
+    throw Object.assign(new Error('Archivo trasladado inválido'), { status: 400 });
+  }
+  const carpeta = safeSegment(partes[1]);
+  const archivo = safeSegment(partes[2]);
+  const fp = resolveInsideDocu(dni, `${TRASLADADOS_DIR}/${carpeta}/${archivo}`);
+  if (!fs.existsSync(fp)) throw Object.assign(new Error('El archivo ya no existe'), { status: 404 });
+  return { carpeta, archivo, fp };
+}
+
+async function cargarPdfEditable(fp: string): Promise<PDFDocument> {
+  const src = await PDFDocument.load(fs.readFileSync(fp), { ignoreEncryption: true });
+  if (src.isEncrypted) throw Object.assign(new Error('El PDF está protegido; no se puede modificar'), { status: 400 });
+  return src;
 }
 
 function parseDocumentOrder(raw: unknown): DocumentOrderInput[] {
@@ -2657,11 +2722,56 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
         };
         for (const r of nr) if (esOtroPais(r.nacionalidad) || esOtroPais(r.nac_pais)) extranjeros.add(Number(r.dni));
       }
+      // "Extranjeros" para RRHH = becarios del Programa Beca de Radicación para Profesionales
+      // Extranjeros (ley_id 12), no cualquier DNI >= 90M (17/11/2026). Vigentes = ACTIVO / TRAMITE /
+      // COMISION. Con lo recibido por mail de cada uno, para el bloque "Faltan" del panel.
+      const becarios = await sequelize.query<{ dni: number; nombre: string; estado: string }>(
+        `SELECT a.dni, TRIM(CONCAT(COALESCE(p.apellido, ''), ', ', COALESCE(p.nombre, ''))) AS nombre,
+                MIN(a.estado_empleo) AS estado
+           FROM agentes a
+           JOIN personal p ON p.dni = a.dni AND p.deleted_at IS NULL
+          WHERE a.ley_id = 12 AND a.deleted_at IS NULL AND a.estado_empleo IN ('ACTIVO', 'TRAMITE', 'COMISION')
+          GROUP BY a.dni, p.apellido, p.nombre
+          ORDER BY p.apellido, p.nombre`,
+        { type: QueryTypes.SELECT },
+      );
+      const radicacion = new Set<number>(becarios.map((b) => Number(b.dni)));
+      const recibidoPorDni = new Map<number, Record<string, string>>();
+      for (const r of items as any[]) {
+        const d = Number(String(r.dni || '').replace(/\D/g, ''));
+        if (!d || !radicacion.has(d) || r.estado === 'error') continue;
+        const tipo = String(r.novedad || '').split(' · ')[0].replace(/^Antecedentes\s*/i, '').trim().toLowerCase();
+        if (!tipo || tipo === '?') continue;
+        const m = recibidoPorDni.get(d) || {};
+        const f = String(r.creado_at instanceof Date ? r.creado_at.toISOString() : r.creado_at);
+        if (!m[tipo] || f > m[tipo]) m[tipo] = f;   // el más reciente de cada tipo
+        recibidoPorDni.set(d, m);
+      }
+      const tandasBecarios = new Map<number, string[]>();
+      if (becarios.length) {
+        const tb = await sequelize.query<{ dni: number; tanda: string }>(
+          `SELECT dni, tanda FROM tramites_tanda_interinos WHERE dni IN (:dnis) ORDER BY tanda`,
+          { replacements: { dnis: Array.from(radicacion) }, type: QueryTypes.SELECT },
+        );
+        for (const r of tb) {
+          const k = Number(r.dni);
+          if (!tandasBecarios.has(k)) tandasBecarios.set(k, []);
+          tandasBecarios.get(k)!.push(r.tanda);
+        }
+      }
       const data = items.map((r: any) => {
         const d = Number(String(r.dni || '').replace(/\D/g, ''));
-        return { ...r, tandas: d ? tandasPorDni.get(d) || [] : [], extranjero: d ? extranjeros.has(d) : false };
+        return {
+          ...r, tandas: d ? tandasPorDni.get(d) || [] : [], extranjero: d ? extranjeros.has(d) : false,
+          radicacion: d ? radicacion.has(d) : false,
+        };
       });
-      return res.json({ ok: true, data });
+      const becariosRadicacion = becarios.map((b) => ({
+        dni: Number(b.dni), nombre: b.nombre, estado: b.estado,
+        tandas: tandasBecarios.get(Number(b.dni)) || [],
+        recibidos: recibidoPorDni.get(Number(b.dni)) || {},
+      }));
+      return res.json({ ok: true, data, becariosRadicacion });
     } catch (err: any) {
       logger.error({ msg: '[tramites] antecedentes-recibidos error', error: err?.message });
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });
@@ -3013,6 +3123,151 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // ── Legajo Digital SIAPE (botón ⬇️ Legajo SIAPE) ──────────────────────────────
+  // El robot scripts/descargar_legajo_digital_siape.py (robots_config siape_legajo_digital, mig 136)
+  // baja de SIAPE el CV y la Planilla de datos personales (PASE A PLANTA PERMANENTE 2026) a
+  // DOCU\<dni>\Curriculum y \Planilla de datos personales. Tarda ~6 min por agente y usa SIAPE,
+  // así que se lanza por run_robot (respeta el turno de los robots de SIAPE); el pedido (tanda, dnis)
+  // va a app_runtime_config porque run_robot no pasa parámetros, y el robot deja su avance en
+  // 'siape_legajo_digital_estado'.
+  const LD_SCRIPT = 'siape_legajo_digital';
+  const LD_PEDIDO = 'siape_legajo_digital_pedido';
+  const LD_ESTADO = 'siape_legajo_digital_estado';
+  const LD_DOCS = [
+    { clave: 'cv', carpeta: 'Curriculum', prefijo: 'Curriculum SIAPE' }, // sync-guard:ignore
+    { clave: 'planilla', carpeta: 'Planilla de datos personales', prefijo: 'Planilla de datos personales SIAPE' }, // sync-guard:ignore
+  ] as const;
+
+  const leerRuntime = async (clave: string): Promise<any> => {
+    const [r] = await sequelize.query<any>(
+      `SELECT config_json, updated_at FROM app_runtime_config WHERE config_key = :clave`,
+      { replacements: { clave }, type: QueryTypes.SELECT },
+    );
+    if (!r?.config_json) return null;
+    try {
+      const j = typeof r.config_json === 'string' ? JSON.parse(r.config_json) : r.config_json;
+      return { ...j, _updatedAt: r.updated_at };
+    } catch { return null; }
+  };
+
+  // GET ?tanda= → por agente: qué archivo de SIAPE ya está en DOCU + último resultado del robot.
+  router.get('/tandas/legajo-digital', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.query.tanda);
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+      const base = path.resolve(getDocuBaseDir());
+      const agentes = await sequelize.query<any>(
+        `SELECT t.dni, p.apellido, p.nombre
+           FROM tramites_tanda_interinos t
+           LEFT JOIN personal p ON p.dni = t.dni AND p.deleted_at IS NULL
+          WHERE t.tanda = :tanda
+          ORDER BY p.apellido, p.nombre`,
+        { replacements: { tanda }, type: QueryTypes.SELECT },
+      );
+      const dnis = agentes.map((a) => String(a.dni));
+      // último resultado del robot por DNI (script_run_items)
+      const items = dnis.length ? await sequelize.query<any>(
+        `SELECT i.dni, i.estado, i.detalle, i.creado_at
+           FROM script_run_items i
+           JOIN (SELECT dni, MAX(id) AS id FROM script_run_items WHERE script = :s AND dni IN (:dnis) GROUP BY dni) u
+             ON u.id = i.id`,
+        { replacements: { s: LD_SCRIPT, dnis }, type: QueryTypes.SELECT },
+      ) : [];
+      const ultimo = new Map(items.map((i) => [String(i.dni), i]));
+      const rows = agentes.map((a) => {
+        const docs: Record<string, string | null> = {};
+        for (const d of LD_DOCS) {
+          let archivo: string | null = null;
+          try {
+            const dir = path.join(base, String(a.dni), d.carpeta);
+            if (fs.existsSync(dir)) {
+              const hits = fs.readdirSync(dir).filter((f) => f.startsWith(d.prefijo)).sort();
+              archivo = hits.length ? hits[hits.length - 1] : null;
+            }
+          } catch { archivo = null; }
+          docs[d.clave] = archivo;
+        }
+        const u = ultimo.get(String(a.dni));
+        const det = String(u?.detalle || '');
+        return {
+          dni: Number(a.dni),
+          apellido: a.apellido || '',
+          nombre: a.nombre || '',
+          cv: docs.cv,
+          planilla: docs.planilla,
+          ultimo: u ? {
+            estado: String(u.estado || ''),
+            // "sin_tramite: ..." = no está en la tanda 2026 de SIAPE
+            sinTramite: det.startsWith('sin_tramite'),
+            detalle: det.slice(0, 400),
+            fecha: u.creado_at,
+          } : null,
+        };
+      });
+      const estado = await leerRuntime(LD_ESTADO);
+      const pedido = await leerRuntime(LD_PEDIDO);
+      // "corriendo" vale si el robot actualizó hace menos de 20 min (un agente tarda ~6)
+      const fresco = estado?.actualizado && (Date.now() - new Date(estado.actualizado).getTime()) < 20 * 60 * 1000;
+      const corriendo = !!(estado?.corriendo && fresco);
+      // pedido más nuevo que la última corrida y de hace menos de 1 h = en cola esperando el turno de SIAPE
+      const pedidoAt = pedido?.pedidoAt ? new Date(pedido.pedidoAt).getTime() : 0;
+      const inicioAt = estado?.inicio ? new Date(estado.inicio).getTime() : 0;
+      const enCola = !corriendo && pedidoAt > inicioAt && Date.now() - pedidoAt < 60 * 60 * 1000;
+      return res.json({
+        ok: true,
+        data: {
+          tanda, rows,
+          robot: {
+            corriendo, enCola,
+            tanda: estado?.tanda ?? null,
+            total: estado?.total ?? null,
+            hechos: estado?.hechos ?? null,
+            actual: corriendo ? (estado?.actual ?? null) : null,
+            inicio: estado?.inicio ?? null,
+            fin: estado?.fin ?? null,
+            bajados: estado?.bajados ?? null,
+            errores: estado?.errores ?? null,
+            error: estado?.error ?? null,
+          },
+        },
+      });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] legajo-digital estado error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al leer el estado' });
+    }
+  });
+
+  // POST { tanda, dnis? } → deja el pedido y lanza el robot (si no hay ningún otro de SIAPE, arranca ya;
+  // si hay, run_robot espera su turno).
+  router.post('/tandas/legajo-digital', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.body?.tanda);
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+      const dnis: number[] | undefined = Array.isArray(req.body?.dnis)
+        ? req.body.dnis.map((v: any) => parseDni(v)).filter((v: number | null): v is number => !!v)
+        : undefined;
+      const estado = await leerRuntime(LD_ESTADO);
+      const fresco = estado?.actualizado && (Date.now() - new Date(estado.actualizado).getTime()) < 20 * 60 * 1000;
+      if (estado?.corriendo && fresco) {
+        return res.status(409).json({ ok: false, error: `El robot ya está corriendo (tanda "${estado.tanda || '-'}"). Esperá a que termine.` });
+      }
+      const actor = (req as any).auth?.principalType === 'user' ? Number((req as any).auth.principalId) || null : null;
+      const pedido = { tanda, ...(dnis?.length ? { dnis } : {}), pedidoAt: new Date().toISOString() };
+      await sequelize.query(
+        `INSERT INTO app_runtime_config (config_key, config_json, updated_by, created_at, updated_at)
+         VALUES (:k, :j, :u, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE config_json = VALUES(config_json), updated_by = VALUES(updated_by), updated_at = NOW()`,
+        { replacements: { k: LD_PEDIDO, j: JSON.stringify(pedido), u: actor } },
+      );
+      const como = await ejecutarAhora(LD_SCRIPT);
+      logger.info({ msg: '[tramites] legajo-digital lanzado', tanda, dnis: dnis?.length || 0, como });
+      return res.json({ ok: true, data: { tanda, como } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] legajo-digital lanzar error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'No se pudo lanzar el robot' });
+    }
+  });
+
   // Estado de un agente en una tanda: { tanda, dni, estado } (pendiente|hecho|aprobado).
   router.post('/tandas/estado', async (req: Request, res: Response) => {
     try {
@@ -3090,6 +3345,69 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       return res.json({ ok: true, data: { rows, leyes: leyes.map((l) => l.ley), proceso } });
     } catch (err: any) {
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al listar orden de documentos' });
+    }
+  });
+
+  // Alta de un documento nuevo en el orden: { proceso?, ley, documento, observacion?, otraLey? }.
+  // Entra al final (orden = max+1) de cada ley elegida y crea la subcarpeta DOCU\<dni>\<documento>
+  // a todos los agentes de TODAS las tandas que sean de esa ley y ya tengan carpeta en DOCU,
+  // salteando a los que están en estado 'aprobado' (trámite terminado). Nunca pisa carpetas.
+  router.post('/orden-docs', async (req: Request, res: Response) => {
+    try {
+      const proceso = queryString(req.body?.proceso) || ORDEN_PROCESO_DEFAULT;
+      const ley = queryString(req.body?.ley);
+      const documento = String(req.body?.documento || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      const observacion = String(req.body?.observacion || '').trim() || null;
+      if (!ley || !['10430', '10471'].includes(ley)) return res.status(400).json({ ok: false, error: 'Ley inválida' });
+      if (!documento) return res.status(400).json({ ok: false, error: 'Falta el nombre del documento' });
+      if (/[\\/]/.test(documento)) return res.status(400).json({ ok: false, error: 'El nombre no puede tener / ni \\ (se usa como nombre de carpeta)' });
+      const carpeta = safeSegment(documento); // valida que sirva como nombre de carpeta
+      const leyes = req.body?.otraLey ? [ley, ley === '10430' ? '10471' : '10430'] : [ley];
+
+      // Nombre repetido (mismo nombre o misma carpeta) en alguna de las leyes → no se agrega nada.
+      const existentes = await sequelize.query<{ ley: string; documento: string }>(
+        `SELECT ley, documento FROM orden_documentos_expediente WHERE proceso = :proceso AND ley IN (:leyes)`,
+        { replacements: { proceso, leyes }, type: QueryTypes.SELECT }
+      );
+      const choca = existentes.find((e) => safeSegment(e.documento).toLowerCase() === carpeta.toLowerCase());
+      if (choca) return res.status(409).json({ ok: false, error: `Ya existe «${choca.documento}» en la ley ${choca.ley}` });
+
+      await sequelize.transaction(async (t) => {
+        for (const l of leyes) {
+          const [mx] = await sequelize.query<{ m: number | null }>(
+            `SELECT MAX(orden) AS m FROM orden_documentos_expediente WHERE proceso = :proceso AND ley = :ley`,
+            { replacements: { proceso, ley: l }, type: QueryTypes.SELECT, transaction: t }
+          );
+          await sequelize.query(
+            `INSERT INTO orden_documentos_expediente (proceso, ley, orden, documento, observacion, activo)
+             VALUES (:proceso, :ley, :orden, :documento, :observacion, 1)`,
+            { replacements: { proceso, ley: l, orden: Number(mx?.m || 0) + 1, documento, observacion }, type: QueryTypes.INSERT, transaction: t }
+          );
+        }
+      });
+
+      // Carpetas en DOCU para los agentes de todas las tandas de esas leyes.
+      const agentes = (await listTandaAgentes(sequelize, null)) as any[];
+      const vistos = new Set<number>();
+      let creadas = 0, yaTenian = 0, sinCarpeta = 0, aprobados = 0;
+      for (const a of agentes) {
+        const dni = Number(a.dni);
+        if (!dni || vistos.has(dni)) continue;
+        if (!leyes.includes(String(a.ocupacionLey || ''))) continue;
+        vistos.add(dni);
+        if (String(a.estado || '').toLowerCase() === 'aprobado') { aprobados += 1; continue; }
+        const dir = resolveDocuAgentDir(dni);
+        if (!fs.existsSync(dir)) { sinCarpeta += 1; continue; }
+        const target = path.join(dir, carpeta);
+        if (fs.existsSync(target)) { yaTenian += 1; continue; }
+        fs.mkdirSync(target, { recursive: true });
+        creadas += 1;
+      }
+      logger.info({ msg: '[tramites] documento agregado al orden', proceso, leyes, documento, creadas, yaTenian, sinCarpeta, aprobados });
+      return res.json({ ok: true, data: { documento, leyes, carpetas: { creadas, yaTenian, sinCarpeta, aprobados } } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] orden-docs alta error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al agregar el documento' });
     }
   });
 
@@ -3472,6 +3790,221 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     } catch (err: any) {
       logger.error({ msg: '[tramites] combinar-guardar error', error: err?.message });
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al guardar el combinado' });
+    }
+  });
+
+  // Saca UNA hoja del combinado → DOCU\<dni>\Trasladados\<subcarpeta>\.
+  // modo 'hoja': se separó esa página y el original quedó sin ella (las siguientes corren -1).
+  // modo 'archivo': se movió el archivo entero (tenía una sola hoja, o es imagen/TIFF).
+  router.post('/combinar-sacar', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const page = Number(req.body?.page);
+      if (!Number.isInteger(page) || page < 0) return res.status(400).json({ ok: false, error: 'Página inválida' });
+      const { carpeta, archivo, fp } = fuenteCombinarRel(dni, req.body?.rel);
+
+      const destDir = path.join(resolveDocuAgentDir(dni), TRASLADADOS_DIR, carpeta);
+      fs.mkdirSync(destDir, { recursive: true });
+
+      let modo: 'hoja' | 'archivo' = 'archivo';
+      let destName: string;
+      const src = COMBINAR_PDF.test(fp) ? await cargarPdfEditable(fp) : null;
+      if (src && page >= src.getPageCount()) return res.status(400).json({ ok: false, error: 'Página inexistente' });
+
+      if (src && src.getPageCount() > 1) {
+        const sacada = await PDFDocument.create();
+        const [copia] = await sacada.copyPages(src, [page]);
+        sacada.addPage(copia);
+        const base = archivo.replace(/\.pdf$/i, '');
+        destName = nombreLibre(destDir, `${base} - hoja ${page + 1}.pdf`);
+        fs.writeFileSync(path.join(destDir, destName), Buffer.from(await sacada.save())); // primero la copia
+        src.removePage(page);
+        escribirAtomico(fp, Buffer.from(await src.save()));
+        modo = 'hoja';
+      } else {
+        destName = nombreLibre(destDir, archivo);
+        moverArchivo(fp, path.join(destDir, destName));
+      }
+      logger.info({ msg: '[tramites] hoja trasladada', dni, rel: `${carpeta}/${archivo}`, page, modo, destino: destName });
+      return res.json({ ok: true, data: { modo, trasladado: `${TRASLADADOS_DIR}/${carpeta}/${destName}` } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] combinar-sacar error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al sacar la hoja' });
+    }
+  });
+
+  // Rota una hoja EN EL ARCHIVO ORIGINAL (delta 90 / -90 / 180). PDF: rotación de la
+  // página; JPG/PNG: se re-dibuja la imagen girada. TIFF no se soporta.
+  router.post('/combinar-rotar', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const page = Number(req.body?.page);
+      const delta = Number(req.body?.delta);
+      if (!Number.isInteger(page) || page < 0) return res.status(400).json({ ok: false, error: 'Página inválida' });
+      if (![90, -90, 180].includes(delta)) return res.status(400).json({ ok: false, error: 'Rotación inválida' });
+      const { fp } = fuenteCombinarRel(dni, req.body?.rel);
+
+      if (COMBINAR_PDF.test(fp)) {
+        const src = await cargarPdfEditable(fp);
+        if (page >= src.getPageCount()) return res.status(400).json({ ok: false, error: 'Página inexistente' });
+        const pg = src.getPage(page);
+        const ang = (((pg.getRotation().angle + delta) % 360) + 360) % 360;
+        pg.setRotation(degrees(ang));
+        escribirAtomico(fp, Buffer.from(await src.save()));
+      } else if (COMBINAR_JPG.test(fp) || COMBINAR_PNG.test(fp)) {
+        if (page !== 0) return res.status(400).json({ ok: false, error: 'Página inexistente' });
+        const { createCanvas, loadImage } = require('@napi-rs/canvas');
+        const img = await loadImage(fs.readFileSync(fp));
+        const w = img.width; const h = img.height;
+        const giro = Math.abs(delta) === 90;
+        const canvas = createCanvas(giro ? h : w, giro ? w : h);
+        const ctx = canvas.getContext('2d');
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((delta * Math.PI) / 180);
+        ctx.drawImage(img, -w / 2, -h / 2);
+        const out: Buffer = COMBINAR_PNG.test(fp) ? canvas.encodeSync('png') : canvas.encodeSync('jpeg', 92);
+        escribirAtomico(fp, out);
+      } else {
+        return res.status(400).json({ ok: false, error: 'Los TIFF no se pueden rotar desde acá' });
+      }
+      logger.info({ msg: '[tramites] hoja rotada', dni, rel: req.body?.rel, page, delta });
+      return res.json({ ok: true, data: { dni, delta } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] combinar-rotar error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al rotar' });
+    }
+  });
+
+  // Pestaña "🗂️ Documentos": los documentos del orden (PASE A TRANSITORIA, ley del agente)
+  // aunque su subcarpeta esté vacía, para listarlos a la izquierda y como destino de "Subir".
+  router.get('/documentos-agente', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.query?.dni as any);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const ley = await leyDeAgente(sequelize, dni);
+      if (!ley) return res.status(400).json({ ok: false, error: 'No se pudo determinar la ley del agente (10430/10471)' });
+      const docs = await sequelize.query<{ documento: string }>(
+        `SELECT documento FROM orden_documentos_expediente
+          WHERE proceso = :proceso AND ley = :ley AND activo = 1 ORDER BY orden`,
+        { replacements: { proceso: 'PASE A TRANSITORIA', ley }, type: QueryTypes.SELECT }
+      );
+      return res.json({ ok: true, data: { dni, ley, docs: docs.map((d) => ({ documento: d.documento, carpeta: safeSegment(d.documento) })) } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] documentos-agente error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al listar documentos' });
+    }
+  });
+
+  // "Subir a otra carpeta": pasa UNA hoja a la subcarpeta de otro documento del mismo agente.
+  // PDF de varias hojas: se copia la hoja a un PDF nuevo en el destino y recién después se
+  // saca del original. Una sola hoja (o imagen/TIFF): se mueve el archivo entero.
+  // Body: { dni, rel, page, destino (nombre del documento del orden) }.
+  router.post('/combinar-mover-hoja', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const page = Number(req.body?.page);
+      if (!Number.isInteger(page) || page < 0) return res.status(400).json({ ok: false, error: 'Página inválida' });
+      const { carpeta, archivo, fp } = fuenteCombinarRel(dni, req.body?.rel);
+
+      // el destino tiene que ser un documento del orden de la ley del agente
+      const ley = await leyDeAgente(sequelize, dni);
+      const docs = ley ? await sequelize.query<{ documento: string }>(
+        `SELECT documento FROM orden_documentos_expediente WHERE proceso = :proceso AND ley = :ley AND activo = 1`,
+        { replacements: { proceso: 'PASE A TRANSITORIA', ley }, type: QueryTypes.SELECT }
+      ) : [];
+      const destino = docs.find((d) => d.documento === String(req.body?.destino || ''));
+      if (!destino) return res.status(400).json({ ok: false, error: 'Documento de destino inválido' });
+      const carpetaDest = safeSegment(destino.documento);
+      if (carpetaDest.toLowerCase() === carpeta.toLowerCase()) return res.status(400).json({ ok: false, error: 'La hoja ya está en ese documento' });
+
+      const destDir = path.join(resolveDocuAgentDir(dni), carpetaDest);
+      fs.mkdirSync(destDir, { recursive: true });
+
+      let modo: 'hoja' | 'archivo' = 'archivo';
+      let destName: string;
+      const src = COMBINAR_PDF.test(fp) ? await cargarPdfEditable(fp) : null;
+      if (src && page >= src.getPageCount()) return res.status(400).json({ ok: false, error: 'Página inexistente' });
+
+      if (src && src.getPageCount() > 1) {
+        const hoja = await PDFDocument.create();
+        const [copia] = await hoja.copyPages(src, [page]);
+        hoja.addPage(copia);
+        const base = archivo.replace(/\.pdf$/i, '');
+        destName = nombreLibre(destDir, `${base} - hoja ${page + 1}.pdf`);
+        fs.writeFileSync(path.join(destDir, destName), Buffer.from(await hoja.save())); // primero la copia
+        src.removePage(page);
+        escribirAtomico(fp, Buffer.from(await src.save()));
+        modo = 'hoja';
+      } else {
+        if (!src && page !== 0) return res.status(400).json({ ok: false, error: 'Página inexistente' });
+        destName = nombreLibre(destDir, archivo);
+        moverArchivo(fp, path.join(destDir, destName));
+      }
+      logger.info({ msg: '[tramites] hoja movida de documento', dni, rel: `${carpeta}/${archivo}`, page, modo, destino: `${carpetaDest}/${destName}` });
+      return res.json({ ok: true, data: { modo, destino: `${carpetaDest}/${destName}` } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] combinar-mover-hoja error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al mover la hoja' });
+    }
+  });
+
+  // Lista lo trasladado de uno o varios agentes (?dnis=1,2,3).
+  router.get('/trasladados', async (req: Request, res: Response) => {
+    try {
+      const dnis = String(req.query?.dnis || '').split(',').map((d) => parseDni(d.trim())).filter((d): d is number => !!d).slice(0, 1000);
+      const rows: Array<{ dni: number; rel: string; carpeta: string; archivo: string; bytes: number; fecha: string }> = [];
+      for (const dni of dnis) {
+        const base = path.join(resolveDocuAgentDir(dni), TRASLADADOS_DIR);
+        if (!fs.existsSync(base)) continue;
+        for (const d of fs.readdirSync(base, { withFileTypes: true })) {
+          if (!d.isDirectory()) continue;
+          for (const f of fs.readdirSync(path.join(base, d.name), { withFileTypes: true })) {
+            if (!f.isFile() || /^thumbs\.db$/i.test(f.name) || f.name.includes('.tmp-')) continue;
+            const st = fs.statSync(path.join(base, d.name, f.name));
+            rows.push({ dni, rel: `${TRASLADADOS_DIR}/${d.name}/${f.name}`, carpeta: d.name, archivo: f.name, bytes: st.size, fecha: st.mtime.toISOString() });
+          }
+        }
+      }
+      rows.sort((a, b) => b.fecha.localeCompare(a.fecha));
+      return res.json({ ok: true, data: { rows } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] trasladados error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al listar trasladados' });
+    }
+  });
+
+  // Contenido de un trasladado (base64) para la vista previa.
+  router.get('/trasladados/archivo', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(String(req.query?.dni || ''));
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const { archivo, fp } = trasladadoRel(dni, req.query?.rel);
+      const tipo = COMBINAR_PDF.test(archivo) ? 'pdf' : COMBINAR_PNG.test(archivo) ? 'png' : COMBINAR_JPG.test(archivo) ? 'jpg' : 'otro';
+      if (tipo === 'otro') return res.json({ ok: true, data: { tipo, base64: null } });
+      return res.json({ ok: true, data: { tipo, base64: fs.readFileSync(fp).toString('base64') } });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al leer el archivo' });
+    }
+  });
+
+  // Devuelve un trasladado a su subcarpeta de origen (sin pisar: agrega " (2)" si hace falta).
+  router.post('/trasladados/restaurar', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const { carpeta, archivo, fp } = trasladadoRel(dni, req.body?.rel);
+      const destDir = path.join(resolveDocuAgentDir(dni), carpeta);
+      fs.mkdirSync(destDir, { recursive: true });
+      const destName = nombreLibre(destDir, archivo);
+      moverArchivo(fp, path.join(destDir, destName));
+      logger.info({ msg: '[tramites] trasladado restaurado', dni, rel: req.body?.rel, destino: `${carpeta}/${destName}` });
+      return res.json({ ok: true, data: { rel: `${carpeta}/${destName}` } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] restaurar trasladado error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al restaurar' });
     }
   });
 

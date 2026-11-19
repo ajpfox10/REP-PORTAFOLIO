@@ -469,204 +469,296 @@ export function buildFichajesAgentesRouter(sequelize: Sequelize) {
   // vía la última corrida del comparador 2.0 (comparacion_novedades). NO usa la tabla historial.
   // Por cada día de ausente: fichadas del reloj, horario del día, Salud Laboral (reconocimientos + turnos), ART
   // (accidente de trabajo en los archivos + padrón art_nomina) y lo cargado por el jefe.
+  // Cálculo de "Ausentes del mes" para cualquier rango (lo usan /ausentes y /ausentes-seguidos).
+  // Devuelve además evalDe (evaluación día por día de cada agente) y las fotos de horario.
+  async function calcularAusentes(desde: string, hasta: string) {
+    const sel = <T = any>(sql: string, rep: any[]): Promise<T[]> => sequelize.query(sql, { replacements: rep, type: QueryTypes.SELECT }) as unknown as Promise<T[]>;
+    const [corrida] = await sel<any>(
+      `SELECT id, DATE_FORMAT(creado_en,'%Y-%m-%d %H:%i') creado_en, archivo_siape, DATE_FORMAT(siape_modificado,'%Y-%m-%d %H:%i') siape_modificado,
+              archivo_ministerio, DATE_FORMAT(ministerio_modificado,'%Y-%m-%d %H:%i') ministerio_modificado
+         FROM comparacion_corridas ORDER BY id DESC LIMIT 1`, []);
+    if (!corrida) return { desde, hasta, corrida: null, avisos: null as string[] | null, agentes: [] as any[], evalDe: null as any, fotos: null as Map<string, Foto[]> | null };
+
+    // todas las filas de la corrida que tocan el mes (ausentes y otras novedades)
+    const filas = await sel<any>(
+      `SELECT estado, motivo, dependencia, ley, dni, nombre, novedad_siap, novedad_ministerio,
+              DATE_FORMAT(desde_siap,'%Y-%m-%d') ds, DATE_FORMAT(COALESCE(hasta_siap, desde_siap),'%Y-%m-%d') hs,
+              DATE_FORMAT(desde_ministerio,'%Y-%m-%d') dm, DATE_FORMAT(COALESCE(hasta_ministerio, desde_ministerio),'%Y-%m-%d') hm
+         FROM comparacion_novedades
+        WHERE corrida_id = ?
+          AND ((desde_siap <= ? AND COALESCE(hasta_siap, desde_siap) >= ?) OR (desde_ministerio <= ? AND COALESCE(hasta_ministerio, desde_ministerio) >= ?))`,
+      [corrida.id, hasta, desde, hasta, desde]);
+    const esAusSiape = (r: any) => String(r.novedad_siap || '').trim().toUpperCase() === 'AUSENTE SIN AVISO';
+    const esAusMin = (r: any) => /^28\b/.test(String(r.novedad_ministerio || '').trim());
+    const esArt = (t: any) => /ACCIDENTE DE TRABAJO/i.test(String(t || ''));
+    const dias = (d: string | null, h: string | null) => {
+      const out: string[] = [];
+      if (!d) return out;
+      for (let f = d < desde ? desde : d; f <= (h && h < hasta ? h : hasta); f = sumarDias(f, 1)) out.push(f);
+      return out;
+    };
+
+    interface DiaAus { fecha: string; siape: boolean; ministerio: boolean; estado: string; motivo: string }
+    const aus = new Map<string, Map<string, DiaAus>>();            // dni → fecha → día
+    const otras = new Map<string, { fuente: string; texto: string; desde: string; hasta: string }[]>();
+    const info = new Map<string, { nombre: string; dependencia: string; leyArchivo: string }>();
+    const addOtra = (k: string, o: { fuente: string; texto: string; desde: string; hasta: string }) => {
+      if (!otras.has(k)) otras.set(k, []);
+      otras.get(k)!.push(o);
+    };
+    for (const r of filas) {
+      const k = normDni(r.dni);
+      if (!k) continue;
+      const aS = esAusSiape(r), aM = esAusMin(r);
+      if (aS || aM) {
+        if (!info.has(k)) info.set(k, { nombre: r.nombre, dependencia: r.dependencia, leyArchivo: r.ley });
+        if (!aus.has(k)) aus.set(k, new Map());
+        const m = aus.get(k)!;
+        const fs = new Set([...(aS ? dias(r.ds, r.hs) : []), ...(aM ? dias(r.dm, r.hm) : [])]);
+        for (const f of fs) {
+          const x = m.get(f) || { fecha: f, siape: false, ministerio: false, estado: r.estado, motivo: r.motivo || '' };
+          if (aS && f >= (r.ds || '') && f <= (r.hs || '')) x.siape = true;
+          if (aM && f >= (r.dm || '') && f <= (r.hm || '')) x.ministerio = true;
+          m.set(f, x);
+        }
+      }
+      // las otras novedades del archivo (para cruzar contra los días de ausente)
+      if (r.novedad_siap && !aS && r.ds) addOtra(k, { fuente: 'SIAPE', texto: String(r.novedad_siap).trim(), desde: r.ds, hasta: r.hs });
+      if (r.novedad_ministerio && !aM && r.dm) addOtra(k, { fuente: 'Ministerio', texto: String(r.novedad_ministerio).trim(), desde: r.dm, hasta: r.hm });
+    }
+    const lista = [...aus.keys()];
+    if (!lista.length) return { desde, hasta, corrida, avisos: null as string[] | null, agentes: [] as any[], evalDe: null as any, fotos: null as Map<string, Foto[]> | null };
+
+    // agente: ley, servicio, residente (fila más reciente de agentes)
+    const pers = new Map<string, any>();
+    try {
+      for (const p of await sel<any>(
+        `SELECT a.dni, l.nombre AS ley, a.ley_id, a.ocupacion_id, o.nombre AS ocupacion, a.estado_empleo, s.nombre AS servicio
+           FROM agentes a
+           LEFT JOIN ley l ON l.id = a.ley_id
+           LEFT JOIN ocupaciones o ON o.id = a.ocupacion_id
+           LEFT JOIN agentes_servicios ags ON ags.dni = a.dni AND ags.fecha_hasta IS NULL AND ags.deleted_at IS NULL
+           LEFT JOIN servicios s ON s.id = ags.servicio_id
+          WHERE a.dni IN (?) AND a.deleted_at IS NULL
+          ORDER BY a.id DESC`, [lista])) {
+        const k = normDni(p.dni);
+        if (!pers.has(k)) pers.set(k, p);
+      }
+    } catch (e: any) { logger.warn({ msg: 'fichajes-agentes/ausentes: datos del agente', error: e?.message }); }
+
+    // fuentes locales por día: Salud Laboral, jefe, padrón ART
+    type Loc = { grupo: 'RECONOCIDO' | 'SALUD_LABORAL' | 'JEFE'; texto: string; desde: string; hasta: string };
+    const loc = new Map<string, Loc[]>();
+    const addLoc = (dni: any, l: Loc) => { const k = normDni(dni); if (!loc.has(k)) loc.set(k, []); loc.get(k)!.push(l); };
+    const consultas: [Loc['grupo'], string, (r: any) => string][] = [
+      ['RECONOCIDO', `SELECT dni, tipo, resultado, DATE_FORMAT(COALESCE(fecha_desde, fecha),'%Y-%m-%d') d, DATE_FORMAT(COALESCE(fecha_hasta, fecha_desde, fecha),'%Y-%m-%d') h
+                        FROM reconocimientos_medicos WHERE deleted_at IS NULL AND dni IN (?)
+                         AND COALESCE(fecha_desde, fecha) <= ? AND COALESCE(fecha_hasta, fecha_desde, fecha) >= ?`,
+        r => `Reconocimiento ${r.tipo || ''} ${r.resultado ? `(${r.resultado})` : ''}`.replace(/\s+/g, ' ').trim()],
+      ['SALUD_LABORAL', `SELECT dni, DATE_FORMAT(COALESCE(fecha_desde, fecha_turno),'%Y-%m-%d') d, DATE_FORMAT(COALESCE(fecha_hasta, fecha_desde, fecha_turno),'%Y-%m-%d') h,
+                                DATE_FORMAT(fecha_turno,'%d/%m') ft, observaciones
+                           FROM turnos_salud_laboral WHERE deleted_at IS NULL AND dni IN (?)
+                            AND COALESCE(fecha_desde, fecha_turno) <= ? AND COALESCE(fecha_hasta, fecha_desde, fecha_turno) >= ?`,
+        r => `Turno Salud Laboral${r.ft ? ` ${r.ft}` : ''}${r.observaciones ? ` · ${r.observaciones}` : ''}`],
+      ['JEFE', `SELECT dni, DATE_FORMAT(fecha_franco,'%Y-%m-%d') d, DATE_FORMAT(fecha_franco,'%Y-%m-%d') h, jefe_nombre FROM francos_compensatorios
+                 WHERE deleted_at IS NULL AND dni IN (?) AND fecha_franco <= ? AND fecha_franco >= ?`, r => `Franco compensatorio${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
+      ['JEFE', `SELECT dni, DATE_FORMAT(fecha,'%Y-%m-%d') d, DATE_FORMAT(DATE_ADD(fecha, INTERVAL GREATEST(COALESCE(dias,1),1)-1 DAY),'%Y-%m-%d') h, jefe_nombre
+                  FROM articulo_26 WHERE deleted_at IS NULL AND COALESCE(estado,'') <> 'ANULADO' AND dni IN (?)
+                   AND fecha <= ? AND DATE_ADD(fecha, INTERVAL GREATEST(COALESCE(dias,1),1)-1 DAY) >= ?`, r => `Art. 26${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
+      ['JEFE', `SELECT dni, DATE_FORMAT(fecha,'%Y-%m-%d') d, DATE_FORMAT(fecha,'%Y-%m-%d') h, jefe_nombre FROM examen
+                 WHERE deleted_at IS NULL AND dni IN (?) AND fecha <= ? AND fecha >= ?`, r => `Examen${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
+      ['JEFE', `SELECT dni, DATE_FORMAT(fecha,'%Y-%m-%d') d, DATE_FORMAT(fecha,'%Y-%m-%d') h, jefe_nombre FROM prexamen
+                 WHERE deleted_at IS NULL AND dni IN (?) AND fecha <= ? AND fecha >= ?`, r => `Pre-examen${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
+      ['JEFE', `SELECT dni, DATE_FORMAT(fecha,'%Y-%m-%d') d, DATE_FORMAT(fecha,'%Y-%m-%d') h, jefe_nombre FROM papcolpo
+                 WHERE deleted_at IS NULL AND dni IN (?) AND fecha <= ? AND fecha >= ?`, r => `Pap/colpo${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
+      ['JEFE', `SELECT dni, DATE_FORMAT(fecha,'%Y-%m-%d') d, DATE_FORMAT(fecha,'%Y-%m-%d') h, jefe_nombre, hora_desde, hora_hasta FROM permiso_salida
+                 WHERE deleted_at IS NULL AND dni IN (?) AND fecha <= ? AND fecha >= ?`,
+        r => `Permiso de salida ${String(r.hora_desde || '').slice(0, 5)}-${String(r.hora_hasta || '').slice(0, 5)}${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
+      ['JEFE', `SELECT dni, DATE_FORMAT(fecha_desde,'%Y-%m-%d') d, DATE_FORMAT(DATE_ADD(fecha_desde, INTERVAL GREATEST(COALESCE(dias,1),1)-1 DAY),'%Y-%m-%d') h, jefe_nombre
+                  FROM practicas_profesionales WHERE deleted_at IS NULL AND dni IN (?)
+                   AND fecha_desde <= ? AND DATE_ADD(fecha_desde, INTERVAL GREATEST(COALESCE(dias,1),1)-1 DAY) >= ?`, r => `Prácticas profesionales${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
+      ['JEFE', `SELECT dni, tipo, DATE_FORMAT(fecha,'%Y-%m-%d') d, DATE_FORMAT(COALESCE(fecha_hasta, fecha),'%Y-%m-%d') h, jefe_nombre FROM novedad_jefe
+                 WHERE deleted_at IS NULL AND dni IN (?) AND fecha <= ? AND COALESCE(fecha_hasta, fecha) >= ?`, r => `${r.tipo || 'Novedad del jefe'}${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
+    ];
+    const avisos: string[] = [];
+    for (const [grupo, sql, txt] of consultas) {
+      try {
+        for (const r of await sel<any>(sql, [lista, hasta, desde])) addLoc(r.dni, { grupo, texto: txt(r), desde: r.d, hasta: r.h });
+      } catch (e: any) { avisos.push(`No se pudo leer ${sql.match(/FROM (\w+)/)?.[1]}: ${e?.message}`); }
+    }
+    const padronArt = new Set<string>();
+    try { for (const r of await sel<any>(`SELECT dni FROM art_nomina WHERE dni IN (?)`, [lista])) padronArt.add(normDni(r.dni)); }
+    catch (e: any) { avisos.push(`No se pudo leer el padrón ART: ${e?.message}`); }
+
+    // fichadas y horario del día
+    // Fichaje evaluado POR TURNO (mismo motor que la pestaña Fichajes / Sin fichaje salida): noche y guardia
+    // toman la entrada del día anterior o la salida del día siguiente; cada marca es de un solo turno.
+    // Sin novedades de historial: acá solo interesa si fichó el turno.
+    const [mar, fot, feriados, fich] = await Promise.all([
+      leerMarcas(desde, hasta), leerFotos(sequelize, desde, hasta), leerFeriados(sequelize, desde, hasta), leerFichadas(lista, desde, hasta),
+    ]);
+    if (mar.error) avisos.push(mar.error);
+    if ('error' in fich) avisos.push(String(fich.error));
+    const src: Fuentes = {
+      fotos: fot.porDni, marcas: mar.marcas, feriados, novedad: () => ({ siape: [], justifica: null }),
+      punches: 'error' in fich ? {} : fich.punches, lector: 'error' in fich ? {} : fich.lector,
+    };
+    const evalCache = new Map<string, Map<string, Dia>>();
+    const evalDe = (k: string) => {
+      if (!evalCache.has(k)) evalCache.set(k, new Map(evaluarAgente(k, desde, hasta, src).map(d => [d.fecha, d])));
+      return evalCache.get(k)!;
+    };
+    const tipoTurno = (k: string, f: string) => {
+      const t = fotoDel(fot.porDni.get(k), f)?.foto.turnos[DOW_KEYS[dowDe(f)]];
+      if (!t) return null;
+      return t.cruza ? (t.horas >= 20 ? 'GUARDIA' : 'NOCHE') : 'DIA';
+    };
+    const cubre = (x: { desde: string; hasta: string }, f: string) => x.desde <= f && (x.hasta || x.desde) >= f;
+
+    const agentes = lista.map(k => {
+      const p = pers.get(k), inf = info.get(k)!;
+      const ds = [...aus.get(k)!.values()].sort((a, b) => a.fecha.localeCompare(b.fecha)).map(d => {
+        const ev = evalDe(k).get(d.fecha);
+        const marcas = ev?.marcas || (mar.marcas.get(`${k}|${d.fecha}`) || []).map(m => ({ h: fmt(m.m), t: m.t }));
+        const turno = tipoTurno(k, d.fecha);
+        // fichó el turno = entrada o salida asignada a ESE turno (con noche/guardia cruza la medianoche)
+        const fichaje = !ev || !ev.horario
+          ? (marcas.length ? 'FICHO_SIN_TURNO' : 'SIN_TURNO')
+          : ev.entrada && ev.salida ? 'COMPLETO' : ev.entrada ? 'SOLO_ENTRADA' : ev.salida ? 'SOLO_SALIDA'
+          : ev.estado === 'NO_TRABAJA' ? 'NO_LE_TOCA' : 'NO';
+        const l = (loc.get(k) || []).filter(x => cubre(x, d.fecha));
+        const ot = (otras.get(k) || []).filter(x => cubre(x, d.fecha));
+        const art = ot.filter(x => esArt(x.texto)).map(x => `${x.fuente}: ${x.texto}`);
+        return {
+          ...d, dow: dowDe(d.fecha), marcas, turno, fichaje,
+          horario: ev?.horario ?? null, aprox: !!ev?.aprox, entrada: ev?.entrada ?? null, salida: ev?.salida ?? null,
+          motivosFichaje: ev?.motivos ?? [],
+          reconocido: l.filter(x => x.grupo === 'RECONOCIDO').map(x => x.texto),
+          saludLaboral: l.filter(x => x.grupo === 'SALUD_LABORAL').map(x => x.texto),
+          jefe: l.filter(x => x.grupo === 'JEFE').map(x => x.texto),
+          art,
+          otras: ot.filter(x => !esArt(x.texto)).map(x => `${x.fuente}: ${x.texto}`),
+        };
+      });
+      const n = (f: (d: typeof ds[number]) => boolean) => ds.filter(f).length;
+      return {
+        dni: k, nombre: inf.nombre, dependencia: inf.dependencia,
+        ley: p?.ley || inf.leyArchivo || null, servicio: p?.servicio || null, ocupacion: p?.ocupacion || null,
+        estadoEmpleo: p?.estado_empleo || null,
+        residente: Number(p?.ley_id) === 11 || Number(p?.ocupacion_id) === 132,
+        enReloj: mar.enReloj.has(k), enPadronArt: padronArt.has(k),
+        ausentes: ds.length,
+        enSiape: n(d => d.siape), enMinisterio: n(d => d.ministerio),
+        fichoDias: n(d => ['COMPLETO', 'SOLO_ENTRADA', 'SOLO_SALIDA', 'FICHO_SIN_TURNO'].includes(d.fichaje)),
+        fichoCompletoDias: n(d => d.fichaje === 'COMPLETO'),
+        turnos: [...new Set(ds.map(d => d.turno).filter(Boolean))],
+        planta: inf.leyArchivo || null,
+        becado: /BECA/i.test(`${p?.ley || ''} ${inf.leyArchivo || ''} ${fotoDel(fot.porDni.get(k), hasta)?.foto.regimen || ''}`),
+        reconocidoDias: n(d => d.reconocido.length > 0),
+        saludLaboralDias: n(d => d.saludLaboral.length > 0),
+        artDias: n(d => d.art.length > 0),
+        jefeDias: n(d => d.jefe.length > 0),
+        otrasDias: n(d => d.otras.length > 0),
+        dias: ds,
+      };
+    });
+    return { desde, hasta, corrida, avisos: avisos as string[] | null, agentes: agentes as any[], evalDe, fotos: fot.porDni as Map<string, Foto[]> | null };
+  }
+
   router.get('/ausentes', async (req: Request, res: Response) => {
     const am = parseAnioMes(req);
     if (!am) return res.status(400).json({ ok: false, error: 'anio/mes inválidos' });
     try {
       const { desde, hasta } = rangoMes(am.anio, am.mes);
-      const sel = <T = any>(sql: string, rep: any[]): Promise<T[]> => sequelize.query(sql, { replacements: rep, type: QueryTypes.SELECT }) as unknown as Promise<T[]>;
-      const [corrida] = await sel<any>(
-        `SELECT id, DATE_FORMAT(creado_en,'%Y-%m-%d %H:%i') creado_en, archivo_siape, DATE_FORMAT(siape_modificado,'%Y-%m-%d %H:%i') siape_modificado,
-                archivo_ministerio, DATE_FORMAT(ministerio_modificado,'%Y-%m-%d %H:%i') ministerio_modificado
-           FROM comparacion_corridas ORDER BY id DESC LIMIT 1`, []);
-      if (!corrida) return res.json({ ok: true, desde, hasta, corrida: null, agentes: [] });
-
-      // todas las filas de la corrida que tocan el mes (ausentes y otras novedades)
-      const filas = await sel<any>(
-        `SELECT estado, motivo, dependencia, ley, dni, nombre, novedad_siap, novedad_ministerio,
-                DATE_FORMAT(desde_siap,'%Y-%m-%d') ds, DATE_FORMAT(COALESCE(hasta_siap, desde_siap),'%Y-%m-%d') hs,
-                DATE_FORMAT(desde_ministerio,'%Y-%m-%d') dm, DATE_FORMAT(COALESCE(hasta_ministerio, desde_ministerio),'%Y-%m-%d') hm
-           FROM comparacion_novedades
-          WHERE corrida_id = ?
-            AND ((desde_siap <= ? AND COALESCE(hasta_siap, desde_siap) >= ?) OR (desde_ministerio <= ? AND COALESCE(hasta_ministerio, desde_ministerio) >= ?))`,
-        [corrida.id, hasta, desde, hasta, desde]);
-      const esAusSiape = (r: any) => String(r.novedad_siap || '').trim().toUpperCase() === 'AUSENTE SIN AVISO';
-      const esAusMin = (r: any) => /^28\b/.test(String(r.novedad_ministerio || '').trim());
-      const esArt = (t: any) => /ACCIDENTE DE TRABAJO/i.test(String(t || ''));
-      const dias = (d: string | null, h: string | null) => {
-        const out: string[] = [];
-        if (!d) return out;
-        for (let f = d < desde ? desde : d; f <= (h && h < hasta ? h : hasta); f = sumarDias(f, 1)) out.push(f);
-        return out;
-      };
-
-      interface DiaAus { fecha: string; siape: boolean; ministerio: boolean; estado: string; motivo: string }
-      const aus = new Map<string, Map<string, DiaAus>>();            // dni → fecha → día
-      const otras = new Map<string, { fuente: string; texto: string; desde: string; hasta: string }[]>();
-      const info = new Map<string, { nombre: string; dependencia: string; leyArchivo: string }>();
-      const addOtra = (k: string, o: { fuente: string; texto: string; desde: string; hasta: string }) => {
-        if (!otras.has(k)) otras.set(k, []);
-        otras.get(k)!.push(o);
-      };
-      for (const r of filas) {
-        const k = normDni(r.dni);
-        if (!k) continue;
-        const aS = esAusSiape(r), aM = esAusMin(r);
-        if (aS || aM) {
-          if (!info.has(k)) info.set(k, { nombre: r.nombre, dependencia: r.dependencia, leyArchivo: r.ley });
-          if (!aus.has(k)) aus.set(k, new Map());
-          const m = aus.get(k)!;
-          const fs = new Set([...(aS ? dias(r.ds, r.hs) : []), ...(aM ? dias(r.dm, r.hm) : [])]);
-          for (const f of fs) {
-            const x = m.get(f) || { fecha: f, siape: false, ministerio: false, estado: r.estado, motivo: r.motivo || '' };
-            if (aS && f >= (r.ds || '') && f <= (r.hs || '')) x.siape = true;
-            if (aM && f >= (r.dm || '') && f <= (r.hm || '')) x.ministerio = true;
-            m.set(f, x);
-          }
-        }
-        // las otras novedades del archivo (para cruzar contra los días de ausente)
-        if (r.novedad_siap && !aS && r.ds) addOtra(k, { fuente: 'SIAPE', texto: String(r.novedad_siap).trim(), desde: r.ds, hasta: r.hs });
-        if (r.novedad_ministerio && !aM && r.dm) addOtra(k, { fuente: 'Ministerio', texto: String(r.novedad_ministerio).trim(), desde: r.dm, hasta: r.hm });
-      }
-      const lista = [...aus.keys()];
-      if (!lista.length) return res.json({ ok: true, desde, hasta, corrida, agentes: [] });
-
-      // agente: ley, servicio, residente (fila más reciente de agentes)
-      const pers = new Map<string, any>();
-      try {
-        for (const p of await sel<any>(
-          `SELECT a.dni, l.nombre AS ley, a.ley_id, a.ocupacion_id, o.nombre AS ocupacion, a.estado_empleo, s.nombre AS servicio
-             FROM agentes a
-             LEFT JOIN ley l ON l.id = a.ley_id
-             LEFT JOIN ocupaciones o ON o.id = a.ocupacion_id
-             LEFT JOIN agentes_servicios ags ON ags.dni = a.dni AND ags.fecha_hasta IS NULL AND ags.deleted_at IS NULL
-             LEFT JOIN servicios s ON s.id = ags.servicio_id
-            WHERE a.dni IN (?) AND a.deleted_at IS NULL
-            ORDER BY a.id DESC`, [lista])) {
-          const k = normDni(p.dni);
-          if (!pers.has(k)) pers.set(k, p);
-        }
-      } catch (e: any) { logger.warn({ msg: 'fichajes-agentes/ausentes: datos del agente', error: e?.message }); }
-
-      // fuentes locales por día: Salud Laboral, jefe, padrón ART
-      type Loc = { grupo: 'RECONOCIDO' | 'SALUD_LABORAL' | 'JEFE'; texto: string; desde: string; hasta: string };
-      const loc = new Map<string, Loc[]>();
-      const addLoc = (dni: any, l: Loc) => { const k = normDni(dni); if (!loc.has(k)) loc.set(k, []); loc.get(k)!.push(l); };
-      const consultas: [Loc['grupo'], string, (r: any) => string][] = [
-        ['RECONOCIDO', `SELECT dni, tipo, resultado, DATE_FORMAT(COALESCE(fecha_desde, fecha),'%Y-%m-%d') d, DATE_FORMAT(COALESCE(fecha_hasta, fecha_desde, fecha),'%Y-%m-%d') h
-                          FROM reconocimientos_medicos WHERE deleted_at IS NULL AND dni IN (?)
-                           AND COALESCE(fecha_desde, fecha) <= ? AND COALESCE(fecha_hasta, fecha_desde, fecha) >= ?`,
-          r => `Reconocimiento ${r.tipo || ''} ${r.resultado ? `(${r.resultado})` : ''}`.replace(/\s+/g, ' ').trim()],
-        ['SALUD_LABORAL', `SELECT dni, DATE_FORMAT(COALESCE(fecha_desde, fecha_turno),'%Y-%m-%d') d, DATE_FORMAT(COALESCE(fecha_hasta, fecha_desde, fecha_turno),'%Y-%m-%d') h,
-                                  DATE_FORMAT(fecha_turno,'%d/%m') ft, observaciones
-                             FROM turnos_salud_laboral WHERE deleted_at IS NULL AND dni IN (?)
-                              AND COALESCE(fecha_desde, fecha_turno) <= ? AND COALESCE(fecha_hasta, fecha_desde, fecha_turno) >= ?`,
-          r => `Turno Salud Laboral${r.ft ? ` ${r.ft}` : ''}${r.observaciones ? ` · ${r.observaciones}` : ''}`],
-        ['JEFE', `SELECT dni, DATE_FORMAT(fecha_franco,'%Y-%m-%d') d, DATE_FORMAT(fecha_franco,'%Y-%m-%d') h, jefe_nombre FROM francos_compensatorios
-                   WHERE deleted_at IS NULL AND dni IN (?) AND fecha_franco <= ? AND fecha_franco >= ?`, r => `Franco compensatorio${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
-        ['JEFE', `SELECT dni, DATE_FORMAT(fecha,'%Y-%m-%d') d, DATE_FORMAT(DATE_ADD(fecha, INTERVAL GREATEST(COALESCE(dias,1),1)-1 DAY),'%Y-%m-%d') h, jefe_nombre
-                    FROM articulo_26 WHERE deleted_at IS NULL AND COALESCE(estado,'') <> 'ANULADO' AND dni IN (?)
-                     AND fecha <= ? AND DATE_ADD(fecha, INTERVAL GREATEST(COALESCE(dias,1),1)-1 DAY) >= ?`, r => `Art. 26${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
-        ['JEFE', `SELECT dni, DATE_FORMAT(fecha,'%Y-%m-%d') d, DATE_FORMAT(fecha,'%Y-%m-%d') h, jefe_nombre FROM examen
-                   WHERE deleted_at IS NULL AND dni IN (?) AND fecha <= ? AND fecha >= ?`, r => `Examen${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
-        ['JEFE', `SELECT dni, DATE_FORMAT(fecha,'%Y-%m-%d') d, DATE_FORMAT(fecha,'%Y-%m-%d') h, jefe_nombre FROM prexamen
-                   WHERE deleted_at IS NULL AND dni IN (?) AND fecha <= ? AND fecha >= ?`, r => `Pre-examen${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
-        ['JEFE', `SELECT dni, DATE_FORMAT(fecha,'%Y-%m-%d') d, DATE_FORMAT(fecha,'%Y-%m-%d') h, jefe_nombre FROM papcolpo
-                   WHERE deleted_at IS NULL AND dni IN (?) AND fecha <= ? AND fecha >= ?`, r => `Pap/colpo${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
-        ['JEFE', `SELECT dni, DATE_FORMAT(fecha,'%Y-%m-%d') d, DATE_FORMAT(fecha,'%Y-%m-%d') h, jefe_nombre, hora_desde, hora_hasta FROM permiso_salida
-                   WHERE deleted_at IS NULL AND dni IN (?) AND fecha <= ? AND fecha >= ?`,
-          r => `Permiso de salida ${String(r.hora_desde || '').slice(0, 5)}-${String(r.hora_hasta || '').slice(0, 5)}${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
-        ['JEFE', `SELECT dni, DATE_FORMAT(fecha_desde,'%Y-%m-%d') d, DATE_FORMAT(DATE_ADD(fecha_desde, INTERVAL GREATEST(COALESCE(dias,1),1)-1 DAY),'%Y-%m-%d') h, jefe_nombre
-                    FROM practicas_profesionales WHERE deleted_at IS NULL AND dni IN (?)
-                     AND fecha_desde <= ? AND DATE_ADD(fecha_desde, INTERVAL GREATEST(COALESCE(dias,1),1)-1 DAY) >= ?`, r => `Prácticas profesionales${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
-        ['JEFE', `SELECT dni, tipo, DATE_FORMAT(fecha,'%Y-%m-%d') d, DATE_FORMAT(COALESCE(fecha_hasta, fecha),'%Y-%m-%d') h, jefe_nombre FROM novedad_jefe
-                   WHERE deleted_at IS NULL AND dni IN (?) AND fecha <= ? AND COALESCE(fecha_hasta, fecha) >= ?`, r => `${r.tipo || 'Novedad del jefe'}${r.jefe_nombre ? ` (${r.jefe_nombre})` : ''}`],
-      ];
-      const avisos: string[] = [];
-      for (const [grupo, sql, txt] of consultas) {
-        try {
-          for (const r of await sel<any>(sql, [lista, hasta, desde])) addLoc(r.dni, { grupo, texto: txt(r), desde: r.d, hasta: r.h });
-        } catch (e: any) { avisos.push(`No se pudo leer ${sql.match(/FROM (\w+)/)?.[1]}: ${e?.message}`); }
-      }
-      const padronArt = new Set<string>();
-      try { for (const r of await sel<any>(`SELECT dni FROM art_nomina WHERE dni IN (?)`, [lista])) padronArt.add(normDni(r.dni)); }
-      catch (e: any) { avisos.push(`No se pudo leer el padrón ART: ${e?.message}`); }
-
-      // fichadas y horario del día
-      // Fichaje evaluado POR TURNO (mismo motor que la pestaña Fichajes / Sin fichaje salida): noche y guardia
-      // toman la entrada del día anterior o la salida del día siguiente; cada marca es de un solo turno.
-      // Sin novedades de historial: acá solo interesa si fichó el turno.
-      const [mar, fot, feriados, fich] = await Promise.all([
-        leerMarcas(desde, hasta), leerFotos(sequelize, desde, hasta), leerFeriados(sequelize, desde, hasta), leerFichadas(lista, desde, hasta),
-      ]);
-      if (mar.error) avisos.push(mar.error);
-      if ('error' in fich) avisos.push(String(fich.error));
-      const src: Fuentes = {
-        fotos: fot.porDni, marcas: mar.marcas, feriados, novedad: () => ({ siape: [], justifica: null }),
-        punches: 'error' in fich ? {} : fich.punches, lector: 'error' in fich ? {} : fich.lector,
-      };
-      const evalCache = new Map<string, Map<string, Dia>>();
-      const evalDe = (k: string) => {
-        if (!evalCache.has(k)) evalCache.set(k, new Map(evaluarAgente(k, desde, hasta, src).map(d => [d.fecha, d])));
-        return evalCache.get(k)!;
-      };
-      const tipoTurno = (k: string, f: string) => {
-        const t = fotoDel(fot.porDni.get(k), f)?.foto.turnos[DOW_KEYS[dowDe(f)]];
-        if (!t) return null;
-        return t.cruza ? (t.horas >= 20 ? 'GUARDIA' : 'NOCHE') : 'DIA';
-      };
-      const cubre = (x: { desde: string; hasta: string }, f: string) => x.desde <= f && (x.hasta || x.desde) >= f;
-
-      const agentes = lista.map(k => {
-        const p = pers.get(k), inf = info.get(k)!;
-        const ds = [...aus.get(k)!.values()].sort((a, b) => a.fecha.localeCompare(b.fecha)).map(d => {
-          const ev = evalDe(k).get(d.fecha);
-          const marcas = ev?.marcas || (mar.marcas.get(`${k}|${d.fecha}`) || []).map(m => ({ h: fmt(m.m), t: m.t }));
-          const turno = tipoTurno(k, d.fecha);
-          // fichó el turno = entrada o salida asignada a ESE turno (con noche/guardia cruza la medianoche)
-          const fichaje = !ev || !ev.horario
-            ? (marcas.length ? 'FICHO_SIN_TURNO' : 'SIN_TURNO')
-            : ev.entrada && ev.salida ? 'COMPLETO' : ev.entrada ? 'SOLO_ENTRADA' : ev.salida ? 'SOLO_SALIDA'
-            : ev.estado === 'NO_TRABAJA' ? 'NO_LE_TOCA' : 'NO';
-          const l = (loc.get(k) || []).filter(x => cubre(x, d.fecha));
-          const ot = (otras.get(k) || []).filter(x => cubre(x, d.fecha));
-          const art = ot.filter(x => esArt(x.texto)).map(x => `${x.fuente}: ${x.texto}`);
-          return {
-            ...d, dow: dowDe(d.fecha), marcas, turno, fichaje,
-            horario: ev?.horario ?? null, aprox: !!ev?.aprox, entrada: ev?.entrada ?? null, salida: ev?.salida ?? null,
-            motivosFichaje: ev?.motivos ?? [],
-            reconocido: l.filter(x => x.grupo === 'RECONOCIDO').map(x => x.texto),
-            saludLaboral: l.filter(x => x.grupo === 'SALUD_LABORAL').map(x => x.texto),
-            jefe: l.filter(x => x.grupo === 'JEFE').map(x => x.texto),
-            art,
-            otras: ot.filter(x => !esArt(x.texto)).map(x => `${x.fuente}: ${x.texto}`),
-          };
-        });
-        const n = (f: (d: typeof ds[number]) => boolean) => ds.filter(f).length;
-        return {
-          dni: k, nombre: inf.nombre, dependencia: inf.dependencia,
-          ley: p?.ley || inf.leyArchivo || null, servicio: p?.servicio || null, ocupacion: p?.ocupacion || null,
-          estadoEmpleo: p?.estado_empleo || null,
-          residente: Number(p?.ley_id) === 11 || Number(p?.ocupacion_id) === 132,
-          enReloj: mar.enReloj.has(k), enPadronArt: padronArt.has(k),
-          ausentes: ds.length,
-          enSiape: n(d => d.siape), enMinisterio: n(d => d.ministerio),
-          fichoDias: n(d => ['COMPLETO', 'SOLO_ENTRADA', 'SOLO_SALIDA', 'FICHO_SIN_TURNO'].includes(d.fichaje)),
-          fichoCompletoDias: n(d => d.fichaje === 'COMPLETO'),
-          turnos: [...new Set(ds.map(d => d.turno).filter(Boolean))],
-          planta: inf.leyArchivo || null,
-          becado: /BECA/i.test(`${p?.ley || ''} ${inf.leyArchivo || ''} ${fotoDel(fot.porDni.get(k), hasta)?.foto.regimen || ''}`),
-          reconocidoDias: n(d => d.reconocido.length > 0),
-          saludLaboralDias: n(d => d.saludLaboral.length > 0),
-          artDias: n(d => d.art.length > 0),
-          jefeDias: n(d => d.jefe.length > 0),
-          otrasDias: n(d => d.otras.length > 0),
-          dias: ds,
-        };
-      });
-      res.json({ ok: true, desde, hasta, corrida, avisos, agentes });
+      const r = await calcularAusentes(desde, hasta);
+      if (!r.corrida || r.avisos === null) return res.json({ ok: true, desde, hasta, corrida: r.corrida, agentes: [] });
+      res.json({ ok: true, desde, hasta, corrida: r.corrida, avisos: r.avisos, agentes: r.agentes });
     } catch (e: any) {
       logger.error({ msg: 'fichajes-agentes/ausentes: error', error: e?.message });
+      res.status(500).json({ ok: false, error: e?.message || 'Error' });
+    }
+  });
+
+  // GET /fichajes-agentes/ausentes-seguidos?desde=&hasta=&min=3 — banner del Dashboard y página "Ausentes seguidos".
+  // Por defecto los últimos 60 días hasta hoy. Racha = ausentes cargados (SIAPE y/o 28 del Ministerio, última corrida)
+  // en días que le tocaba venir, uno detrás del otro:
+  //   · ausente en día que le toca                 → suma
+  //   · día que NO le toca (franco, semana alterna, feriado), sin ausente → no corta ni suma
+  //   · día que le toca y no tiene ausente         → corta
+  //   · ausente en día que NO le toca              → no suma; queda como aviso
+  //   · sin horario cargado                        → se toma como que le tocaba, con aviso
+  const cacheSeguidos = new Map<string, { t: number; data: any }>(); // 5 min: el banner del Dashboard lo pide en cada visita
+  router.get('/ausentes-seguidos', async (req: Request, res: Response) => {
+    try {
+      const hoy = hoyIso();
+      const qd = String(req.query.desde || ''), qh = String(req.query.hasta || '');
+      const hasta = /^\d{4}-\d{2}-\d{2}$/.test(qh) && qh <= hoy ? qh : hoy;
+      const desde = /^\d{4}-\d{2}-\d{2}$/.test(qd) && qd <= hasta ? qd : sumarDias(hasta, -59);
+      if (sumarDias(desde, 400) < hasta) return res.status(400).json({ ok: false, error: 'Rango máximo: 400 días' });
+      const min = Math.min(30, Math.max(2, Number(req.query.min) || 3));
+      const ck = `${desde}|${hasta}|${min}`;
+      const c = cacheSeguidos.get(ck);
+      if (c && Date.now() - c.t < 5 * 60_000 && !req.query.refresh) return res.json(c.data);
+
+      const r = await calcularAusentes(desde, hasta);
+      if (!r.corrida || !r.agentes.length) return res.json({ ok: true, desde, hasta, min, corrida: r.corrida, avisos: r.avisos || [], agentes: [] });
+
+      const NO_TOCA_SEMANA = /^esta semana no le toca/;
+      const agentes: any[] = [];
+      for (const a of r.agentes) {
+        const k = a.dni as string;
+        const aus = new Map<string, any>(a.dias.map((d: any) => [d.fecha, d]));
+        const ev: Map<string, any> = r.evalDe(k);
+        const fotos = r.fotos?.get(k);
+        const rachas: any[] = [];
+        let run: any[] = [];
+        const cerrar = () => {
+          const cuenta = run.filter(x => x.tipo === 'AUSENTE').length;
+          if (cuenta >= min) {
+            let fin = run.length - 1;
+            while (fin >= 0 && run[fin].tipo !== 'AUSENTE') fin--;      // sin días sueltos al final
+            const dias = run.slice(0, fin + 1);
+            const avisos: string[] = [];
+            for (const x of dias) {
+              if (x.tipo === 'AUSENTE_NO_TOCA') avisos.push(`Ausente el ${x.fecha} y no le correspondía venir`);
+              if (x.sinHorario) avisos.push(`Sin horario cargado el ${x.fecha}`);
+            }
+            const ausDias = dias.filter(x => x.tipo === 'AUSENTE');
+            rachas.push({
+              desde: ausDias[0].fecha, hasta: ausDias[ausDias.length - 1].fecha, seguidos: cuenta,
+              fichoDias: ausDias.filter(x => ['COMPLETO', 'SOLO_ENTRADA', 'SOLO_SALIDA', 'FICHO_SIN_TURNO'].includes(x.fichaje)).length,
+              avisos: [...new Set(avisos)], dias,
+            });
+          }
+          run = [];
+        };
+        for (let f = desde; f <= hasta; f = sumarDias(f, 1)) {
+          const d = ev.get(f);
+          const sinHorario = !fotoDel(fotos, f);
+          const noToca = !sinHorario && (!d?.horario || !!d?.feriado || (d?.motivos || []).some((m: string) => NO_TOCA_SEMANA.test(m)));
+          const enCurso = d?.estado === 'HOY';
+          const x = aus.get(f);
+          const base = { fecha: f, dow: dowDe(f), horario: d?.horario ?? null, feriado: d?.feriado ?? null };
+          if (x && !noToca) run.push({ ...base, ...x, tipo: 'AUSENTE', sinHorario });
+          else if (x && noToca) run.push({ ...base, ...x, tipo: 'AUSENTE_NO_TOCA' });
+          else if (noToca || enCurso) { if (run.length) run.push({ ...base, tipo: noToca ? 'NO_LE_TOCA' : 'EN_CURSO' }); }
+          else cerrar();                                         // le tocaba y no hay ausente: corta
+        }
+        cerrar();
+        if (!rachas.length) continue;
+        agentes.push({
+          dni: k, nombre: a.nombre, servicio: a.servicio, ley: a.ley, dependencia: a.dependencia, ocupacion: a.ocupacion,
+          maxSeguidos: Math.max(...rachas.map(x => x.seguidos)),
+          avisos: [...new Set(rachas.flatMap(x => x.avisos))],
+          rachas,
+        });
+      }
+      agentes.sort((x, y) => y.maxSeguidos - x.maxSeguidos || String(x.nombre).localeCompare(String(y.nombre), 'es'));
+      const data = { ok: true, desde, hasta, min, corrida: r.corrida, avisos: r.avisos || [], agentes, generado: new Date().toISOString() };
+      cacheSeguidos.set(ck, { t: Date.now(), data });
+      res.json(data);
+    } catch (e: any) {
+      logger.error({ msg: 'fichajes-agentes/ausentes-seguidos: error', error: e?.message });
       res.status(500).json({ ok: false, error: e?.message || 'Error' });
     }
   });
