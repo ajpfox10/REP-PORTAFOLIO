@@ -96,15 +96,32 @@ if ($t) { Unregister-ScheduledTask -TaskPath '${CARPETA_TAREAS}' -TaskName '${no
 `);
 }
 
-export async function ejecutarAhora(script: string): Promise<'tarea' | 'directo'> {
+/**
+ * Pedido para la corrida que se lanza ahora: archivo JSON en la carpeta de scripts que
+ * VA a correr (la de la tarea programada = prod, o la del backend si va directo). El robot
+ * lo lee y lo borra (ej. pedido_certificados_tanda.json → certificados solo de esa tanda).
+ */
+export interface PedidoCorrida { archivo: string; datos: Record<string, unknown> }
+
+export async function ejecutarAhora(script: string, pedido?: PedidoCorrida): Promise<'tarea' | 'directo'> {
   const nombre = nombreSeguro(script);
-  const out = await ps(`
+  const escribirPedido = (dir: string) => {
+    if (!pedido) return;
+    if (!/^[a-z0-9_]{1,80}\.json$/.test(pedido.archivo)) throw new Error('Nombre de pedido inválido');
+    fs.writeFileSync(path.join(dir, pedido.archivo), JSON.stringify({ ...pedido.datos, at: new Date().toISOString() }), 'utf8');
+  };
+  const hay = await ps(`
 $t = Get-ScheduledTask -TaskPath '${CARPETA_TAREAS}' -TaskName '${nombre}' -ErrorAction SilentlyContinue
-if ($t) { Start-ScheduledTask -TaskPath '${CARPETA_TAREAS}' -TaskName '${nombre}'; 'tarea' } else { 'no' }
+if ($t) { 'tarea' } else { 'no' }
 `);
-  if (out.trim() === 'tarea') return 'tarea';
+  if (hay.trim() === 'tarea') {
+    escribirPedido(dirTareasProgramadas());
+    await ps(`Start-ScheduledTask -TaskPath '${CARPETA_TAREAS}' -TaskName '${nombre}'`);
+    return 'tarea';
+  }
   // sin tarea programada: se lanza directo en la sesión del backend, desacoplado
   const dir = resolverScriptsDir();
+  escribirPedido(dir);
   await ps(`Start-Process -FilePath (Get-Command python).Source -ArgumentList 'run_robot.py ${nombre}' -WorkingDirectory '${dir.replace(/'/g, "''")}' -WindowStyle Minimized`);
   return 'directo';
 }

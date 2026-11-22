@@ -209,6 +209,56 @@ type ViewerState = {
   revokeOnClose: boolean;
 } | null;
 
+// Resolución por defecto de TODOS los escaneos: 600 dpi; si el equipo no la tiene, la más alta que ofrezca.
+const DPI_PREFERIDO = 600;
+function dpiPreferido(res: number[] | null | undefined): number {
+  if (!Array.isArray(res) || !res.length) return DPI_PREFERIDO;
+  return res.includes(DPI_PREFERIDO) ? DPI_PREFERIDO : Math.max(...res);
+}
+
+// modo 'reemplazar' = 📷 Re-escanear documento (lo de antes va a Trasladados);
+// modo 'agregar' = ➕ Agregar hoja (se mete en su lugar: después de `despuesDe`, o al final si es null).
+type ReescaneoInfo = {
+  id: string; modo: 'reemplazar' | 'agregar'; dni: number; documento: string; carpeta: string;
+  rels: string[]; archivos: string[]; despuesDe: { rel: string; page: number; n: number } | null;
+};
+
+// Oscuridad que se aplica a cada hoja al guardar (el escáner no acepta brillo/contraste por eSCL).
+const OSCURIDADES: Array<{ v: 0 | 1 | 2 | 3; label: string }> = [
+  { v: 0, label: 'Normal' }, { v: 1, label: 'Oscuro' }, { v: 2, label: 'Más oscuro' }, { v: 3, label: 'Muy oscuro' },
+];
+
+function leerReescaneoDeUrl(): ReescaneoInfo | null {
+  try {
+    const raw = new URLSearchParams(window.location.search).get('reescaneo');
+    if (!raw) return null;
+    const d = JSON.parse(decodeURIComponent(escape(atob(raw))));
+    if (!d || !Number(d.dni) || !d.carpeta || !Array.isArray(d.rels)) return null;
+    const dd = d.despuesDe && d.despuesDe.rel
+      ? { rel: String(d.despuesDe.rel), page: Number(d.despuesDe.page) || 0, n: Number(d.despuesDe.n) || 0 }
+      : null;
+    return {
+      id: String(d.id || Date.now()), modo: d.modo === 'agregar' ? 'agregar' : 'reemplazar',
+      dni: Number(d.dni), documento: String(d.documento || d.carpeta),
+      carpeta: String(d.carpeta), rels: d.rels.map(String), archivos: Array.isArray(d.archivos) ? d.archivos.map(String) : [],
+      despuesDe: dd,
+    };
+  } catch { return null; }
+}
+
+const sinTildesLower = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+
+// Tipo de documento a partir del nombre de los archivos viejos (el escáner los nombra con
+// el label del tipo: "Decl. Jurada de Condiciones de Salud (2-4).jpg", "…-1142.pdf").
+function tipoDesdeArchivos(archivos: string[]): string {
+  for (const a of archivos) {
+    const base = sinTildesLower(a.replace(/\.[^.]+$/, '').replace(/\s*\(\d+-\d+\)$/, '').replace(/-\d+$/, ''));
+    const t = TIPOS_DOCUMENTO.find(x => sinTildesLower(x.label) === base);
+    if (t) return t.value;
+  }
+  return '';
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export function EscaneoPage() {
   const toast = useToast();
@@ -220,6 +270,12 @@ export function EscaneoPage() {
   const [agente, setAgente]     = useState<any>(null);
   const [matches, setMatches]   = useState<any[]>([]);
   const [loadingAgente, setLoadingAgente] = useState(false);
+
+  // Modo "📷 Re-escanear documento" (viene de Trámites → 🗂️ Documentos en otra pestaña):
+  // ?reescaneo=<base64 JSON {id,dni,documento,carpeta,rels,archivos}>. Precarga agente,
+  // carpeta, tipo y máx. resolución; al guardar, los archivos de antes van a Trasladados.
+  const [reescaneo, setReescaneo] = useState<ReescaneoInfo | null>(leerReescaneoDeUrl);
+  const reescaneoPrecargadoRef = useRef(false);
 
   // Tipo de documento — OBLIGATORIO
   const [tipoDoc, setTipoDoc] = useState<string>('');
@@ -275,11 +331,12 @@ export function EscaneoPage() {
 
   // Opciones de escaneo
   const [source, setSource]   = useState<string>('flatbed');
-  const [dpi, setDpi]         = useState<number>(300);
+  const [dpi, setDpi]         = useState<number>(DPI_PREFERIDO);
   const [color, setColor]     = useState(true);
   const [duplex, setDuplex]   = useState(false);
   const [outputFormat, setOutputFormat] = useState<OutputFormat>('pdf');
   const [paperSize, setPaperSize] = useState<string>('A4');
+  const [oscuridad, setOscuridad] = useState<0 | 1 | 2 | 3>(0);
 
   // Sesión multi-página
   const [session, setSession]     = useState<ScannedPage[]>([]);
@@ -452,7 +509,7 @@ export function EscaneoPage() {
       setSource(caps.sources[0] || 'flatbed');
     }
     if (!caps.resolutions.includes(dpi)) {
-      setDpi(caps.resolutions.includes(300) ? 300 : caps.resolutions[0] || 300);
+      setDpi(dpiPreferido(caps.resolutions));
     }
     const colorKey = color ? 'color' : 'grayscale';
     if (!caps.color_modes.includes(colorKey) && !caps.color_modes.includes(color ? 'color' : 'gris')) {
@@ -555,6 +612,31 @@ export function EscaneoPage() {
     } catch (e: any) { toast.error('Error', e?.message); }
     finally { setLoadingAgente(false); }
   }, [dni, cargarDocHistory, cargarSubDisk, resetSubcarpetas]);
+
+  // Re-escaneo: 1) buscar el agente; 2) con el agente cargado, fijar carpeta/tipo/formato.
+  useEffect(() => {
+    if (!reescaneo || reescaneoPrecargadoRef.current) return;
+    if (!agente) {
+      if (!loadingAgente && dni !== String(reescaneo.dni)) { setDni(String(reescaneo.dni)); void buscarPorDni(String(reescaneo.dni)); }
+      return;
+    }
+    if (Number(agente.dni) !== reescaneo.dni) return;
+    reescaneoPrecargadoRef.current = true;
+    seleccionarCategoria(reescaneo.carpeta, String(agente.dni));
+    const tipo = tipoDesdeArchivos(reescaneo.archivos);
+    if (tipo) setTipoDoc(tipo);
+    const todosJpg = reescaneo.archivos.length > 0 && reescaneo.archivos.every(a => /\.jpe?g$/i.test(a));
+    setOutputFormat(todosJpg ? 'jpg' : 'pdf');
+    setColor(true);
+    setOscuridad(1); // las hojas que se re-escanean suelen ser las que salieron claras
+  }, [reescaneo, agente, loadingAgente, dni, buscarPorDni, seleccionarCategoria]);
+
+  // Re-escaneo: siempre 600 dpi (o la más alta del equipo elegido), aunque se haya cambiado a mano.
+  useEffect(() => {
+    if (!reescaneo) return;
+    const res = devices.find(d => d.id === selectedDevice)?.capabilities?.resolutions;
+    if (Array.isArray(res) && res.length) setDpi(dpiPreferido(res));
+  }, [reescaneo, devices, selectedDevice]);
 
   const buscarPorNombre = useCallback(async () => {
     const q = fullName.trim();
@@ -754,7 +836,10 @@ export function EscaneoPage() {
       }
       // Si hay subcarpeta elegida, se codifica en personal_ref: 'docu|<relpath>|<tipo>'.
       // doc_class queda como el tipo puro para que el backend detecte el tipo aunque falle el parse.
-      const personalRef = refRes ?? (subRelPath ? `docu|${subRelPath}|${tipoDoc}` : tipoDoc);
+      // Oscuridad: el back de personal oscurece cada hoja antes de escribirla ('|osc:N' al final).
+      const personalRef = refRes ?? (oscuridad
+        ? `docu|${subRelPath}|${tipoDoc}|osc:${oscuridad}`
+        : (subRelPath ? `docu|${subRelPath}|${tipoDoc}` : tipoDoc));
       const resp = await scannerFetch<{ output_format?: string; documents?: number }>('/v1/scan-jobs/consolidate', {
         method: 'POST',
         body: JSON.stringify({
@@ -776,6 +861,44 @@ export function EscaneoPage() {
       }
       apiFetch<any>(`/scanner/documents/${agente.dni}`)
         .then(r => setDocHistory(r?.data || [])).catch(() => {});
+      const avisarDocumentos = (info: ReescaneoInfo) => {
+        try { localStorage.setItem('reescaneo-hecho', JSON.stringify({ id: info.id, dni: info.dni, documento: info.documento, t: Date.now() })); } catch { /* noop */ }
+      };
+      if (reescaneo?.modo === 'agregar' && Number(agente.dni) === reescaneo.dni && subRelPath === reescaneo.carpeta) {
+        // El escáner escribe el archivo unos segundos después del consolidate: se reintenta hasta 2 min.
+        const info = reescaneo;
+        const antes = info.archivos;
+        let listo = false;
+        for (let intento = 0; intento < 40 && !listo; intento += 1) {
+          try {
+            const rr = await apiFetch<{ ok: boolean; data: { modo: string; insertadas: number } }>(
+              '/tramites-documentales/combinar-insertar',
+              { method: 'POST', body: JSON.stringify({ dni: info.dni, carpeta: info.carpeta, despuesDe: info.despuesDe, antes }) });
+            listo = true;
+            toast.ok('Hoja agregada', info.despuesDe
+              ? `${rr.data.insertadas} hoja(s) agregada(s) después de la #${info.despuesDe.n} de ${info.documento}`
+              : `${rr.data.insertadas} hoja(s) agregada(s) al final de ${info.documento}`);
+            avisarDocumentos(info);
+            setReescaneo(null);
+          } catch (e: any) {
+            if (/todavía no llegó/i.test(e?.message || '')) { await new Promise(r => setTimeout(r, 3000)); continue; }
+            toast.error('Se guardó la hoja, pero no se pudo ubicar en el documento', `${e?.message || 'Error'} — acomodala desde Documentos`);
+            listo = true;
+          }
+        }
+        if (!listo) toast.error('La hoja nueva no apareció en la carpeta', 'Revisá en Documentos con 🔄 en un rato');
+      } else if (reescaneo && Number(agente.dni) === reescaneo.dni && subRelPath === reescaneo.carpeta) {
+        try {
+          const rr = await apiFetch<{ ok: boolean; data: { movidos: string[]; yaNoEstaban: string[] } }>(
+            '/tramites-documentales/combinar-reemplazar-doc',
+            { method: 'POST', body: JSON.stringify({ dni: reescaneo.dni, rels: reescaneo.rels }) });
+          toast.ok('Documento reemplazado', `${rr.data.movidos.length} archivo(s) viejo(s) → Trasladados\\${reescaneo.carpeta} (se recuperan en ♻️ Restaurar)`);
+          avisarDocumentos(reescaneo);
+          setReescaneo(null);
+        } catch (e: any) {
+          toast.error('Se guardó el escaneo nuevo, pero no se pudieron trasladar los viejos', e?.message || 'Error');
+        }
+      }
       if (refRes) {
         const d = datosResolucion();
         setResElegida(''); setResNueva(RES_VACIA);
@@ -800,7 +923,7 @@ export function EscaneoPage() {
         toast.error('No se pudo guardar', msg);
       }
     } finally { setSaving(false); }
-  }, [session, agente, tipoDoc, outputFormat, subRelPath, datosResolucion, descripcion, authSession, resNueva, mostrarDondeSeGuardo]);
+  }, [session, agente, tipoDoc, outputFormat, subRelPath, datosResolucion, descripcion, authSession, resNueva, mostrarDondeSeGuardo, reescaneo, oscuridad]);
 
   const descartarSesion = useCallback(() => {
     blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
@@ -1076,6 +1199,29 @@ export function EscaneoPage() {
 
             {/* IZQUIERDA */}
             <div className="scan-col">
+
+              {reescaneo && (
+                <div className="card scan-card" style={{ border: '1px solid rgba(250,204,21,0.5)', background: 'rgba(250,204,21,0.08)' }}>
+                  <div className="scan-section-title">{reescaneo.modo === 'agregar' ? '➕ Agregar hoja al documento' : '📷 Re-escaneo de documento'}</div>
+                  <div style={{ fontSize: '0.85rem', lineHeight: 1.5 }}>
+                    <b>{reescaneo.documento}</b> · DNI {reescaneo.dni}<br />
+                    {reescaneo.modo === 'agregar' ? (
+                      <>Escaneá <b>solo la hoja que falta</b>. Al guardar se mete {reescaneo.despuesDe
+                        ? <><b>después de la hoja #{reescaneo.despuesDe.n}</b></>
+                        : <><b>al final</b></>} del documento. No se mueve nada a Trasladados.</>
+                    ) : (
+                      <>Escaneá el documento <b>completo</b> (todas las hojas). Al guardar, los {reescaneo.rels.length} archivo(s)
+                      que tiene ahora pasan a <b>Trasladados\{reescaneo.carpeta}</b> (se recuperan en ♻️ Restaurar).</>
+                    )}
+                    {subRelPath !== reescaneo.carpeta && (
+                      <div style={{ color: '#f87171', marginTop: 4 }}>⚠️ La carpeta destino no es «{reescaneo.carpeta}»: así no se {reescaneo.modo === 'agregar' ? 'agrega al documento' : 'reemplaza nada'}.</div>
+                    )}
+                  </div>
+                  <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                    <button className="btn" onClick={() => setReescaneo(null)}>Cancelar (escaneo normal)</button>
+                  </div>
+                </div>
+              )}
 
               {/* ── AGENTE — OBLIGATORIO ── */}
               <div className={`card scan-card${!agente ? ' scan-card-required' : ' scan-card-ok'}`}>
@@ -1532,6 +1678,14 @@ export function EscaneoPage() {
                     ))}
                   </div>
 
+                  <div className="muted scan-label" style={{ marginTop: 12 }} title="Se aplica a cada hoja al guardar: letras claras → más oscuras, fondo blanco">Oscuridad (letras claras)</div>
+                  <div className="scan-caps-grid">
+                    {OSCURIDADES.map(o => (
+                      <button key={o.v} className={`scan-cap-btn${oscuridad === o.v ? ' selected' : ''}`}
+                        onClick={() => setOscuridad(o.v)}>{o.v ? '🌑 ' : ''}{o.label}</button>
+                    ))}
+                  </div>
+
                   <div className="muted scan-label" style={{ marginTop: 12 }}>Modo de color</div>
                   <div className="scan-caps-grid">
                     {(caps.color_modes.length ? caps.color_modes : ['color','gris']).map(m => (
@@ -1677,7 +1831,7 @@ export function EscaneoPage() {
                     </div>
                     <div className="scan-summary-row">
                       <span className="muted">Resolución</span>
-                      <span>{dpi} dpi · {color ? 'Color' : 'Grises'}</span>
+                      <span>{dpi} dpi · {color ? 'Color' : 'Grises'}{oscuridad ? ` · 🌑 ${OSCURIDADES[oscuridad].label}` : ''}</span>
                     </div>
                     <div className="scan-summary-row">
                       <span className="muted">Tamaño</span>

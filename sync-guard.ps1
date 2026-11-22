@@ -84,7 +84,7 @@ try {
   $forbiddenPath = '(?i)(^|/)(secrets/|\.env(\.(?!example$|sample$|template$)[^/]*)?$|fichero_config\.json$|[^/]*_(token|credentials)\.json$|[^/]*\.(pem|key|pfx|p12|pyc)$|id_rsa|Login Data$|Cookies$|Web Data$|__pycache__/|\.chrome-debug/|chrome-dev-visible)'
   # PDFs, planillas, imagenes y carpetas de datos: solo se permiten los assets reales del codigo
   $dataFile    = '(?i)\.(pdf|csv|xlsx?|png|jpe?g|webp|bmp)$|(^|/)(storage|uploads|capturas|screenshots|fichadas)/|fichad[^/]*\.txt$|(^|/)attlog[^/]*\.txt$'
-  $dataAllowed = '(?i)^(apipersonal/src/templates/|apipersonal/assets/|TRABAJO PRACTICO FINAL/img/)'
+  $dataAllowed = '(?i)^(apipersonal/src/templates/|apipersonal/assets/|apifront/public/normativa/[^/]+\.pdf$|TRABAJO PRACTICO FINAL/img/)'
   # volcados de pantallas de SiAPe, logs de pruebas y listados reales: traen DNI/CUIL/nombres de agentes
   $personalData = '(?i)^apipersonal/scripts/(dump_[^/]*\.txt|logs_[^/]*\.txt|siape_[^/]*\.(json|txt)|siape_map_baja/|siape_catalogo/|data/)'
   $staged = @(git -c core.quotepath=off diff --cached --name-only --diff-filter=ACMR)

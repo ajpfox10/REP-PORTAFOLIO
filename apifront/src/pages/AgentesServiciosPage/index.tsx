@@ -416,7 +416,12 @@ function ExportarAntiguedadModal({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function AgentesServiciosPage() {
+// embedded: se muestra como pestaña dentro de Reportes (sin Layout propio)
+function WrapAS({ embedded, children }: { embedded: boolean; children?: React.ReactNode }) {
+  return embedded ? <>{children}</> : <Layout title="Agentes por Servicio" showBack>{children}</Layout>;
+}
+
+export function AgentesServiciosPage({ embedded = false }: { embedded?: boolean } = {}) {
   const toast = useToast();
 
   // Filtros
@@ -606,7 +611,7 @@ export function AgentesServiciosPage() {
   };
 
   return (
-    <Layout title="Agentes por Servicio" showBack>
+    <WrapAS embedded={embedded}>
       <div className="asv-layout">
 
         {/* ── PANEL DE FILTROS ── */}
@@ -909,6 +914,6 @@ export function AgentesServiciosPage() {
           onClose={() => setModalExportar(false)}
         />
       )}
-    </Layout>
+    </WrapAS>
   );
 }

@@ -145,7 +145,12 @@ function CumpleanosTabla({
   );
 }
 
-export function AlertasPage() {
+// embedded: se muestra como pestaña dentro de Reportes (sin Layout propio)
+function WrapAl({ embedded, children }: { embedded: boolean; children?: React.ReactNode }) {
+  return embedded ? <>{children}</> : <Layout title="Alertas" showBack>{children}</Layout>;
+}
+
+export function AlertasPage({ embedded = false }: { embedded?: boolean } = {}) {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState('');
@@ -358,7 +363,7 @@ export function AlertasPage() {
     });
 
   return (
-    <Layout title="Alertas" showBack>
+    <WrapAl embedded={embedded}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <strong style={{ fontSize: '1.05rem' }}>🔔 Alertas del sistema</strong>
@@ -495,7 +500,7 @@ export function AlertasPage() {
           </AlertaCard>
         </>
       )}
-    </Layout>
+    </WrapAl>
   );
 }
 

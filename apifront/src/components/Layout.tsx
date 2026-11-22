@@ -7,6 +7,9 @@ import { RobotsFallidosBanner } from './RobotsFallidosBanner';
 import { ResolucionesSinArchivoBanner } from './ResolucionesSinArchivoBanner';
 import { AlertasJubilacionBloqueo } from './AlertasJubilacionBloqueo';
 import { FelicitacionAutomatica } from '../pages/CumpleanosFelicitacionesPage/FelicitacionAutomatica';
+import { GpProgramadosRunner } from '../pages/GpAvisosPage/GpProgramadosRunner';
+import { EnvioAgendaAutomatico } from '../pages/AgendaTurnosPage/envioCola';
+import { RecargaPorVersion } from './RecargaPorVersion';
 import { FeriadosBloqueo } from './FeriadosBloqueo';
 
 export function Layout({ title, children, showBack, fluid }: {
@@ -250,7 +253,7 @@ export function Layout({ title, children, showBack, fluid }: {
                       <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>
                         Análisis
                       </div>
-                      {navLink('/app/estadisticas', '📊 Estadísticas')}
+                      {navLink('/app/reportes?tab=estadisticas', '📊 Estadísticas')}
                       {navLink('/app/asistencia', '🗓️ Asistencia')}
                       {navLink('/app/reporte-servicio', '📊 Reporte por Servicio')}
                       {navLink('/app/ausencias-fichajes', '🕵️ Ausentes vs Fichajes')}
@@ -259,13 +262,13 @@ export function Layout({ title, children, showBack, fluid }: {
                       {isAdmin && navLink('/app/art26-ministerio', '📋 Art. 26 → MS (FC)')}
                       {(hasPerm('crud:fc_cert_reemplazos:read') || isAdmin) && navLink('/app/fc-cert-reemplazos', '📋 FC / Cert. / Reemplazos')}
                       {navLink('/app/organigrama', '🏗️ Organigrama')}
-                      {navLink('/app/alertas', '🔔 Alertas')}
+                      {navLink('/app/reportes?tab=alertas', '🔔 Alertas')}
                       {isAdmin && navLink('/app/cumpleanos-felicitaciones', '🎂 Felicitaciones')}
                       {navLink('/app/atencion', '🏛️ Atención al Público')}
-                      {navLink('/app/agentes-servicios', '🏥 Agentes por Servicio')}
+                      {navLink('/app/reportes?tab=agentes_servicios', '🏥 Agentes por Servicio')}
                       {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
                       {isAdmin && navLink('/app/bajas-gestion', '📋 Gestión de Bajas')}
-                      {isAdmin && navLink('/app/historial-estructura', '🗂️ Historial Estructura')}
+                      {isAdmin && navLink('/app/estructura?tab=historial', '🗂️ Historial Estructura')}
 
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
 
@@ -355,6 +358,13 @@ export function Layout({ title, children, showBack, fluid }: {
 
       {/* Felicitaciones de cumpleaños automáticas: solo en la PC marcada (localStorage) */}
       <FelicitacionAutomatica />
+      <GpProgramadosRunner />
+
+      {/* Agenda de turnos: manda por WhatsApp la cola de envíos, solo en la PC marcada (localStorage) */}
+      <EnvioAgendaAutomatico />
+
+      {/* Después de un deploy: se recarga sola (o avisa) para no quedar con la app vieja */}
+      <RecargaPorVersion />
 
       <div style={{ marginTop: 16 }}>{children}</div>
     </div>

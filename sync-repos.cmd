@@ -34,6 +34,11 @@ echo === apifront ===
 robocopy "C:\apps\personaldev\apifront" "D:\Repositorios\apifront" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
 
 echo.
+echo === PDFs que usa la app (plantillas + normativa; el resto de *.pdf queda excluido) ===
+robocopy "C:\apps\personaldev\apipersonal\assets" "D:\Repositorios\apipersonal\assets" *.pdf %DRY% /E /R:1 /W:1 /NP /NDL
+robocopy "C:\apps\personaldev\apifront\public\normativa" "D:\Repositorios\apifront\public\normativa" *.pdf %DRY% /R:1 /W:1 /NP /NDL
+
+echo.
 echo === abrir-carpeta-handler ===
 robocopy "C:\apps\personaldev\abrir-carpeta-handler" "D:\Repositorios\abrir-carpeta-handler" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
 

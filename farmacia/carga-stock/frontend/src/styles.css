@@ -749,6 +749,26 @@ table.carga-manual { min-width: 0; }
 table.carga-manual th, table.carga-manual td { padding: 6px 7px; font-size: 13.5px; line-height: 1.3; }
 table.carga-manual th { font-size: 12.5px; }
 table.carga-manual td:nth-child(2) { white-space: nowrap; }
+/* Entra en el ancho del monitor: los textos se parten en varias lineas (el renglon se hace mas alto) */
+table.carga-manual { width: 100%; }
+table.carga-manual th, table.carga-manual td,
+table.carga-manual td *:not(input) { white-space: normal !important; }
+table.carga-manual td:nth-child(2) { white-space: nowrap !important; }
+table.carga-manual td button { max-width: 100%; }
+/* Mas angosta y con scroll propio: la barra horizontal queda siempre a la vista (abajo de la pantalla)
+   y el encabezado queda fijo arriba al bajar */
+.carga-manual-wrap { max-height: calc(100vh - 90px); overflow: auto; }
+table.carga-manual th, table.carga-manual td { padding: 4px 5px; font-size: 12.5px; line-height: 1.25; }
+table.carga-manual th { font-size: 11.5px; }
+table.carga-manual input[type="number"] { width: 70px !important; max-width: 100%; }
+/* Tirador en el borde derecho de cada titulo para cambiar el ancho de la columna */
+table.carga-manual th { position: sticky; }
+table.carga-manual th .col-tirador { position: absolute; top: 0; right: -3px; width: 7px; height: 100%; cursor: col-resize; z-index: 2; }
+table.carga-manual th .col-tirador:hover { background: #00a6b8; opacity: 0.45; }
+/* Con anchos fijados a mano: el texto se parte en lineas y el renglon se hace mas alto; nada se sale de su columna */
+table.carga-manual.anchos-fijos td, table.carga-manual.anchos-fijos th { overflow: hidden; overflow-wrap: anywhere; }
+table.carga-manual.anchos-fijos td div, table.carga-manual.anchos-fijos td table, table.carga-manual.anchos-fijos td button { max-width: 100%; }
+table.carga-manual.anchos-fijos td:nth-child(2) { white-space: normal !important; }
 .ayuda-carga { margin-top: 8px; background: #f4f8fa; border: 1px solid #dbe3e8; border-radius: 6px; padding: 8px 14px; font-size: 13.5px; line-height: 1.5; }
 .ayuda-carga summary { cursor: pointer; font-weight: 700; color: #174e8d; }
 .ayuda-carga ul { margin: 6px 0 2px; padding-left: 20px; }
@@ -827,3 +847,18 @@ table.carga-manual td:nth-child(2) { white-space: nowrap; }
 }
 .ayuda-sub-corto { padding: 0 14px 8px 40px; font-size: 13px; color: #34506b; }
 @media print { .ayuda-pagina { display: none; } }
+
+/* Confirmar O.C. escaneada (OCR) */
+.folder-picker.oc-escaneo { width: min(1100px, 100%); max-height: 92vh; }
+.oc-escaneo-body { overflow: auto; min-height: 0; }
+.oc-escaneo-cab { display: grid; grid-template-columns: 160px 1fr 130px 130px; gap: 10px; margin-bottom: 12px; }
+.oc-escaneo-cab label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+.oc-escaneo-nro { font-size: 1.15em; font-weight: 700; }
+.oc-escaneo input { width: 100%; box-sizing: border-box; }
+.oc-escaneo-num { max-width: 80px; text-align: right; }
+.oc-escaneo-cant { font-weight: 700; background: #fff8e1; }
+.oc-escaneo-cod { max-width: 110px; }
+.oc-escaneo-imp { max-width: 130px; text-align: right; }
+.oc-escaneo-desc { min-width: 280px; }
+.oc-escaneo-texto { white-space: pre-wrap; font-size: 12px; max-height: 260px; overflow: auto; background: #f6f7f9; padding: 8px; border-radius: 6px; }
+@media (max-width: 700px) { .oc-escaneo-cab { grid-template-columns: 1fr; } }

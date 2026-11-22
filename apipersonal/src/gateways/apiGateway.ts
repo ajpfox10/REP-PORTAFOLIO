@@ -60,6 +60,7 @@ import { buildSaludLaboralHabilitacionesRouter } from '../routes/saludLaboralHab
 import { buildBajasRouter } from '../routes/bajas.routes';
 import { buildJubilacionRouter } from '../routes/jubilacion.routes';
 import { buildAgendaTurnosRouter } from '../routes/agendaTurnos.routes';
+import { registrarVisita, usarBasePcs } from '../services/pcsConectadas';
 import { buildWhatsappBotRouter } from '../routes/whatsappBot.routes';
 import { buildGpAvisosRouter } from '../routes/gpAvisos.routes';
 import { buildHerramientasRouter } from '../routes/herramientas.routes';
@@ -188,7 +189,9 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(apiPrefix, idempotencyMiddleware(sequelize));
 
   // ── Rutas protegidas (todas requieren token JWT valido) ────────────────────
-  const protect = [authContext(sequelize), requirePermission('api:access')];
+  // registrarVisita: anota IP + usuario de cada PC (lista "PCs con la app abierta" de la Agenda de turnos)
+  usarBasePcs(sequelize);
+  const protect = [authContext(sequelize), registrarVisita, requirePermission('api:access')];
 
   // Permisos por router = los mismos que pide el front para entrar a la pantalla que lo usa
   // (auditoría 08/11: estos routers solo pedían estar logueado).

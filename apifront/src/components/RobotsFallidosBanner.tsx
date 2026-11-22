@@ -126,7 +126,9 @@ export function RobotsFallidosBanner() {
               <div style={{ color: '#fca5a5', fontSize: '0.75rem', overflowWrap: 'anywhere' }}>{f.motivo || 'Sin detalle'}</div>
               {errores[f.script] && <div style={{ color: '#fde047', fontSize: '0.75rem' }}>⚠️ {errores[f.script]}</div>}
             </div>
-            {!f.lanzable ? (
+            {f.script === 'migraciones' ? (
+              <span style={{ color: '#f87171', fontSize: '0.72rem' }}>se arregla con una migración nueva + reiniciar la API</span>
+            ) : !f.lanzable ? (
               <span style={{ color: '#f87171', fontSize: '0.72rem' }}>se lanza desde su pantalla</span>
             ) : l ? (
               <span style={{ color: '#fcd34d', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>

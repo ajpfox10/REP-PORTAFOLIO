@@ -1171,7 +1171,12 @@ interface Stats {
 }
 
 // ─── PAGE ─────────────────────────────────────────────────────────────────────
-export function EstadisticasPage() {
+// embedded: se muestra como pestaña dentro de Reportes (sin Layout propio)
+function Wrap({ embedded, children }: { embedded: boolean; children?: React.ReactNode }) {
+  return embedded ? <>{children}</> : <Layout title="Estadísticas" showBack>{children}</Layout>;
+}
+
+export function EstadisticasPage({ embedded = false }: { embedded?: boolean } = {}) {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState({ loaded: 0, total: 0, step: '' });
@@ -1300,7 +1305,7 @@ export function EstadisticasPage() {
 
   if (loading || !stats) {
     return (
-      <Layout title="Estadísticas" showBack>
+      <Wrap embedded={embedded}>
         <div className="card" style={{ textAlign: 'center', padding: 56 }}>
           <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>⏳</div>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>{progress.step || 'Iniciando…'}</div>
@@ -1322,7 +1327,7 @@ export function EstadisticasPage() {
             Se están cargando TODOS los registros paginando la API…
           </div>
         </div>
-      </Layout>
+      </Wrap>
     );
   }
 
@@ -1543,7 +1548,7 @@ export function EstadisticasPage() {
   }));
 
   return (
-    <Layout title="Estadísticas" showBack>
+    <Wrap embedded={embedded}>
       {/* ── Header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <div>
@@ -1878,6 +1883,6 @@ export function EstadisticasPage() {
           </div>
         </Section>
       )}
-    </Layout>
+    </Wrap>
   );
 }

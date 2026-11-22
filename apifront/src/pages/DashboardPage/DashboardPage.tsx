@@ -68,7 +68,7 @@ function GroupTab({ to, children, tooltip }: {
   );
 }
 
-function AsistenciaTile({ canSeePlus, canSeeAdmin }: { canSeePlus: boolean; canSeeAdmin: boolean }) {
+function AsistenciaTile({ canSeePlus, canSeeAdmin, canSeeFc }: { canSeePlus: boolean; canSeeAdmin: boolean; canSeeFc: boolean }) {
   return (
     <div className="tile dash-group-tile" style={{ borderLeftColor: '#6366f1', borderLeftWidth: 3 }}>
       <Link className="dash-group-main" to="/app/asistencia">
@@ -122,6 +122,14 @@ function AsistenciaTile({ canSeePlus, canSeeAdmin }: { canSeePlus: boolean; canS
             Licencias y Plus
           </GroupTab>
         )}
+        {canSeeFc && (
+          <GroupTab
+            to="/app/fc-cert-reemplazos"
+            tooltip="Seguimiento mensual de Francos Compensatorios, Certificación de Servicios y Reemplazos de Guardia."
+          >
+            FC / Cert. / Reemplazos
+          </GroupTab>
+        )}
       </div>
     </div>
   );
@@ -134,12 +142,18 @@ function EstructuraTile() {
         <h3>🏗️ Estructura Organizacional</h3>
         <p>Administrá la jerarquía completa: Dependencias, Reparticiones, Servicios y Sectores. CRUD con filtros y exportación a Excel.</p>
       </Link>
-      <div className="dash-group-tabs dash-group-tabs-single" role="tablist" aria-label="Herramientas de estructura organizacional">
+      <div className="dash-group-tabs" role="tablist" aria-label="Herramientas de estructura organizacional">
         <GroupTab
           to="/app/organigrama"
           tooltip="Unificado en Estructura Organizacional. Vista visual del personal por jefatura, dependencia, servicio y sector."
         >
           Organigrama
+        </GroupTab>
+        <GroupTab
+          to="/app/jefedeptos"
+          tooltip="Cargar y consultar el historial de quién ocupó cada jefatura. Alertas de vencimiento de cargos por concurso."
+        >
+          Historial Jefaturas
         </GroupTab>
       </div>
     </div>
@@ -514,7 +528,7 @@ export function DashboardPage() {
           <Tile to="/app/gestion" title="📋 Gestión" desc="Buscar agente por DNI o nombre. Ver todos sus datos, documentos y pedidos." disabled={!canGestion} accent="#2563eb" />
           <Tile to="/app/mensajes-reloj" title="💬 Mensajes al reloj" desc="Elegir varios agentes y mandarles un mensaje que aparece en el reloj cuando fichan." disabled={!canGestion} accent="#14b8a6" />
           <Tile to="/app/redaccion" title="✍️ Redacción" desc="Generar certificados, IOMA y documentos para un agente." accent="#7c3aed" />
-          <Tile to="/app/reportes" title="🎂 Reportes" desc="Cumpleaños, antigüedad, consultas dinámicas sobre las tablas." accent="#f97316" />
+          <Tile to="/app/reportes" title="🎂 Reportes" desc="Estadísticas del personal, agentes por servicio, alertas (cumpleaños próximos, antigüedad 20 años, ingresos y bajas recientes, datos incompletos), cumpleaños, antigüedad y consultas dinámicas." accent="#f97316" />
           <Tile to="/app/consultas" title="💬 Consultas" desc="Historial de consultas del sistema." accent="#10b981" />
           <StatTile to="/app/pedidos" title="📨 Pedidos" desc="Ver pedidos y exportar." stat={pedidosTotal === null ? '—' : `${pedidosTotal}`} disabled={!canPedidos} />
           <Tile to="/app/documentos" title="📂 Documentos" desc="Listado y visor de documentos PDF." disabled={!canDocs} accent="#22d3ee" />
@@ -542,27 +556,18 @@ export function DashboardPage() {
           Análisis y estadísticas
         </div>
         <div className="grid">
-          <Tile to="/app/estadisticas" title="📊 Estadísticas" desc="Agentes por sector, servicio, categoría, ingresos por año, cumpleaños del mes y más." accent="#ec4899" />
-          <AsistenciaTile canSeePlus={canSeeNormativa} canSeeAdmin={hasPerm('crud:*:*')} />
+          <AsistenciaTile canSeePlus={canSeeNormativa} canSeeAdmin={hasPerm('crud:*:*')} canSeeFc={hasPerm('crud:fc_cert_reemplazos:read') || hasPerm('crud:*:*')} />
           {canSeeJubilablesEstadistica && (
             <Tile to="/app/jubilables-estadistica" title="📈 Jubilables (estadística)" desc="Proyección de jubilables por servicio y ley, sin datos de agentes." accent="#7c3aed" />
           )}
           {canSeeNormativa && (
             <Tile to="/app/normativa" title="⚖️ Normativa" desc="Plus de guardia y de planta Ley 10471: porcentajes vigentes, licencias que no descuentan, simulador y decretos en PDF." accent="#0ea5e9" />
           )}
-          {(hasPerm('crud:fc_cert_reemplazos:read') || hasPerm('crud:*:*')) && (
-            <Tile to="/app/fc-cert-reemplazos" title="📋 FC / Cert. / Reemplazos" desc="Seguimiento mensual de Francos Compensatorios, Certificación de Servicios y Reemplazos de Guardia." accent="#7c2d12" />
-          )}
-          <Tile to="/app/alertas" title="🔔 Alertas" desc="Cumpleaños próximos, antigüedad 20 años, ingresos y bajas recientes, datos incompletos." accent="#ef4444" />
           {canSeeAlertasAgente && (
             <Tile to="/app/alertas-agente" title="🚨 Alertas por Agente" desc="Gestión de alertas manuales por agente: creación, seguimiento y estado de lectura por usuario." accent="#dc2626" />
           )}
-          <Tile to="/app/agentes-servicios" title="🏥 Agentes por Servicio" desc="..." accent="#0891b2" />
           {hasPerm('crud:*:*') && (
             <Tile to="/app/bajas-gestion" title="📉 Gestión de Bajas" desc="Estadísticas, completitud de datos y bajas por estructura en pestañas. Filtros por ley, sexo, servicio y edad." accent="#f87171" />
-          )}
-          {hasPerm('crud:*:*') && (
-            <Tile to="/app/historial-estructura" title="🗂️ Historial Estructura" desc="Descarga desde la Intranet del Ministerio el plantel completo de cada agente (activos e inactivos) a Excel en D:\G\HISTORIAL ESTRUCTURA." accent="#60a5fa" />
           )}
         </div>
       </div>
@@ -573,7 +578,6 @@ export function DashboardPage() {
         </div>
         <div className="grid">
           <EstructuraTile />
-          <Tile to="/app/jefedeptos" title="🏛️ Historial Jefaturas" desc="Cargar y consultar el historial de quién ocupó cada jefatura. Alertas de vencimiento de cargos por concurso." accent="#6366f1" />
           {hasPerm('crud:*:*') && (
             <Tile to="/app/licencias-medicas-control" title="🩺 Licencias médicas pendientes y denegadas" desc="Licencias PENDIENTES y DENEGADAS del agente: si ese día le tocaba venir, si fichó y qué cargó el jefe en SIAPE. Quiénes deben reclamar." accent="#ef4444" />
           )}
@@ -595,17 +599,12 @@ export function DashboardPage() {
             <Tile to="/app/agenda-turnos" title="📆 Agenda de turnos" desc="Turnos que el agente elige solo desde un enlace por WhatsApp (uno por enlace). Agendas por sector, horarios, bloqueos y sincronización con Google Calendar." accent="#0e7490" />
           )}
           {(hasPerm('crud:agentexdni1:read') || hasPerm('crud:*:*')) && <GpAvisosTile />}
-          {hasPerm('crud:*:*') && (
-            <Tile to="/app/whatsapp-bot" title="🤖 Bot de WhatsApp" desc="Respuestas automáticas por la API oficial: menú de opciones, certificado IOMA en PDF, pasar a una persona, textos, horario, pedidos, conversaciones y simulador." accent="#16a34a" />
-          )}
           <Tile to="/app/concursos" title="🏆 Concursos Ley 10471" desc="Concurso de ingreso por año, ley, servicio y agente. Concurso de funciones: Ley 10471 con más de 15 años de antigüedad. Exportación a Excel." accent="#6366f1" />
           <LegajoTile />
           <Tile to="/app/mi-cuenta" title="👤 Mi cuenta" desc="Perfil, permisos, tablas del sistema e información de acceso." accent="#0ea5e9" />
           <Tile to="/app/escaneo" title="🖨️ Escaneo" desc="Escaneo de documentos, dispositivos, bandejas y cola de trabajos en tiempo real." accent="#0891b2" />
-          <Tile to="/app/admin" title="🛠️ Administración" desc="Gestión administrativa del sistema, usuarios y solicitudes de acceso." accent="#dc2626" />
-          <Tile to="/app/fichero" title="📤 Módulo Fichero" desc="Monitor de archivos de fichadas: archivos creados, estado de subida SFTP y alerta de red caída." accent="#f59e0b" />
-          <Tile to="/app/fichero-biometria-lab" title="Prueba fichero lógica nueva" desc="Transferencia y pruebas ADMS de usuario, huellas, rostro/cara, palma y mensajes entre relojes." accent="#0f766e" />
-          <Tile to="/app/scripts-siape" title="🤖 Robots SIAPE" desc="Estado de la última corrida de cada script de automatización (exportaciones, cargas, descargas)." accent="#eab308" />
+          <Tile to="/app/fichero" title="📤 Módulo Fichero" desc="Monitor de archivos de fichadas: archivos creados, estado de subida SFTP, alerta de red caída y pruebas de biometría/mensajes entre relojes." accent="#f59e0b" />
+          <Tile to="/app/scripts-siape" title="🤖 Robots" desc="Estado de la última corrida de cada script de automatización (exportaciones, cargas, descargas) y bot de WhatsApp." accent="#eab308" />
         </div>
       </div>
 

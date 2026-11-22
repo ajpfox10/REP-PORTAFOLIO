@@ -143,10 +143,14 @@ export function AptosTandaTab() {
 
   async function bajarDeSiape() {
     if (robot.fase === 'corriendo') return;
+    if (!selectedTanda) {
+      toast.warning('Elegí una tanda', 'Seleccioná arriba la tanda de la que querés bajar los aptos de SIAPE.');
+      return;
+    }
     try {
       const previa = await ultimaCorrida();
       const idPrevio = previa?.id ?? 0;
-      await apiFetch(`/script-runs/ejecutar/${ROBOT}`, { method: 'POST' });
+      await apiFetch(`/script-runs/ejecutar/${ROBOT}`, { method: 'POST', body: JSON.stringify({ tanda: selectedTanda }) });
       setRobot({ fase: 'corriendo' });
       const inicio = Date.now();
       pollRef.current = window.setInterval(async () => {
@@ -265,9 +269,11 @@ export function AptosTandaTab() {
           </span>
         )}
         <button type="button" onClick={() => void bajarDeSiape()} disabled={robot.fase === 'corriendo'}
-          title="Lanza el robot de la exportación 123 (Exámenes Médicos Salud) y actualiza la tabla al terminar"
+          title={selectedTanda
+            ? `Lanza el robot de la exportación 123 (Exámenes Médicos Salud) y baja los certificados solo de ${selectedTanda}`
+            : 'Elegí primero una tanda'}
           style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.6)', background: robot.fase === 'corriendo' ? 'rgba(124,58,237,0.15)' : 'rgba(124,58,237,0.3)', color: '#e9d5ff', fontSize: '0.78rem', cursor: robot.fase === 'corriendo' ? 'wait' : 'pointer' }}>
-          {robot.fase === 'corriendo' ? '⏳ Corriendo…' : '🤖 Bajar de SIAPE'}
+          {robot.fase === 'corriendo' ? '⏳ Corriendo…' : selectedTanda ? `🤖 Bajar de SIAPE (${selectedTanda})` : '🤖 Bajar de SIAPE'}
         </button>
       </div>
 

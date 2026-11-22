@@ -77,6 +77,29 @@ def registrar_item(script, dni=None, nombre=None, novedad=None, desde=None, hast
         print(f"AVISO: no pude registrar el detalle en script_run_items: {ex}")
 
 
+def auditar_docu(script, dni, archivo, documento=None, detalle=None):
+    """Deja un archivo que el robot guardo en DOCU en docu_auditoria (mig 146; pestaña Auditoria de
+    Tramites Documentales): dni, ruta relativa a DOCU, robot y PC. Nunca corta al robot."""
+    import socket
+    from pathlib import Path
+    docu = Path(os.environ.get("DOCU_DIR") or os.environ.get("TRAMITES_DOCU_BASE_DIR") or r"D:\G\DOCU")
+    archivo = Path(archivo)
+    try:
+        ruta = str(archivo.resolve().relative_to(docu.resolve()))
+    except (ValueError, OSError):
+        ruta = str(archivo)
+    try:
+        with conn() as cn, cn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO docu_auditoria (dni, ruta, documento, origen, robot, pc, detalle) "
+                "VALUES (%s, %s, %s, 'robot', %s, %s, %s)",
+                (int(dni), ruta[:600], (documento or archivo.parent.name)[:200], str(script)[:80],
+                 socket.gethostname()[:120], (str(detalle)[:500] if detalle else None)))
+            cn.commit()
+    except Exception as ex:
+        print(f"AVISO: no pude registrar la auditoria de {ruta}: {ex}")
+
+
 def conn():
     return pymysql.connect(
         host=os.environ.get("DB_HOST", "127.0.0.1"),

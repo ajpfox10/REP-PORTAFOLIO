@@ -48,9 +48,31 @@ async function guardarUrl(url) {
 // La red del hospital bloquea QUIC (UDP): va por HTTP/2 (443)
 const cf = spawn(EXE, ['tunnel', '--no-autoupdate', '--protocol', 'http2', '--url', `http://127.0.0.1:${PORT}`], { windowsHide: true });
 let guardada = false;
+
+// Auto-reinicio: Cloudflare da de baja los túneles rápidos cada tanto (pasó 13/11 y 18/11) y cloudflared se queda
+// reintentando para siempre con "Tunnel not found". Si aparece 3 veces en 15 min se corta → pm2 lo levanta de nuevo
+// y sale una dirección nueva (que se guarda sola). Los enlaces ya mandados hay que reenviarlos desde la ficha.
+const NOT_FOUND_MAX = 3;
+const NOT_FOUND_VENTANA_MS = 15 * 60 * 1000;
+let notFound = [];
+let reiniciando = false;
+const vigilar = (s) => {
+  if (reiniciando || !/Tunnel not found/i.test(s)) return;
+  const ahora = Date.now();
+  notFound = notFound.filter(t => ahora - t < NOT_FOUND_VENTANA_MS);
+  notFound.push(ahora);
+  if (notFound.length >= NOT_FOUND_MAX) {
+    reiniciando = true;
+    log(`Cloudflare dio de baja el túnel ("Tunnel not found" x${notFound.length}): se reinicia para pedir una dirección nueva`);
+    try { cf.kill(); } catch { /* noop */ }
+    setTimeout(() => process.exit(1), 3000);
+  }
+};
+
 const leer = (buf) => {
   const s = buf.toString();
   process.stdout.write(s);
+  vigilar(s);
   const m = !guardada && s.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
   if (m) {
     guardada = true;

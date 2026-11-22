@@ -239,6 +239,13 @@ type EscaneoAgentePageProps = {
 };
 
 // ─── Componente principal ─────────────────────────────────────────────────────
+// Resolución por defecto de TODOS los escaneos: 600 dpi; si el equipo no la tiene, la más alta que ofrezca.
+const DPI_PREFERIDO = 600;
+function dpiPreferido(res: number[] | null | undefined): number {
+  if (!Array.isArray(res) || !res.length) return DPI_PREFERIDO;
+  return res.includes(DPI_PREFERIDO) ? DPI_PREFERIDO : Math.max(...res);
+}
+
 export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgentePageProps = {}) {
   const { dni: routeDni } = useParams<{ dni: string }>();
   const dniParam = dni || routeDni;
@@ -340,7 +347,7 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
 
   // Opciones de escaneo
   const [source, setSource]   = useState<string>('flatbed');
-  const [dpi, setDpi]         = useState<number>(300);
+  const [dpi, setDpi]         = useState<number>(DPI_PREFERIDO);
   const [color, setColor]     = useState(true);
   const [duplex, setDuplex]   = useState(false);
   const [outputFormat, setOutputFormat] = useState<OutputFormat>('pdf');
@@ -500,7 +507,7 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
     const caps = selected?.capabilities;
     if (!caps) return;
     if (!caps.sources.includes(source as any)) setSource(caps.sources[0] || 'flatbed');
-    if (!caps.resolutions.includes(dpi)) setDpi(caps.resolutions.includes(300) ? 300 : caps.resolutions[0] || 300);
+    if (!caps.resolutions.includes(dpi)) setDpi(dpiPreferido(caps.resolutions));
     const colorKey = color ? 'color' : 'grayscale';
     if (!caps.color_modes.includes(colorKey) && !caps.color_modes.includes(color ? 'color' : 'gris')) {
       setColor(caps.color_modes.includes('color'));

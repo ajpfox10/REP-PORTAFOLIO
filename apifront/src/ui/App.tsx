@@ -20,7 +20,6 @@ import { PedidosPage } from '../pages/PedidosPage';
 import { DocumentosPage } from '../pages/DocumentosPage';
 import { ReportesPage } from '../pages/ReportesPage';
 import { RedaccionPage } from '../pages/RedaccionPage';
-import { EstadisticasPage } from '../pages/EstadisticasPage';
 import { OrganigramaPage } from '../pages/OrganigramaPage';
 import { ComparadorPage } from '../pages/ComparadorPage';
 import { ComparadorSiapePage } from '../pages/ComparadorSiapePage';
@@ -35,12 +34,10 @@ import { NormativaPage } from '../pages/NormativaPage';
 import { LicenciasPlusPage } from '../pages/LicenciasPlusPage';
 import { FeriadosPage } from '../pages/FeriadosPage';
 import { AgendaTurnosPage } from '../pages/AgendaTurnosPage';
-import { WhatsappBotPage } from '../pages/WhatsappBotPage';
 import { ComisionesPage } from '../pages/ComisionesPage';
 import { VacacionesAdelantadasPage } from '../pages/VacacionesAdelantadasPage';
 import { CargaHorariaLeyPage } from '../pages/CargaHorariaLeyPage';
 import { LegajoPage } from '../pages/LegajoPage';
-import { AlertasPage } from '../pages/AlertasPage';
 import { BuscadorPage } from '../pages/BuscadorPage';
 import { SolicitarAccesoPage } from '../pages/SolicitarAccesoPage';
 import { ForbiddenPage } from '../pages/ForbiddenPage';
@@ -56,19 +53,16 @@ import { AusentismoPage } from '../pages/AusentismoPage';
 import { AtencionPublicoPage } from '../pages/AtencionPublicoPage';
 import { EscaneoPage } from '../pages/EscaneoPage';
 import { EscaneoAgentePage } from '../pages/EscaneoAgentePage';
-import { AgentesServiciosPage } from '../pages/AgentesServiciosPage';
 import { CitacionesPage } from '../pages/CitacionesPage';
 import { JefeServicioPage } from '../pages/JefeServicioPage';
 import { SamoPage } from '../pages/SamoPage';
 import { ResolucionesPage } from '../pages/ResolucionesPage';
 import { FicheroPage } from '../pages/FicheroPage';
-import { FicheroBiometriaLabPage } from '../pages/FicheroBiometriaLabPage';
 import { AusenciasConFichajesPage } from '../pages/AusenciasConFichajesPage';
 import { SinFichajeSalidaPage }    from '../pages/SinFichajeSalidaPage';
 import { ExamenIngresoPage } from '../pages/ExamenIngresoPage';
 import { AccidentesPunzoPage } from '../pages/AccidentesPunzoPage';
 import { BajasGestionPage } from '../pages/BajasGestionPage';
-import { HistorialEstructuraPage } from '../pages/HistorialEstructuraPage';
 import { useKiosk, setKioskManual } from '../hooks/useKiosk';
 import { HerramientasPage }    from '../pages/HerramientasPage';
 import { LicenciasMedicasControlPage } from '../pages/LicenciasMedicasControlPage';
@@ -395,9 +389,7 @@ export function App() {
               path="/app/estadisticas"
               element={
                 <Private>
-                  <Guard perm="crud:*:*">
-                    <EstadisticasPage />
-                  </Guard>
+                  <Navigate to="/app/reportes?tab=estadisticas" replace />
                 </Private>
               }
             />
@@ -495,9 +487,7 @@ export function App() {
               path="/app/whatsapp-bot"
               element={
                 <Private>
-                  <Guard anyOf={['crud:*:*']}>
-                    <WhatsappBotPage />
-                  </Guard>
+                  <Navigate to="/app/scripts-siape?tab=whatsapp" replace />
                 </Private>
               }
             />
@@ -605,9 +595,7 @@ export function App() {
               path="/app/alertas"
               element={
                 <Private>
-                  <Guard perm="crud:*:*">
-                    <AlertasPage />
-                  </Guard>
+                  <Navigate to="/app/reportes?tab=alertas" replace />
                 </Private>
               }
             />
@@ -685,9 +673,7 @@ export function App() {
               path="/app/fichero-biometria-lab"
               element={
                 <Private>
-                  <Guard perm="crud:*:*">
-                    <FicheroBiometriaLabPage />
-                  </Guard>
+                  <Navigate to="/app/fichero?tab=lab" replace />
                 </Private>
               }
             />
@@ -735,9 +721,7 @@ export function App() {
               path="/app/agentes-servicios"
               element={
                 <Private>
-                 <Guard perm="crud:*:*">
-                  <AgentesServiciosPage />
-                 </Guard>
+                 <Navigate to="/app/reportes?tab=agentes_servicios" replace />
                </Private>
               }
              />
@@ -831,9 +815,7 @@ export function App() {
               path="/app/historial-estructura"
               element={
                 <Private>
-                  <Guard perm="crud:*:*">
-                    <HistorialEstructuraPage />
-                  </Guard>
+                  <Navigate to="/app/estructura?tab=historial" replace />
                 </Private>
               }
             />

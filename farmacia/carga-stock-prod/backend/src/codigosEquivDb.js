@@ -265,6 +265,8 @@ function comparar(a, b) {
     } else {
       res.presentacion = LIQUIDO_ORAL.has(grupoForma(a.forma)) && LIQUIDO_ORAL.has(grupoForma(b.forma)) ? 'parecida' : 'no';
       res.detalle.presentacion = `${a.forma} / ${b.forma}`;
+      // Comprimido vs inyectable (u otra forma de otro grupo): nunca es el mismo producto
+      if (res.presentacion === 'no') res.formaDistinta = true;
     }
   }
   // Volumen de cada unidad: ampolla de 1 ml y de 5 ml son productos distintos (el stock cuenta unidades)
@@ -456,6 +458,10 @@ async function unificar({ codigo, con, queda, anio, semestre, nota, forzar }, us
   const cmp = await compararCodigos(codigo, con);
   if (cmp?.drogaDistinta) {
     throw errorStatus(`No se puede unificar: ${codigo} y ${con} son drogas distintas.`, 409);
+  }
+  if (cmp?.formaDistinta) {
+    throw errorStatus(`No se pueden atar: son presentaciones distintas (${cmp.detalle.presentacion}). No es el mismo producto.
+Si querés dejarlo marcado, usá «No es la misma droga».`, 409);
   }
   if (cmp && !cmp.ok && !forzar) {
     const mal = ['droga', 'concentracion', 'presentacion'].filter((k) => cmp[k] === 'no')

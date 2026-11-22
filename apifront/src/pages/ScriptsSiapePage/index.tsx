@@ -5,6 +5,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Layout }   from '../../components/Layout';
+import { useSearchParams } from 'react-router-dom';
+import { WhatsappBotPage } from '../WhatsappBotPage';
 import { apiFetch } from '../../api/http';
 import { lanzarRobot, estaCorriendo } from '../../components/RobotsFallidosBanner';
 
@@ -486,6 +488,10 @@ function Configuracion({ robot, onGuardado }: { robot: Robot; onGuardado: () => 
 // ── Página ──────────────────────────────────────────────────────────────────
 
 export function ScriptsSiapePage() {
+  // Pestañas de la página: robots (SIAPE, Intranet…) y bot de WhatsApp
+  const [params, setParams] = useSearchParams();
+  const vista: 'robots' | 'whatsapp' = params.get('tab') === 'whatsapp' ? 'whatsapp' : 'robots';
+  const setVista = (v: 'robots' | 'whatsapp') => setParams(v === 'robots' ? {} : { tab: v }, { replace: true });
   const [datos, setDatos] = useState<Robot[]>([]);
   const [cargando, setCargando] = useState(true);
   const [abierto, setAbierto] = useState<string | null>(null);
@@ -507,7 +513,13 @@ export function ScriptsSiapePage() {
   }, [datos]);
 
   return (
-    <Layout title="Herramientas">
+    <Layout title="Robots">
+      <div style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button className={`btn${vista === 'robots' ? ' active' : ''}`} onClick={() => setVista('robots')}>🤖 Robots</button>
+        <button className={`btn${vista === 'whatsapp' ? ' active' : ''}`} onClick={() => setVista('whatsapp')}>💬 Bot de WhatsApp</button>
+      </div>
+      {vista === 'whatsapp' && <WhatsappBotPage embedded />}
+      {vista === 'robots' && (
       <div style={S.card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
           <div>
@@ -611,6 +623,7 @@ export function ScriptsSiapePage() {
           ))
         )}
       </div>
+      )}
     </Layout>
   );
 }

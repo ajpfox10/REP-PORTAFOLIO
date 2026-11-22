@@ -82,7 +82,12 @@ function Burbuja({ texto, propio, pie }: { texto: string; propio?: boolean; pie?
 
 type Tab = 'estado' | 'menu' | 'textos' | 'pedidos' | 'resets' | 'chats' | 'probar' | 'conexion';
 
-export function WhatsappBotPage() {
+// embedded: se muestra como pestaña dentro de Robots (sin Layout propio)
+function WrapBot({ embedded, children }: { embedded: boolean; children?: React.ReactNode }) {
+  return embedded ? <>{children}</> : <Layout title="Bot de WhatsApp" showBack>{children}</Layout>;
+}
+
+export function WhatsappBotPage({ embedded = false }: { embedded?: boolean } = {}) {
   const toast = useToast();
   const [tab, setTab] = useState<Tab>('estado');
   const [estado, setEstado] = useState<Estado | null>(null);
@@ -108,7 +113,7 @@ export function WhatsappBotPage() {
   );
 
   return (
-    <Layout title="Bot de WhatsApp" showBack>
+    <WrapBot embedded={embedded}>
       <div className="card" style={{ marginTop: 12, padding: 16 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <Pestaña t="estado">📊 Estado</Pestaña>
@@ -138,7 +143,7 @@ export function WhatsappBotPage() {
       {estado && tab === 'chats' && <ChatsTab onCambio={cargar} />}
       {estado && tab === 'probar' && <ProbarTab e={estado} />}
       {estado && tab === 'conexion' && <ConexionTab e={estado} guardar={guardarConfig} />}
-    </Layout>
+    </WrapBot>
   );
 }
 

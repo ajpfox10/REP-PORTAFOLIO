@@ -50,7 +50,11 @@ async function parseOrdenCompra(buffer) {
   const lines = await extractLines(buffer);
   const text = lines.join('\n');
   const oc = text.match(/Nro de O\.C\.:\s*(\S+)/);
-  if (!oc) throw new Error('No parece una Orden de Compra (falta "Nro de O.C.")');
+  if (!oc) {
+    // sin capa de texto (o casi): es un escaneo, hay que leerlo con OCR
+    const sinTexto = text.replace(/\s+/g, '').length < 200;
+    throw Object.assign(new Error('No parece una Orden de Compra (falta "Nro de O.C.")'), { sinTexto });
+  }
   const proveedor = text.match(/Raz.n Social:\s*(.*?)(?:\s+Destino:.*)?$/m);
   const fecha = text.match(/FECHA:\s*(\d\d\/\d\d\/\d{4})/);
   const vence = text.match(/al proveedor y el\s*(\d\d\/\d\d\/\d{4})/);
@@ -93,6 +97,84 @@ async function parseOrdenCompra(buffer) {
   };
 }
 
+// Importes leidos por OCR: "7.100,0000$", "$1.420.000,00", "1420000,00"
+function importeOcr(s) {
+  const n = num(String(s).replace(/[^\d.,]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+// Borrador de una O.C. escaneada a partir del texto del OCR. No se guarda: lo confirma el usuario.
+// paginas: [{ texto, confianza }], numPages: paginas del PDF
+function borradorDesdeOcr({ paginas, numPages, girada }) {
+  const texto = paginas.map((p) => p.texto).join('\n');
+  const lineas = texto.split(/\r?\n/).map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const nro = texto.match(/Nro\.?\s*de\s*O\.?\s*C\.?\s*:?\s*(\d{1,6})\s*[/-]\s*(\d{4})/i);
+  const avisos = [];
+  if (girada) avisos.push('El PDF estaba escaneado boca abajo: se leyó girado.');
+  const hojas = texto.match(/Hoja\s*\d+\s*\/\s*(\d+)/i);
+  if (hojas && Number(hojas[1]) > numPages) {
+    avisos.push(`La O.C. dice ${hojas[1]} hojas y el PDF trae ${numPages}: pueden faltar renglones.`);
+  }
+  const fecha = texto.match(/F\s?ECHA\s?:?\s*(\d\d\/\d\d\/\d{4})/i);
+  const vence = texto.match(/proveedor\s+y\s+el\s*(\d\d\/\d\d\/\d{4})/i);
+  const proc = texto.match(/CORRESPONDE\s+A\s+(.*?Nro\.?\s*\d+\s*\/\s*\d{4})/i);
+  const razon = texto.match(/Raz.n\s+Social:?\s*(.+)/i);
+  let proveedor = razon ? razon[1].trim() : '';
+  const corte = proveedor.match(/^(.*?\b(?:S\.?\s?C\.?\s?S|S\.?\s?A|S\.?\s?R\.?\s?L|S\.?\s?A\.?\s?S)\b\.?)/i);
+  if (corte) proveedor = corte[1];
+  proveedor = proveedor.slice(0, 120).trim();
+
+  const renglones = [];
+  for (const linea of lineas) {
+    const cod = linea.match(/\b([A-Z]\d{7})\b/);
+    if (!cod) continue;
+    const antes = linea.slice(0, cod.index);
+    const ren = antes.match(/^\D{0,3}(\d{1,3})\b/);
+    const despues = linea.slice(cod.index + cod[0].length);
+    const montos = [...despues.matchAll(/\$?\s?\d[\d.]*,\d{2,4}\s?\$?/g)].map((m) => ({ v: importeOcr(m[0]), i: m.index }));
+    const total = montos.length ? montos[montos.length - 1].v : null;
+    const unitario = montos.length > 1 ? montos[montos.length - 2].v : null;
+    const finDesc = montos.length > 1 ? montos[montos.length - 2].i : (montos.length ? montos[0].i : despues.length);
+    let descripcion = despues.slice(0, finDesc)
+      .replace(/^\s*[)|\]]?\s*[\d-]{5,}\s*/, '') // codigo de catalogo pegado al codigo
+      .replace(/[|“”"«»]/g, ' ')
+      .replace(/\s+\d\.\d\.\d\b.*$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    // cantidad: un entero antes del unitario; si no se lee, total / unitario
+    let cantidad = null;
+    const ent = despues.slice(0, finDesc).match(/(?:^|\s)(\d{1,3}(?:\.\d{3})+|\d+)\s*\S{0,2}\s*$/);
+    if (ent) cantidad = Number(ent[1].replace(/\./g, ''));
+    if (unitario && total) {
+      const calc = total / unitario;
+      if (Math.abs(calc - Math.round(calc)) < 0.01 && (!cantidad || Math.abs(cantidad * unitario - total) > 0.05)) cantidad = Math.round(calc);
+    }
+    if (ent && cantidad === Number(ent[1].replace(/\./g, ''))) descripcion = descripcion.replace(/\s*\d[\d.]*\s*\S{0,2}\s*$/, '').trim();
+    renglones.push({
+      renglon: ren ? Number(ren[1]) : null,
+      codigo: cod[1],
+      descripcion,
+      cantidad: cantidad || null,
+      unitario,
+      total
+    });
+  }
+  if (!renglones.length) avisos.push('El OCR no encontró renglones: cargalos a mano.');
+  if (renglones.some((r) => !r.renglon || !r.cantidad)) avisos.push('Hay renglones sin número o sin cantidad: completalos.');
+  const confianza = paginas.length ? Math.round(paginas.reduce((a, p) => a + p.confianza, 0) / paginas.length) : 0;
+  return {
+    oc: nro ? `${Number(nro[1])}/${nro[2]}` : null,
+    proveedor,
+    fecha: fecha ? fecha[1] : '',
+    vence: vence ? vence[1] : '',
+    procedimiento: proc ? proc[1].replace(/\s+/g, ' ').trim() : '',
+    renglones,
+    avisos,
+    confianza,
+    paginas: numPages,
+    texto: texto.slice(0, 20000)
+  };
+}
 
 function hashArchivo(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
@@ -230,4 +312,4 @@ function construirExcel(ordenes, omitidos = []) {
   return wb;
 }
 
-module.exports = { OPCIONES_COMPLETO, COMPLETO_OK, parseOrdenCompra, hashArchivo, leerPdfsCarpeta, ordenNombres, claveOc, leerCargaManual, construirExcel };
+module.exports = { OPCIONES_COMPLETO, COMPLETO_OK, parseOrdenCompra, borradorDesdeOcr, hashArchivo, leerPdfsCarpeta, ordenNombres, claveOc, leerCargaManual, construirExcel };

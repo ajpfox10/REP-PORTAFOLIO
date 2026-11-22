@@ -34,6 +34,16 @@ let token = null
 let usuario = ''
 let backendUrl = 'http://localhost:8510'
 
+// Cada pedido avisa desde que PC viene y con que version de la app (todas las PC
+// usan el mismo usuario "escritorio"; asi el control sabe que PC hizo cada consulta).
+const EQUIPO = (() => { try { return require('os').hostname() } catch (e) { return '' } })()
+const VERSION_APP = (() => { try { return require('./package.json').version } catch (e) { return '' } })()
+function headersBase() {
+  const h = { 'x-equipo': EQUIPO, 'x-version': VERSION_APP }
+  if (token) h.authorization = 'Bearer ' + token
+  return h
+}
+
 function apiPost(path, body) { return reintentar401(path, () => apiPostRaw(path, body)) }
 function apiPostRaw(path, body) {
   return new Promise((resolve, reject) => {
@@ -41,8 +51,7 @@ function apiPostRaw(path, body) {
     try { u = new URL(backendUrl + path) } catch (e) { return reject(new Error('URL de servidor invalida')) }
     const lib = u.protocol === 'https:' ? https : http
     const data = JSON.stringify(body)
-    const headers = { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) }
-    if (token) headers.authorization = 'Bearer ' + token
+    const headers = { ...headersBase(), 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) }
     const req = lib.request(u, { method: 'POST', headers }, (res) => {
       let buf = ''
       res.on('data', (c) => (buf += c))
@@ -65,8 +74,7 @@ function apiGetRaw(path) {
     let u
     try { u = new URL(backendUrl + path) } catch (e) { return reject(new Error('URL de servidor invalida')) }
     const lib = u.protocol === 'https:' ? https : http
-    const headers = {}
-    if (token) headers.authorization = 'Bearer ' + token
+    const headers = headersBase()
     const req = lib.request(u, { method: 'GET', headers }, (res) => {
       let buf = ''
       res.on('data', (c) => (buf += c))

@@ -754,12 +754,13 @@ onMounted(async () => {
         <div class="table-scroll">
           <table>
             <thead>
-              <tr><th>Hora</th><th v-if="controlAgrupar !== 'usuario'">Usuario</th><th>DNI</th><th>CUIL</th><th>Sexo</th><th>Fecha nac.</th><th>Apellido</th><th>Resultado</th><th>Detalle por fuente</th></tr>
+              <tr><th>Hora</th><th v-if="controlAgrupar !== 'usuario'">Usuario</th><th>PC</th><th>DNI</th><th>CUIL</th><th>Sexo</th><th>Fecha nac.</th><th>Apellido</th><th>Resultado</th><th>Detalle por fuente</th></tr>
             </thead>
             <tbody>
               <tr v-for="r in g.filas" :key="r.consultaId">
                 <td>{{ fecha(r.fecha) }}</td>
                 <td v-if="controlAgrupar !== 'usuario'">{{ r.usuario }}</td>
+                <td :title="r.ip || ''">{{ r.equipo || r.ip || '-' }}</td>
                 <td>{{ r.dni || '-' }}</td>
                 <td>{{ r.cuil || '-' }} <span v-if="r.cuilGenerado" class="cuil-gen" title="CUIL calculado por la app (DNI + sexo)">generado</span></td>
                 <td>{{ sexoLabel(r.sexo) }}</td>

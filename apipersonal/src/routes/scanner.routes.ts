@@ -24,6 +24,7 @@ import { env } from '../config/env';
 import fs from 'node:fs';
 import path from 'node:path';
 import axios from 'axios';
+import { oscurecerArchivoBuffer, type NivelOscuridad } from '../services/oscurecerImagen';
 
 // ── Tipos de documentos disponibles para escanear ────────────────────────────
 export const TIPOS_DOCUMENTO_ESCANER = [
@@ -328,8 +329,12 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
       // (ej: 'docu|Nombramiento/IPS|cert_ips_aportes'). Sin ese prefijo → raíz del legajo.
       let subRelPath = '';
       let effectiveRef = personal_ref || '';
+      // "Oscuridad" elegida en Escaneo (19/11/2026): el front agrega '|osc:<1-3>' al final del ref docu.
+      let oscuridad: NivelOscuridad | null = null;
       if (typeof personal_ref === 'string' && personal_ref.startsWith('docu|')) {
         const dp = personal_ref.split('|');
+        const mOsc = /^osc:([123])$/.exec(dp[dp.length - 1] || '');
+        if (mOsc) { oscuridad = Number(mOsc[1]) as NivelOscuridad; dp.pop(); }
         subRelPath = sanitizeRelPath(dp[1] || '');
         effectiveRef = dp.slice(2).join('|') || doc_class || '';
       }
@@ -381,7 +386,16 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
 
       // 4. Descargar físicamente el archivo desde scanner API y escribirlo en disco
       try {
-        const fileBuffer = await downloadScannerFile(String(storage_key), safeScannerBaseOverride(files_base_url));
+        let fileBuffer = await downloadScannerFile(String(storage_key), safeScannerBaseOverride(files_base_url));
+        if (oscuridad) {
+          try {
+            const osc = await oscurecerArchivoBuffer(fileName, Buffer.from(fileBuffer), oscuridad);
+            if (osc) fileBuffer = osc;
+          } catch (e: any) {
+            // si no se puede oscurecer, se guarda igual el original (no se pierde el escaneo)
+            logger.warn({ msg: '[scanner] no se pudo oscurecer el escaneo; se guarda el original', fileName, error: e?.message });
+          }
+        }
         fs.writeFileSync(rutaAbsoluta, fileBuffer);
         logger.info({
           msg: '[scanner] archivo descargado y guardado',

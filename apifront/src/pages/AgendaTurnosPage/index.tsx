@@ -7,6 +7,7 @@ import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { MotivoTurnoSelect, MotivoValor, MOTIVO_VACIO, motivoBody, motivoCompleto } from '../../components/MotivoTurno';
+import { ColaEnvios } from './ColaEnvios';
 
 interface Franja { dia_semana: number; hora_desde: string; hora_hasta: string; duracion_min: number; cupo: number }
 interface Agenda {
@@ -14,7 +15,7 @@ interface Agenda {
   anticipacion_dias: number; ventana_dias: number; vence_dias: number; cancelar_horas: number;
   carga_jubilacion: number; mensaje_whatsapp: string | null; activa: number;
   turnos_desde?: string | null; turnos_desde_activo?: number;
-  habilitados?: number; proximos?: number; franjas: Franja[];
+  habilitados?: number; proximos?: number; para_reenviar?: number; retenidos?: number; franjas: Franja[];
 }
 interface Turno {
   id: number; dni: number; apellido: string; nombre: string; telefono: string | null; fecha: string; hora: string;
@@ -26,6 +27,12 @@ interface Habilitacion {
   id: number; dni: number; apellido: string; nombre: string; telefono: string | null; celular: string | null; dudoso: boolean;
   token: string | null; estado: 'HABILITADO' | 'USADO' | 'VENCIDO' | 'ANULADO'; observacion: string | null; vence_el: string;
   created_at: string; turno_fecha: string | null; turno_hora: string | null; turno_estado: string | null; motivo: string | null;
+  reenviar?: boolean; envios?: number; enviado_at?: string | null;
+  turno_vigente?: string | null;   // 'dd/mm hh:mm' si ya tiene un turno reservado (cualquier enlace)
+}
+interface EstadoTunel {
+  estado: 'OK' | 'CAIDO' | 'SERVIDOR_CAIDO' | 'SIN_URL'; url: string; temporal: boolean; url_desde: string | null;
+  local_ok: boolean; publico_ok: boolean | null; detalle: string; chequeado_at: string; caido_desde: string | null;
 }
 interface Bloqueo { id: number; agenda_id: number | null; agenda_nombre: string | null; fecha_desde: string; fecha_hasta: string; hora_desde: string | null; hora_hasta: string | null; motivo: string | null }
 interface Horario { hora: string; cupo: number; ocupados: number; libres: number; bloqueado: boolean; google: string | null }
@@ -40,6 +47,7 @@ const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', '
 const sel: React.CSSProperties = { padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: '#1e293b', color: 'inherit', fontSize: '0.82rem' };
 const th: React.CSSProperties = { textAlign: 'left', padding: '6px 8px', fontSize: '0.74rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.1)' };
 const td: React.CSSProperties = { padding: '5px 8px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '0.85rem', verticalAlign: 'top' };
+const fmtHora = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
 const fmt = (f?: string | null) => (f ? f.slice(0, 10).split('-').reverse().join('/') : '');
 const hoy = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const masDias = (f: string, n: number) => { const d = new Date(`${f}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
@@ -68,6 +76,9 @@ export function AgendaTurnosPage() {
   const [agendaId, setAgendaId] = useState<number>(0);
   const [tab, setTab] = useState<Tab>('turnos');
   const [cfg, setCfg] = useState<Cfg>({ url_publica: '', plantilla: '', plantillaDefault: '', motivos: [] });
+  const [tunel, setTunel] = useState<EstadoTunel | null>(null);
+  const [probando, setProbando] = useState(false);
+  const [filtroInicial, setFiltroInicial] = useState('HABILITADO');
 
   const agenda = agendas.find(a => a.id === agendaId) || null;
 
@@ -85,8 +96,42 @@ export function AgendaTurnosPage() {
   };
   useEffect(() => { void cargarAgendas(); }, []);
 
+  // ¿la página pública se ve desde internet? (el túnel rápido de Cloudflare se cae cada tanto)
+  const probarTunel = async (forzar: boolean) => {
+    if (forzar) setProbando(true);
+    try {
+      const r = await apiFetch<any>(`/agenda-turnos/tunel${forzar ? '?forzar=1' : ''}`);
+      setTunel(prev => {
+        // cambió la dirección (el túnel se reinició): se recarga para el conteo de reenvíos
+        if (prev && r.data && prev.url !== r.data.url) void cargarAgendas();
+        return r.data;
+      });
+    } catch { /* noop */ } finally { setProbando(false); }
+  };
+  useEffect(() => { void probarTunel(false); const t = setInterval(() => void probarTunel(false), 120_000); return () => clearInterval(t); }, []);
+
+  // reinicia el túnel (pm2) y espera la dirección nueva
+  const [relanzando, setRelanzando] = useState(false);
+  const relanzarTunel = async () => {
+    if (!window.confirm('Se va a relanzar el túnel: sale una DIRECCIÓN NUEVA y los enlaces sin usar mandados con la anterior hay que reenviarlos. ¿Seguir?')) return;
+    setRelanzando(true);
+    try {
+      const r = await apiFetch<any>('/agenda-turnos/tunel/relanzar', json('POST'));
+      setTunel(r.data);
+      void cargarAgendas();
+      if (r.data?.estado === 'OK') toast.ok('Túnel relanzado', `En línea con la dirección nueva. Reenviá los enlaces pendientes.`);
+      else toast.error('Túnel relanzado', r.url_nueva ? 'Ya tiene dirección nueva pero todavía no se ve: probá de nuevo en un minuto.' : 'Todavía no dio dirección nueva: probá de nuevo en un minuto.');
+    } catch (e: any) { toast.error('Relanzar túnel', e?.message || 'No se pudo relanzar'); }
+    finally { setRelanzando(false); }
+  };
+  const irAReenviar = () => { setFiltroInicial('REENVIAR'); setTab('habilitar'); };
+  const [verRetenidos, setVerRetenidos] = useState(0);
+  const irARetenidos = () => { setTab('habilitar'); setVerRetenidos(v => v + 1); };
+  // el contador del banner se actualiza solo (la PC que manda puede retener mientras la página está abierta)
+  useEffect(() => { const t = setInterval(() => void cargarAgendas(), 60_000); return () => clearInterval(t); }, [agendaId]);
+
   const tabBtn = (t: Tab, label: string) => (
-    <button type="button" className="btn" onClick={() => setTab(t)}
+    <button type="button" className="btn" onClick={() => { setTab(t); if (t !== 'habilitar') setFiltroInicial('HABILITADO'); }}
       style={{ background: tab === t ? '#2563eb' : undefined, color: tab === t ? '#fff' : undefined, fontWeight: tab === t ? 700 : 400 }}>{label}</button>
   );
 
@@ -109,6 +154,19 @@ export function AgendaTurnosPage() {
           {tabBtn('google', '📅 Calendario Google')}
           {tabBtn('config', '⚙️ Configurar')}
         </div>
+        <AvisoTunel tunel={tunel} probando={probando} onProbar={() => void probarTunel(true)} relanzando={relanzando} onRelanzar={() => void relanzarTunel()} />
+        {agenda && !!agenda.para_reenviar && (
+          <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.4)', fontSize: '0.85rem', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span>🔁 <b>{agenda.para_reenviar}</b> enlace{agenda.para_reenviar === 1 ? '' : 's'} sin usar se mandaron con una dirección que ya no anda. Hay que reenviarlos con la dirección nueva (mismo enlace personal).</span>
+            <button type="button" className="btn" onClick={irAReenviar}>Reenviar pendientes</button>
+          </div>
+        )}
+        {agenda && !!agenda.retenidos && (
+          <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, background: 'rgba(244,114,182,0.12)', border: '1px solid rgba(244,114,182,0.5)', fontSize: '0.85rem', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span>📩 <b>{agenda.retenidos}</b> agente{agenda.retenidos === 1 ? '' : 's'} tenía{agenda.retenidos === 1 ? '' : 'n'} mensajes <b>sin leer</b> en WhatsApp: <b>no se le{agenda.retenidos === 1 ? '' : 's'} mandó</b> el enlace. Leé qué escribieron y decidí.</span>
+            <button type="button" className="btn" onClick={irARetenidos} style={{ background: '#db2777', color: '#fff', fontWeight: 700 }}>Ver mensajes</button>
+          </div>
+        )}
         {!cfg.url_publica && (
           <div style={{ marginTop: 10, fontSize: '0.82rem', color: '#fbbf24' }}>
             Falta la dirección pública de la página de turnos (Configurar → Dirección pública). Sin eso los enlaces no se pueden armar.
@@ -118,10 +176,39 @@ export function AgendaTurnosPage() {
 
       {tab === 'config' && <ConfigTab agenda={agendaId ? agenda : null} cfg={cfg} onGuardado={(id) => { void cargarAgendas(id); setTab('turnos'); }} onCfg={() => cargarAgendas()} />}
       {agenda && tab === 'turnos' && <TurnosTab agenda={agenda} motivos={cfg.motivos} onCambio={() => cargarAgendas()} />}
-      {agenda && tab === 'habilitar' && <HabilitarTab agenda={agenda} cfg={cfg} onCambio={() => cargarAgendas()} />}
+      {agenda && tab === 'habilitar' && <HabilitarTab key={`${agenda.id}-${filtroInicial}`} agenda={agenda} cfg={cfg} tunel={tunel} filtroInicial={filtroInicial} verRetenidos={verRetenidos} onCambio={() => cargarAgendas()} />}
       {agenda && tab === 'bloqueos' && <BloqueosTab agenda={agenda} />}
       {agenda && tab === 'google' && <GoogleTab agenda={agenda} />}
     </Layout>
+  );
+}
+
+// ── Estado del túnel ────────────────────────────────────────────────────────
+function AvisoTunel({ tunel, probando, onProbar, relanzando, onRelanzar }: { tunel: EstadoTunel | null; probando: boolean; onProbar: () => void; relanzando: boolean; onRelanzar: () => void }) {
+  if (!tunel || tunel.estado === 'SIN_URL') return null;
+  const ok = tunel.estado === 'OK';
+  const color = ok ? '#4ade80' : '#f87171';
+  return (
+    <div style={{ marginTop: 10, padding: ok ? '4px 0' : '8px 12px', borderRadius: 8, fontSize: ok ? '0.78rem' : '0.85rem',
+      background: ok ? undefined : 'rgba(248,113,113,0.1)', border: ok ? undefined : '1px solid rgba(248,113,113,0.45)',
+      display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ color }}>{ok ? '🟢' : '🔴'} <b>{ok ? 'Página de turnos en línea' : tunel.estado === 'SERVIDOR_CAIDO' ? 'Servidor de turnos caído' : 'Túnel caído: los enlaces no abren'}</b></span>
+      <span className="muted">{tunel.detalle}{!ok && tunel.caido_desde ? ` · desde ${fmtHora(tunel.caido_desde)}` : ''} · probado {fmtHora(tunel.chequeado_at)}</span>
+      {!ok && tunel.estado === 'CAIDO' && tunel.temporal && (
+        <span style={{ flexBasis: '100%', fontSize: '0.8rem' }}>
+          El túnel rápido se reinicia solo en unos minutos y sale una <b>dirección nueva</b>. Cuando vuelva a estar en verde, reenviá los enlaces pendientes.
+          Si sigue en rojo más de 15 minutos, avisá a sistemas.
+        </span>
+      )}
+      {!ok && tunel.estado === 'SERVIDOR_CAIDO' && <span style={{ flexBasis: '100%', fontSize: '0.8rem' }}>El programa que atiende la página de turnos no está corriendo: avisá a sistemas.</span>}
+      <button type="button" className="btn" disabled={probando} onClick={onProbar} style={{ fontSize: '0.75rem', padding: '2px 8px' }}>{probando ? 'Probando…' : 'Probar ahora'}</button>
+      {!ok && tunel.estado === 'CAIDO' && (
+        <button type="button" className="btn" disabled={relanzando || probando} onClick={onRelanzar}
+          style={{ fontSize: '0.75rem', padding: '2px 8px', background: '#dc2626', color: '#fff', fontWeight: 700 }}>
+          {relanzando ? 'Relanzando… (hasta 1 min)' : '🚀 Relanzar túnel'}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -244,15 +331,18 @@ function TurnosTab({ agenda, motivos, onCambio }: { agenda: Agenda; motivos: str
 
 // ── Habilitar y enviar ──────────────────────────────────────────────────────
 
-function HabilitarTab({ agenda, cfg, onCambio }: { agenda: Agenda; cfg: Cfg; onCambio: () => void }) {
+function HabilitarTab({ agenda, cfg, tunel, filtroInicial, verRetenidos, onCambio }: { agenda: Agenda; cfg: Cfg; tunel: EstadoTunel | null; filtroInicial: string; verRetenidos: number; onCambio: () => void }) {
   const toast = useToast();
   const [lista, setLista] = useState<Habilitacion[]>([]);
-  const [filtro, setFiltro] = useState<string>('HABILITADO');
+  const [filtro, setFiltro] = useState<string>(filtroInicial || 'HABILITADO');
   const [busca, setBusca] = useState('');
   const [encontrados, setEncontrados] = useState<any[]>([]);
   const [pegados, setPegados] = useState('');
   const [resultado, setResultado] = useState<any[] | null>(null);
   const [mot, setMot] = useState<MotivoValor>(MOTIVO_VACIO);
+  const [colaVer, setColaVer] = useState(0);   // sube al encolar → el panel de la cola se recarga
+  const [tildados, setTildados] = useState<Set<number>>(new Set());   // a quién mandarle (hay que tildarlos primero)
+  useEffect(() => { setTildados(new Set()); }, [agenda.id, filtro]);
 
   const cargar = async () => {
     try { const r = await apiFetch<any>(`/agenda-turnos/habilitaciones?agenda_id=${agenda.id}&estado=${filtro}`); setLista(r.data || []); }
@@ -270,8 +360,9 @@ function HabilitarTab({ agenda, cfg, onCambio }: { agenda: Agenda; cfg: Cfg; onC
   }, [busca]);
 
   const link = (token: string | null) => (token && cfg.url_publica ? `${cfg.url_publica.replace(/\/+$/, '')}/t/${token}` : '');
-  const mensaje = (h: Pick<Habilitacion, 'nombre' | 'apellido' | 'token' | 'vence_el' | 'motivo'>) =>
-    (agenda.mensaje_whatsapp || cfg.plantilla)
+  const REENVIO = 'Le reenviamos el enlace para sacar su turno porque el anterior dejó de funcionar.\n\n';
+  const mensaje = (h: Pick<Habilitacion, 'nombre' | 'apellido' | 'token' | 'vence_el' | 'motivo' | 'reenviar'>) =>
+    (h.reenviar ? REENVIO : '') + (agenda.mensaje_whatsapp || cfg.plantilla)
       .replace(/\{NOMBRE\}/g, `${h.nombre}`.trim())
       .replace(/\{APELLIDO\}/g, `${h.apellido}`.trim())
       .replace(/\{AGENDA\}/g, h.motivo || agenda.nombre)   // con motivo: "su turno de *Nacimiento*"
@@ -299,10 +390,59 @@ function HabilitarTab({ agenda, cfg, onCambio }: { agenda: Agenda; cfg: Cfg; onC
   const copiar = async (texto: string, que: string) => {
     try { await navigator.clipboard.writeText(texto); toast.ok('Copiado', que); } catch { window.prompt('Copiá el texto:', texto); }
   };
+  // se anota con qué dirección salió el mensaje: si después cambia, el enlace aparece en "Para reenviar"
+  const marcarEnviado = async (h: Habilitacion) => {
+    try { await apiFetch(`/agenda-turnos/habilitaciones/${h.id}/enviado`, json('POST', { url: cfg.url_publica })); } catch { /* noop */ }
+    if (h.reenviar) { await cargar(); onCambio(); }
+  };
+  const tunelCaido = !!tunel && tunel.estado !== 'OK' && tunel.estado !== 'SIN_URL';
+  const avisarSiCaido = () => {
+    if (!tunelCaido) return true;
+    return window.confirm('La página de turnos NO se ve desde internet en este momento (túnel caído). Si lo mandás ahora el agente no va a poder abrirlo y vas a tener que reenviarlo. ¿Mandar igual?');
+  };
   const whatsapp = (h: Habilitacion) => {
     if (!cfg.url_publica) { toast.warning('Falta la dirección pública', 'Cargala en Configurar.'); return; }
     if (!h.celular) { toast.warning('Sin celular', 'El agente no tiene celular en la base: copiá el mensaje y mandalo a mano.'); return; }
+    if (!avisarSiCaido()) return;
     window.open(`https://web.whatsapp.com/send?phone=${h.celular}&text=${encodeURIComponent(mensaje(h))}`, 'whatsapp');
+    void marcarEnviado(h);
+  };
+  const copiarMensaje = async (h: Habilitacion) => {
+    if (!avisarSiCaido()) return;
+    await copiar(mensaje(h), 'Mensaje con el enlace');
+    void marcarEnviado(h);
+  };
+  // "Reenviar siguiente": abre WhatsApp con el primero que tenga celular; al marcarlo sale de la lista
+  const conCelular = filtro === 'REENVIAR' ? lista.filter(h => h.celular) : [];
+  const sinCelular = filtro === 'REENVIAR' ? lista.filter(h => !h.celular) : [];
+
+  // Cola: los manda la PC que tiene WhatsApp abierto (el servidor no). Solo los TILDADOS; los que ya tienen turno no se pueden tildar.
+  const tildable = (h: Habilitacion) => h.estado === 'HABILITADO' && !!h.celular && !h.turno_vigente;
+  const tildables = lista.filter(tildable);
+  const paraCola = tildables.filter(h => tildados.has(h.id));
+  const tildar = (id: number, v: boolean) => setTildados(prev => { const n = new Set(prev); if (v) n.add(id); else n.delete(id); return n; });
+  const todosTildados = tildables.length > 0 && tildables.every(h => tildados.has(h.id));
+  const encolar = async () => {
+    if (!cfg.url_publica) { toast.warning('Falta la dirección pública', 'Cargala en Configurar.'); return; }
+    if (!paraCola.length) { toast.warning('Tildá primero', 'Marcá en la lista a quién le querés mandar el enlace.'); return; }
+    let prueba: string | null = null;
+    const modo = window.prompt(
+      `Se van a poner ${paraCola.length} mensaje(s) en la cola. Los manda la PC marcada con WhatsApp abierto, de a uno, con pausa de 20-40 s.\n`
+      + 'Antes de cada uno se revisa que la persona NO tenga ya un turno (si lo tiene, se saltea).\n\n'
+      + 'Dejá vacío y Aceptar para mandarlos DE VERDAD.\nO escribí un número de celular para una PRUEBA (todos llegan a ese número y no se marcan como enviados).', '');
+    if (modo === null) return;
+    if (modo.trim()) prueba = modo.trim();
+    else if (!avisarSiCaido()) return;
+    try {
+      const r = await apiFetch<any>('/agenda-turnos/cola', json('POST', { agenda_id: agenda.id, ids: paraCola.map(h => h.id), prueba_destino: prueba }));
+      const d = r.data || {};
+      toast.ok(prueba ? 'En cola (PRUEBA)' : 'En cola', `${d.encolados} para mandar${d.salteados?.length ? ` · ${d.salteados.length} salteados` : ''}`);
+      if (d.salteados?.length) {
+        window.alert('No se pusieron en la cola:\n\n' + d.salteados.map((x: any) => `${x.apellido} ${x.nombre} (DNI ${x.dni}): ${x.motivo}`).join('\n'));
+      }
+      setColaVer(v => v + 1);
+      setTildados(new Set());
+    } catch (e: any) { toast.error('Cola de envío', e?.message); }
   };
 
   const dnisPegados = [...new Set((pegados.match(/\d{6,9}/g) || []).map(Number))];
@@ -343,6 +483,7 @@ function HabilitarTab({ agenda, cfg, onCambio }: { agenda: Agenda; cfg: Cfg; onC
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
         <b>Enlaces</b>
         <select value={filtro} onChange={(e) => setFiltro(e.target.value)} style={sel}>
+          <option value="REENVIAR">🔁 Para reenviar (dirección vieja)</option>
           <option value="HABILITADO">Sin usar</option>
           <option value="USADO">Usados (ya pidieron turno)</option>
           <option value="VENCIDO">Vencidos</option>
@@ -350,21 +491,55 @@ function HabilitarTab({ agenda, cfg, onCambio }: { agenda: Agenda; cfg: Cfg; onC
           <option value="">Todos</option>
         </select>
         <span className="muted" style={{ fontSize: '0.8rem' }}>{lista.length}</span>
+        {filtro === 'REENVIAR' && conCelular.length > 0 && (
+          <button type="button" className="btn" style={{ background: '#16a34a', color: '#fff', fontWeight: 700 }} onClick={() => whatsapp(conCelular[0])}
+            title="Abre WhatsApp Web con el mensaje del primero de la lista; al mandarlo sale de la lista y queda el siguiente">
+            📲 Reenviar siguiente: {conCelular[0].apellido} {conCelular[0].nombre} ({conCelular.length} con celular)
+          </button>
+        )}
+        {(filtro === 'REENVIAR' || filtro === 'HABILITADO') && tildables.length > 0 && (
+          <button type="button" className="btn" disabled={!paraCola.length}
+            style={{ background: paraCola.length ? '#2563eb' : undefined, color: paraCola.length ? '#fff' : undefined, fontWeight: 700 }} onClick={() => void encolar()}
+            title={paraCola.length ? "Los pone en la cola: los manda la PC que tiene WhatsApp abierto y la app con 'Esta PC manda los mensajes de la agenda'" : 'Tildá primero en la lista a quién mandarle'}>
+            {paraCola.length ? `📤 Mandar a los tildados desde la PC de WhatsApp (${paraCola.length})` : '📤 Tildá a quién mandarle ↓'}
+          </button>
+        )}
       </div>
+      {filtro === 'REENVIAR' && (
+        <div className="muted" style={{ fontSize: '0.8rem', marginTop: 6 }}>
+          Enlaces sin usar que se mandaron con una dirección anterior. El enlace personal es el mismo: solo cambia la dirección.
+          El mensaje sale con una línea que explica que es un reenvío.{sinCelular.length ? ` ${sinCelular.length} sin celular: usá "Copiar mensaje" y mandalo a mano.` : ''}
+          {!lista.length && ' No hay nada para reenviar.'}
+        </div>
+      )}
+      <ColaEnvios agendaId={agenda.id} recargar={colaVer + verRetenidos} soloRetenidos={verRetenidos > 0} onCambio={() => { void cargar(); onCambio(); }} />
       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
-        <thead><tr><th style={th}>Agente</th><th style={th}>Estado</th><th style={th}>Vence / turno</th><th style={th} /></tr></thead>
+        <thead><tr>
+          <th style={{ ...th, width: 28 }}>
+            {tildables.length > 0 && (
+              <input type="checkbox" checked={todosTildados} title="Tildar / destildar todos"
+                onChange={(e) => setTildados(e.target.checked ? new Set(tildables.map(h => h.id)) : new Set())} />
+            )}
+          </th>
+          <th style={th}>Agente</th><th style={th}>Estado</th><th style={th}>Vence / turno</th><th style={th} />
+        </tr></thead>
         <tbody>
           {lista.map(h => (
-            <tr key={h.id}>
+            <tr key={h.id} style={{ background: tildados.has(h.id) ? 'rgba(37,99,235,0.12)' : undefined }}>
+              <td style={{ ...td, width: 28 }}>
+                {tildable(h) && <input type="checkbox" checked={tildados.has(h.id)} onChange={(e) => tildar(h.id, e.target.checked)} />}
+              </td>
               <td style={td}>{h.apellido} {h.nombre}<span className="badge" style={{ marginLeft: 6, color: h.motivo ? '#c4b5fd' : '#94a3b8' }}>{h.motivo || 'motivo: lo elige el agente'}</span><div className="muted" style={{ fontSize: '0.75rem' }}>DNI {h.dni} · {h.celular ? `cel. ${h.celular}${h.dudoso ? ' (dudoso)' : ''}` : 'sin celular'}</div></td>
-              <td style={td}><Badge e={h.estado} /></td>
+              <td style={td}><Badge e={h.estado} />{h.reenviar && <span className="badge" style={{ marginLeft: 4, color: '#fbbf24' }} title="Se mandó con una dirección que ya no anda">🔁 reenviar</span>}
+                {h.estado === 'HABILITADO' && h.turno_vigente && <div style={{ fontSize: '0.72rem', color: '#f87171' }} title="No se puede tildar: ya tiene un turno reservado">⚠ ya tiene turno el {h.turno_vigente}</div>}
+                {!!h.envios && <div className="muted" style={{ fontSize: '0.72rem' }}>enviado {fmtHora(h.enviado_at)}{h.envios > 1 ? ` (${h.envios} veces)` : ''}</div>}</td>
               <td style={td}>
                 {h.estado === 'USADO' && h.turno_fecha ? <>{fmt(h.turno_fecha)} {h.turno_hora} {h.turno_estado && <Badge e={h.turno_estado} />}</> : <>vence {fmt(h.vence_el)}</>}
               </td>
               <td style={{ ...td, whiteSpace: 'nowrap', textAlign: 'right' }}>
                 {h.token && <>
                   {h.estado === 'HABILITADO' && <><button type="button" className="btn" onClick={() => whatsapp(h)} title="Abre WhatsApp Web con el mensaje escrito">📲 WhatsApp</button>{' '}</>}
-                  <button type="button" className="btn" disabled={!cfg.url_publica} onClick={() => void copiar(mensaje(h), 'Mensaje con el enlace')}>Copiar mensaje</button>{' '}
+                  <button type="button" className="btn" disabled={!cfg.url_publica} onClick={() => void copiarMensaje(h)}>Copiar mensaje</button>{' '}
                   <button type="button" className="btn" disabled={!cfg.url_publica} onClick={() => void copiar(link(h.token), 'Enlace')}>🔗</button>{' '}
                 </>}
                 {h.estado === 'HABILITADO' && <button type="button" className="btn" onClick={() => void anular(h)}>Anular</button>}
@@ -373,7 +548,7 @@ function HabilitarTab({ agenda, cfg, onCambio }: { agenda: Agenda; cfg: Cfg; onC
               </td>
             </tr>
           ))}
-          {!lista.length && <tr><td style={td} colSpan={4}><span className="muted">Nada para mostrar.</span></td></tr>}
+          {!lista.length && <tr><td style={td} colSpan={5}><span className="muted">Nada para mostrar.</span></td></tr>}
         </tbody>
       </table>
     </div>

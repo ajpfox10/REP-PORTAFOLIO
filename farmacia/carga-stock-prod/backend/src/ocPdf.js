@@ -55,7 +55,8 @@ async function numeroDentroDelPdf(ruta) {
 }
 
 // Ruta del PDF de la O.C. "683/2026" o null
-async function buscarPdf(oc) {
+// archivo: nombre con el que se cargo la O.C. (los escaneos no traen el numero en el texto)
+async function buscarPdf(oc, archivo) {
   const buscado = numeroOc(oc);
   if (!buscado) return null;
   const pdfs = listarPdfs(carpeta());
@@ -64,6 +65,8 @@ async function buscarPdf(oc) {
     return m && `${Number(m[1])}/${m[2]}` === buscado;
   });
   if (porNombre) return porNombre;
+  const porArchivo = archivo && pdfs.find((ruta) => path.basename(ruta).toLowerCase() === String(archivo).toLowerCase());
+  if (porArchivo) return porArchivo;
   for (const ruta of pdfs) {
     if (await numeroDentroDelPdf(ruta) === buscado) return ruta;
   }

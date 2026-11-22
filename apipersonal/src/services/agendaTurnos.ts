@@ -27,7 +27,7 @@ export class AgendaError extends Error {
 
 const listas = new WeakMap<Sequelize, Promise<void>>();
 
-const MIGRACIONES = ['122__agenda_turnos.sql', '123__agenda_google_calendar.sql', '135__agenda_motivo.sql', '137__agenda_desde_fecha_varios_turnos.sql'];
+const MIGRACIONES = ['122__agenda_turnos.sql', '123__agenda_google_calendar.sql', '135__agenda_motivo.sql', '137__agenda_desde_fecha_varios_turnos.sql', '142__agenda_reenvio_enlaces.sql', '143__agenda_cola_envios.sql', '144__agenda_cola_sin_leer.sql', '145__pcs_visitas.sql'];
 
 // ── Motivo del turno (lista fija + "Otro" escrito) ─────────────────────────
 export const MOTIVO_JUBILACION = 'Jubilación';

@@ -18,7 +18,7 @@ Se instala UNA vez en cada PC (Chrome) que vaya a mandar los avisos o contar los
    (Sigue estando el .zip para instalar a mano + instalar-actualizador.cmd, como antes.)
 
 Actualización automática (desde v1.4.0):
-- instalar-actualizador.cmd crea una tarea de Windows del usuario (cada 2 horas) y un acceso en
+- instalar-actualizador.cmd crea una tarea de Windows del usuario (cada 10 minutos) y un acceso en
   Inicio (al prender la PC). Ambos corren actualizar.ps1 sin ventanas (actualizar-oculto.vbs).
 - actualizar.ps1 consulta version.json en los servidores de servidores.txt; si hay una versión
   nueva baja el zip y pisa los archivos de esta carpeta. Deja registro en actualizador.log.
@@ -36,7 +36,7 @@ Recibidos (v1.3.0): Reportes → WhatsApp → "📥 Recibidos por WhatsApp" cuen
 
 Para publicar una versión nueva (después de cambiar la extensión y subir "version" en manifest.json):
   powershell -ExecutionPolicy Bypass -File C:\apps\personaldev\whatsapp-extension\empaquetar.ps1
-  (también copia Instalar-Extension-Personal.cmd a apifront\public\extension-whatsapp) y deploy del front. Las PCs con el actualizador la toman solas en menos de 2 horas.
+  (también copia Instalar-Extension-Personal.cmd a apifront\public\extension-whatsapp) y deploy del front. Las PCs con el actualizador la toman solas en menos de 15 minutos.
 
 CUIL de ANSES (desde v1.5.0):
   Trámites documentales → Trámites → elegir tanda → "Bajar CUIL de ANSES". La extensión abre la página

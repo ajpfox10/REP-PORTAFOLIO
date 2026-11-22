@@ -22,6 +22,7 @@ export function CombinarPdfTab() {
   const [saving, setSaving] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [oscMenu, setOscMenu] = useState<string | null>(null); // hoja con el menú 🌑 ×1/×2/×3 abierto
   // Lupa: una hoja en ventana grande (zoom en % del ancho de la ventana).
   const [lupaIdx, setLupaIdx] = useState<number | null>(null);
   const [lupaZoom, setLupaZoom] = useState(1);
@@ -141,7 +142,7 @@ export function CombinarPdfTab() {
   }
 
   // Rota la hoja en el archivo original.
-  async function rotar(p: PageItem, delta: 90 | -90) {
+  async function rotar(p: PageItem, delta: 90 | -90 | 180) {
     if (!agente || busyId) return;
     setBusyId(p.id);
     try {
@@ -150,6 +151,32 @@ export function CombinarPdfTab() {
       setPages((prev) => prev.map((x) => (x.id === p.id ? { ...x, rot: x.rot + delta } : x)));
     } catch (e: any) {
       toast.error('No se pudo rotar', e?.message || 'Error');
+    } finally { setBusyId(null); }
+  }
+
+  // 🌑 Oscurecer una hoja EN EL ORIGINAL (copia previa en Trasladados). Después se vuelve a leer el
+  // combinado para ver el cambio, pero CONSERVANDO el orden que se armó a mano (por id = rel#página).
+  async function oscurecer(p: PageItem, nivel: 1 | 2 | 3) {
+    if (!agente || busyId) return;
+    setOscMenu(null);
+    setBusyId(p.id);
+    try {
+      const r = await apiFetch<{ ok: boolean; data: { backup: string } }>('/tramites-documentales/combinar-oscurecer',
+        { method: 'POST', body: JSON.stringify({ dni: agente.dni, rel: p.rel, page: p.page, nivel }) });
+      const res = await apiFetch<{ ok: boolean; data: { pages: Omit<PageItem, 'origIdx'>[]; pdfBase64: string } }>(
+        '/tramites-documentales/combinar-agente', { method: 'POST', body: JSON.stringify({ dni: agente.dni }) });
+      const doc = await pdfjsLib.getDocument({ data: base64ToBytes(res.data.pdfBase64) }).promise;
+      const nuevo = new Map(res.data.pages.map((x, i) => [x.id, { ...x, origIdx: i, rot: 0 }]));
+      setPdf(doc);
+      setPages((prev) => {
+        // mismo orden de antes; lo que ya no está se cae y lo nuevo (si apareciera algo) va al final
+        const vistos = new Set<string>();
+        const orden = prev.filter((x) => nuevo.has(x.id)).map((x) => { vistos.add(x.id); return nuevo.get(x.id)!; });
+        return [...orden, ...Array.from(nuevo.values()).filter((x) => !vistos.has(x.id))];
+      });
+      toast.ok(`Hoja oscurecida ×${nivel}`, `La anterior quedó en ${r.data.backup} (se recupera en ♻️ Restaurar)`);
+    } catch (e: any) {
+      toast.error('No se pudo oscurecer', e?.message || 'Error');
     } finally { setBusyId(null); }
   }
 
@@ -169,6 +196,18 @@ export function CombinarPdfTab() {
 
   const chip: React.CSSProperties = { padding: '5px 14px', borderRadius: 999, fontSize: '0.78rem', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.15)' };
   const iconBtn: React.CSSProperties = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#cbd5e1', cursor: 'pointer', width: 28, height: 26, fontSize: '0.8rem' };
+  // Botón 🌑 + menú ×1 suave / ×2 fuerte / ×3 muy fuerte (mismo que en 🗂️ Documentos)
+  const menuOscurecer = (p: PageItem) => (
+    <>
+      <button type="button" title="Oscurecer esta hoja: elegí ×1 suave, ×2 fuerte o ×3 muy fuerte (corrige el original; la anterior queda en Trasladados)"
+        style={{ ...iconBtn, opacity: busyId ? 0.4 : 1, ...(oscMenu === p.id ? { background: 'rgba(124,58,237,0.35)' } : {}) }}
+        disabled={!!busyId} onClick={() => setOscMenu((m) => (m === p.id ? null : p.id))}>{busyId === p.id ? '…' : '🌑'}</button>
+      {oscMenu === p.id && ([1, 2, 3] as const).map((n) => (
+        <button key={n} type="button" title={n === 1 ? '×1 — Suave' : n === 2 ? '×2 — Fuerte' : '×3 — Muy fuerte'}
+          style={{ ...iconBtn, color: '#fde68a', fontWeight: 700 }} onClick={() => void oscurecer(p, n)}>×{n}</button>
+      ))}
+    </>
+  );
 
   return (
     <div style={{ display: 'flex', gap: 16, minHeight: 480 }}>
@@ -260,6 +299,9 @@ export function CombinarPdfTab() {
                         disabled={!!busyId} onClick={() => void rotar(p, -90)}>↺</button>
                       <button type="button" title="Rotar a la derecha (corrige el archivo original)" style={{ ...iconBtn, opacity: busyId ? 0.4 : 1 }}
                         disabled={!!busyId} onClick={() => void rotar(p, 90)}>↻</button>
+                      <button type="button" title="Dar vuelta 180° (corrige el archivo original)" style={{ ...iconBtn, opacity: busyId ? 0.4 : 1, fontSize: '0.62rem', fontWeight: 700 }}
+                        disabled={!!busyId} onClick={() => void rotar(p, 180)}>180</button>
+                      {menuOscurecer(p)}
                       <button type="button" title="Sacar esta hoja → carpeta Trasladados (se recupera en ♻️ Restaurar)"
                         style={{ ...iconBtn, color: '#fca5a5', borderColor: 'rgba(248,113,113,0.4)', opacity: busyId ? 0.4 : 1 }}
                         disabled={!!busyId} onClick={() => void sacar(p)}>{busyId === p.id ? '…' : '✕'}</button>
@@ -309,6 +351,8 @@ export function CombinarPdfTab() {
                 <span style={{ width: 8 }} />
                 <button type="button" style={{ ...iconBtn, opacity: busyId ? 0.4 : 1 }} disabled={!!busyId} title="Rotar a la izquierda" onClick={() => void rotar(p, -90)}>↺</button>
                 <button type="button" style={{ ...iconBtn, opacity: busyId ? 0.4 : 1 }} disabled={!!busyId} title="Rotar a la derecha" onClick={() => void rotar(p, 90)}>↻</button>
+                <button type="button" style={{ ...iconBtn, opacity: busyId ? 0.4 : 1, fontSize: '0.62rem', fontWeight: 700 }} disabled={!!busyId} title="Dar vuelta 180°" onClick={() => void rotar(p, 180)}>180</button>
+                {menuOscurecer(p)}
                 <button type="button" title="Sacar esta hoja → Trasladados"
                   style={{ ...iconBtn, color: '#fca5a5', borderColor: 'rgba(248,113,113,0.4)', opacity: busyId ? 0.4 : 1 }}
                   disabled={!!busyId} onClick={() => void sacar(p)}>{busyId === p.id ? '…' : '✕'}</button>
@@ -318,7 +362,7 @@ export function CombinarPdfTab() {
               {/* Ctrl + rueda = zoom; rueda sola = desplazar */}
               <div ref={lupaScrollRef} style={{ flex: 1, overflow: 'auto', padding: 16, background: '#111827' }}>
                 <div style={{ width: `${lupaZoom * 100}%`, margin: lupaZoom <= 1 ? '0 auto' : 0 }}>
-                  <PageCanvas key={p.id} pdf={pdf} origIdx={p.origIdx} rot={p.rot} scale={2.5} />
+                  <PageCanvas key={p.id} pdf={pdf} origIdx={p.origIdx} rot={p.rot} scale={3.5} />
                 </div>
               </div>
             </div>

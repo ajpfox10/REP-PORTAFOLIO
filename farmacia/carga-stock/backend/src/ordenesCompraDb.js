@@ -1,5 +1,6 @@
 const { query, transaction } = require('./db');
-const { parseOrdenCompra, hashArchivo, claveOc, OPCIONES_COMPLETO, COMPLETO_OK } = require('./ordenesCompraExcel');
+const { parseOrdenCompra, borradorDesdeOcr, hashArchivo, claveOc, OPCIONES_COMPLETO, COMPLETO_OK } = require('./ordenesCompraExcel');
+const { ocrPdf } = require('./ocOcr');
 
 // Tablas de Ordenes de Compra. Se crean al arrancar el backend (y en migrate.js),
 // asi prod no necesita correr la migracion completa.
@@ -156,7 +157,127 @@ function deFecha(value) {
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
-// archivos: [{ name, buffer }]. Devuelve por archivo: nuevo | ya_cargado | duplicado | error
+// Inserta una O.C. ya leida (del PDF o confirmada desde un escaneo). Si el numero ya existe la marca duplicada.
+async function guardarOrden(orden, name, hash, usuarioId) {
+  return transaction(async (conn) => {
+    const [existente] = await conn.execute('SELECT id, archivo_nombre FROM oc_ordenes WHERE numero = :numero FOR UPDATE', { numero: orden.oc });
+    if (existente.length) {
+      const detalle = `O.C. ${orden.oc} ya está cargada desde "${existente[0].archivo_nombre}"`;
+      await conn.execute(
+        `INSERT INTO oc_archivos (archivo_hash, archivo_nombre, orden_id, estado, detalle, subido_por)
+         VALUES (:hash, :name, :ordenId, 'duplicado', :detalle, :usuarioId)`,
+        { hash, name, ordenId: existente[0].id, detalle, usuarioId: usuarioId || null }
+      );
+      return { name, estado: 'duplicado', oc: orden.oc, detalle };
+    }
+    const [ins] = await conn.execute(
+      `INSERT INTO oc_ordenes (numero, proveedor, fecha_oc, vence, procedimiento, subtotal, archivo_nombre, archivo_hash, creado_por)
+       VALUES (:numero, :proveedor, :fecha, :vence, :procedimiento, :subtotal, :name, :hash, :usuarioId)`,
+      {
+        numero: orden.oc,
+        proveedor: orden.proveedor,
+        fecha: aFecha(orden.fecha),
+        vence: aFecha(orden.vence),
+        procedimiento: orden.procedimiento || null,
+        subtotal: orden.subtotal,
+        name,
+        hash,
+        usuarioId: usuarioId || null
+      }
+    );
+    // COMPLETO arranca en NO: nada entregado todavia (asi tambien queda en el Excel de Drive)
+    for (const it of orden.renglones) {
+      await conn.execute(
+        `INSERT INTO oc_renglones (orden_id, renglon, codigo, descripcion, cantidad, importe_unitario, importe_total, completo)
+         VALUES (:ordenId, :renglon, :codigo, :descripcion, :cantidad, :unitario, :total, 'NO')`,
+        { ordenId: ins.insertId, renglon: it.renglon, codigo: it.codigo, descripcion: it.descripcion, cantidad: it.cantidad, unitario: it.unitario ?? null, total: it.total ?? null }
+      );
+    }
+    await conn.execute(
+      `INSERT INTO oc_archivos (archivo_hash, archivo_nombre, orden_id, estado, detalle, subido_por)
+       VALUES (:hash, :name, :ordenId, 'cargado', :detalle, :usuarioId)`,
+      { hash, name, ordenId: ins.insertId, detalle: orden.detalleArchivo || null, usuarioId: usuarioId || null }
+    );
+    return { name, estado: 'nuevo', oc: orden.oc, proveedor: orden.proveedor, renglones: orden.renglones.length, total: orden.subtotal };
+  });
+}
+
+// Escaneos leidos por OCR que esperan la confirmacion del usuario: hash -> { name, buffer, borrador, ts }.
+// En memoria: si se reinicia el backend hay que volver a importar el PDF (se vuelve a leer).
+const escaneosPendientes = new Map();
+const ESCANEO_TTL_MS = 12 * 60 * 60 * 1000;
+
+function limpiarEscaneos() {
+  const ahora = Date.now();
+  for (const [hash, p] of escaneosPendientes) if (ahora - p.ts > ESCANEO_TTL_MS) escaneosPendientes.delete(hash);
+}
+
+async function leerEscaneo(name, buffer, hash) {
+  limpiarEscaneos();
+  const previo = escaneosPendientes.get(hash);
+  if (previo) {
+    previo.name = name;
+    previo.ts = Date.now();
+    return previo.borrador;
+  }
+  const borrador = borradorDesdeOcr(await ocrPdf(buffer));
+  if (borrador.oc) escaneosPendientes.set(hash, { name, buffer, borrador, ts: Date.now() });
+  return borrador;
+}
+
+function aEnteroPositivo(v) {
+  const n = Number(String(v ?? '').replace(/\./g, '').replace(',', '.'));
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+function aImporte(v) {
+  if (v === null || v === undefined || String(v).trim() === '') return null;
+  const n = typeof v === 'number' ? v : Number(String(v).replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+// El usuario reviso el borrador de un escaneo (numero, renglones, cantidades) y lo confirma
+async function confirmarEscaneo(hash, datos, usuarioId) {
+  limpiarEscaneos();
+  const pendiente = escaneosPendientes.get(String(hash || ''));
+  if (!pendiente) throw err(404, 'Ese escaneo ya no está pendiente: volvé a importar el PDF para leerlo de nuevo');
+  const oc = String(datos?.oc || '').replace(/\s+/g, '').replace('-', '/');
+  const m = oc.match(/^(\d{1,6})\/(\d{4})$/);
+  if (!m) throw err(400, 'El N° de O.C. tiene que ser número/año, por ejemplo 500/2026');
+  const fechaOk = (f) => !f || /^\d\d\/\d\d\/\d{4}$/.test(String(f).trim());
+  if (!fechaOk(datos.fecha) || !fechaOk(datos.vence)) throw err(400, 'Las fechas tienen que ser DD/MM/AAAA');
+  const lista = Array.isArray(datos.renglones) ? datos.renglones : [];
+  if (!lista.length) throw err(400, 'La O.C. tiene que tener al menos un renglón');
+  const vistos = new Set();
+  const renglones = lista.map((r, i) => {
+    const renglon = aEnteroPositivo(r.renglon);
+    const cantidad = aEnteroPositivo(r.cantidad);
+    const codigo = String(r.codigo || '').trim().toUpperCase().slice(0, 20);
+    const descripcion = String(r.descripcion || '').replace(/\s+/g, ' ').trim();
+    if (!renglon) throw err(400, `Fila ${i + 1}: falta el número de renglón`);
+    if (vistos.has(renglon)) throw err(400, `El renglón ${renglon} está repetido`);
+    vistos.add(renglon);
+    if (!codigo) throw err(400, `Renglón ${renglon}: falta el código`);
+    if (!descripcion) throw err(400, `Renglón ${renglon}: falta la descripción`);
+    if (!cantidad) throw err(400, `Renglón ${renglon}: la cantidad tiene que ser un entero mayor a 0`);
+    return { renglon, codigo, descripcion, cantidad, unitario: aImporte(r.unitario), total: aImporte(r.total) };
+  }).sort((a, b) => a.renglon - b.renglon);
+  const orden = {
+    oc: `${Number(m[1])}/${m[2]}`,
+    proveedor: String(datos.proveedor || '').trim().slice(0, 255),
+    fecha: String(datos.fecha || '').trim(),
+    vence: String(datos.vence || '').trim(),
+    procedimiento: String(datos.procedimiento || '').trim().slice(0, 160),
+    subtotal: renglones.reduce((a, r) => a + (r.total || 0), 0),
+    renglones,
+    detalleArchivo: 'Escaneada: leída por OCR y confirmada a mano'
+  };
+  const resultado = await guardarOrden(orden, pendiente.name, hash, usuarioId);
+  escaneosPendientes.delete(hash);
+  return { ...resultado, buffer: pendiente.buffer };
+}
+
+// archivos: [{ name, buffer }]. Devuelve por archivo: nuevo | ya_cargado | duplicado | revisar | error
 async function importarArchivos(archivos, usuarioId) {
   const resultados = [];
   const vistosEnLote = new Map();
@@ -187,53 +308,40 @@ async function importarArchivos(archivos, usuarioId) {
     let orden;
     try {
       orden = await parseOrdenCompra(buffer);
-    } catch (err) {
-      resultados.push({ name, estado: 'error', detalle: err.message });
+    } catch (e) {
+      if (!e.sinTexto) {
+        resultados.push({ name, estado: 'error', detalle: e.message });
+        continue;
+      }
+      // PDF escaneado: se lee con OCR y queda para que el usuario confirme numero y cantidades
+      let borrador;
+      try {
+        borrador = await leerEscaneo(name, buffer, hash);
+      } catch (ocrErr) {
+        resultados.push({ name, estado: 'error', detalle: `Es un escaneo y no se pudo leer con OCR: ${ocrErr.message}` });
+        continue;
+      }
+      if (!borrador.oc) {
+        resultados.push({ name, estado: 'error', detalle: 'Es un escaneo y ni con OCR aparece el "Nro de O.C.": no parece una Orden de Compra' });
+        continue;
+      }
+      const [ya] = await query('SELECT archivo_nombre FROM oc_ordenes WHERE numero = :numero', { numero: borrador.oc });
+      if (ya) {
+        resultados.push({ name, estado: 'duplicado', oc: borrador.oc, detalle: `Escaneo de la O.C. ${borrador.oc}, que ya está cargada desde "${ya.archivo_nombre}"` });
+        continue;
+      }
+      resultados.push({
+        name,
+        estado: 'revisar',
+        oc: borrador.oc,
+        hash,
+        borrador,
+        detalle: `Escaneo leído por OCR (O.C. ${borrador.oc}, ${borrador.renglones.length} renglones): revisá el número y las cantidades y confirmá la carga`
+      });
       continue;
     }
 
-    const resultado = await transaction(async (conn) => {
-      const [existente] = await conn.execute('SELECT id, archivo_nombre FROM oc_ordenes WHERE numero = :numero FOR UPDATE', { numero: orden.oc });
-      if (existente.length) {
-        const detalle = `O.C. ${orden.oc} ya está cargada desde "${existente[0].archivo_nombre}"`;
-        await conn.execute(
-          `INSERT INTO oc_archivos (archivo_hash, archivo_nombre, orden_id, estado, detalle, subido_por)
-           VALUES (:hash, :name, :ordenId, 'duplicado', :detalle, :usuarioId)`,
-          { hash, name, ordenId: existente[0].id, detalle, usuarioId: usuarioId || null }
-        );
-        return { name, estado: 'duplicado', oc: orden.oc, detalle };
-      }
-      const [ins] = await conn.execute(
-        `INSERT INTO oc_ordenes (numero, proveedor, fecha_oc, vence, procedimiento, subtotal, archivo_nombre, archivo_hash, creado_por)
-         VALUES (:numero, :proveedor, :fecha, :vence, :procedimiento, :subtotal, :name, :hash, :usuarioId)`,
-        {
-          numero: orden.oc,
-          proveedor: orden.proveedor,
-          fecha: aFecha(orden.fecha),
-          vence: aFecha(orden.vence),
-          procedimiento: orden.procedimiento || null,
-          subtotal: orden.subtotal,
-          name,
-          hash,
-          usuarioId: usuarioId || null
-        }
-      );
-      // COMPLETO arranca en NO: nada entregado todavia (asi tambien queda en el Excel de Drive)
-      for (const it of orden.renglones) {
-        await conn.execute(
-          `INSERT INTO oc_renglones (orden_id, renglon, codigo, descripcion, cantidad, importe_unitario, importe_total, completo)
-           VALUES (:ordenId, :renglon, :codigo, :descripcion, :cantidad, :unitario, :total, 'NO')`,
-          { ordenId: ins.insertId, renglon: it.renglon, codigo: it.codigo, descripcion: it.descripcion, cantidad: it.cantidad, unitario: it.unitario, total: it.total }
-        );
-      }
-      await conn.execute(
-        `INSERT INTO oc_archivos (archivo_hash, archivo_nombre, orden_id, estado, subido_por)
-         VALUES (:hash, :name, :ordenId, 'cargado', :usuarioId)`,
-        { hash, name, ordenId: ins.insertId, usuarioId: usuarioId || null }
-      );
-      return { name, estado: 'nuevo', oc: orden.oc, proveedor: orden.proveedor, renglones: orden.renglones.length, total: orden.subtotal };
-    });
-    resultados.push(resultado);
+    resultados.push(await guardarOrden(orden, name, hash, usuarioId));
   }
   return resultados;
 }
@@ -528,6 +636,7 @@ module.exports = {
   ensureOrdenesCompraTables,
   estadoOrden,
   importarArchivos,
+  confirmarEscaneo,
   listarOrdenes,
   listarDuplicados,
   actualizarRenglon,

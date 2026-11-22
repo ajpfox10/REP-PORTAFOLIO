@@ -48,7 +48,7 @@ REM 0. Generar .env.production desde .env (cambia NODE_ENV y fuerza la base de P
 REM    Dev usa su propia base (personalv5_dev); prod SIEMPRE personalv5.
 echo [0/6] Generando .env.production...
 cd /d %SRC%
-powershell -Command "(Get-Content '%SRC%\.env') -replace '^NODE_ENV=.*','NODE_ENV=production' -replace '^FICHERO_SUBIDA_DESHABILITADA=.*','FICHERO_SUBIDA_DESHABILITADA=0' -replace '^DB_NAME=.*','DB_NAME=personalv5' | Set-Content '%SRC%\.env.production'"
+powershell -Command "(Get-Content '%SRC%\.env') -replace '^NODE_ENV=.*','NODE_ENV=production' -replace '^FICHERO_SUBIDA_DESHABILITADA=.*','FICHERO_SUBIDA_DESHABILITADA=0' -replace '^DB_NAME=.*','DB_NAME=personalv5' -replace '^MIGRATIONS_ENABLE=.*','MIGRATIONS_ENABLE=true' | Set-Content '%SRC%\.env.production'"
 REM    Secretos propios de prod (JWT, base): viven fuera de dev, en C:\apps\personalprod\secretos-prod.env
 "C:\Program Files\nodejs\node.exe" "%SRC%\scripts\aplicar-secretos-prod.cjs" "%SRC%\.env.production" "C:\apps\personalprod\secretos-prod.env"
 if errorlevel 1 ( echo ERROR: no se pudieron aplicar los secretos de prod - abortando & pause & exit /b 1 )

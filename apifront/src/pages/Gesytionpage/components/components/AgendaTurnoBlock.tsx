@@ -20,7 +20,7 @@ const palabrasDe = (s: string) => String(s || '').normalize('NFD').replace(/[̀-
 // Puede tener varios turnos reservados (17/11): se listan todos y siempre queda "Dar otro turno".
 // Backend: GET /agenda-turnos/agente/:dni, POST /agenda-turnos/habilitaciones, POST .../:id/anular (mig 122).
 
-interface Hab { id: number; token: string | null; estado: 'HABILITADO' | 'USADO' | 'VENCIDO' | 'ANULADO'; vence_el: string; turno_fecha: string | null; turno_hora: string | null; turno_estado: string | null; motivo: string | null }
+interface Hab { id: number; token: string | null; estado: 'HABILITADO' | 'USADO' | 'VENCIDO' | 'ANULADO'; vence_el: string; turno_fecha: string | null; turno_hora: string | null; turno_estado: string | null; motivo: string | null; reenviar?: boolean | number; enviado_at?: string | null }
 interface TurnoAg { id: number; fecha: string; hora: string; origen: string; motivo: string | null }
 // turnos: todos los RESERVADOS del agente en la agenda (puede tener varios, 17/11)
 interface AgendaAg { id: number; nombre: string; lugar: string | null; mensaje_whatsapp: string | null; habilitacion: Hab | null; turno: TurnoAg | null; turnos?: TurnoAg[] }
@@ -47,6 +47,7 @@ export function AgendaTurnoBlock({ dni }: { dni: string }) {
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState<number | null>(null);
   const [editUrl, setEditUrl] = useState(false);
+  const [cancelando, setCancelando] = useState<number | null>(null);
   const [abriendo, setAbriendo] = useState(false);   // la extensión está buscando el chat
   const [url, setUrl] = useState('');
   const [mot, setMot] = useState<MotivoValor>(MOTIVO_VACIO);   // motivo del próximo "Dar turno"
@@ -61,7 +62,8 @@ export function AgendaTurnoBlock({ dni }: { dni: string }) {
   if (!data) return null;
 
   const link = (h: Hab) => (h.token && data.url_publica ? `${data.url_publica.replace(/\/+$/, '')}/t/${h.token}` : '');
-  const mensaje = (a: AgendaAg, h: Hab) => (a.mensaje_whatsapp || data.plantilla)
+  const esReenvio = (h: Hab) => h.estado === 'HABILITADO' && !!Number(h.reenviar);
+  const mensaje = (a: AgendaAg, h: Hab) => (esReenvio(h) ? 'Le reenviamos el enlace para sacar su turno porque el anterior dejó de funcionar.\n\n' : '') + (a.mensaje_whatsapp || data.plantilla)
     .replace(/\{NOMBRE\}/g, tc(data.agente.nombre || ''))
     .replace(/\{APELLIDO\}/g, tc(data.agente.apellido || ''))
     .replace(/\{AGENDA\}/g, h.motivo || a.nombre)
@@ -145,7 +147,34 @@ export function AgendaTurnoBlock({ dni }: { dni: string }) {
     else window.prompt('Copiá el texto:', texto);
   };
   const turnosDe = (a: AgendaAg): TurnoAg[] => a.turnos ?? (a.turno ? [a.turno] : []);
-  const whatsapp = (a: AgendaAg, h: Hab) => void whatsappTexto(mensaje(a, h));
+  // Cancelar el turno desde la ficha (mismo PATCH que la pestaña Turnos de la agenda): queda CANCELADO por la oficina
+  const cancelarTurno = async (t: TurnoAg) => {
+    const motivo = window.prompt(
+      `¿Cancelar el turno del ${dia(t.fecha)} a las ${t.hora}${t.motivo ? ` (${t.motivo})` : ''}? El horario queda libre.\n\n`
+      + 'Podés anotar por qué (opcional, ej. "avisó que no viene"):', '');
+    if (motivo === null) return;
+    setCancelando(t.id);
+    try {
+      await apiFetch(`/agenda-turnos/turnos/${t.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: 'CANCELADO', observaciones: motivo.trim() ? `Cancelado desde Gestión: ${motivo.trim()}` : 'Cancelado desde Gestión' }),
+      });
+      toast.ok('Turno cancelado', `${dia(t.fecha)} ${t.hora}. Si hace falta, dale otro con "Dar otro turno".`);
+      await cargar();
+    } catch (e: any) { toast.error('Cancelar turno', e?.message); }
+    finally { setCancelando(null); }
+  };
+  // se anota con qué dirección salió: si la dirección cambia (túnel caído), queda marcado para reenviar
+  const marcarEnviado = async (h: Hab) => {
+    try {
+      await apiFetch(`/agenda-turnos/habilitaciones/${h.id}/enviado`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: data.url_publica }),
+      });
+      if (esReenvio(h)) await cargar();
+    } catch { /* noop */ }
+  };
+  const whatsapp = (a: AgendaAg, h: Hab) => { void whatsappTexto(mensaje(a, h)); void marcarEnviado(h); };
+  const copiarMensaje = async (a: AgendaAg, h: Hab) => { await copiar(mensaje(a, h), 'Mensaje con el enlace'); void marcarEnviado(h); };
 
   return (
     <div className="agente-servicio-block">
@@ -198,6 +227,10 @@ export function AgendaTurnoBlock({ dni }: { dni: string }) {
                   {a.habilitacion?.token && a.habilitacion.turno_fecha === t.fecha && data.url_publica && (
                     <button type="button" style={btn} onClick={() => void copiar(link(a.habilitacion!), 'Enlace del turno')}>🔗 Copiar enlace</button>
                   )}
+                  <button type="button" style={{ ...btn, color: '#f87171' }} disabled={cancelando === t.id} onClick={() => void cancelarTurno(t)}
+                    title="Marca el turno como cancelado (igual que en Agenda de turnos): el horario queda libre">
+                    {cancelando === t.id ? 'Cancelando…' : '✖ Cancelar turno'}
+                  </button>
                 </div>
               </div>
             ))}
@@ -207,10 +240,15 @@ export function AgendaTurnoBlock({ dni }: { dni: string }) {
                   🔗 Enlace listo, todavía no eligió turno · vence {fmt(h.vence_el)} · {h.motivo ? <b style={{ color: '#c4b5fd' }}>{h.motivo}</b> : 'el motivo lo elige el agente'}
                 </div>
                 {!data.url_publica && <div style={{ fontSize: '0.7rem', color: '#f87171', marginTop: 2 }}>Falta la dirección pública (Agenda de turnos → Configurar).</div>}
+                {esReenvio(h) && data.url_publica && (
+                  <div style={{ fontSize: '0.75rem', color: '#fb923c', marginTop: 2 }}>
+                    🔁 El enlace se le mandó con una dirección que ya no anda: reenviáselo (📲 WhatsApp o Copiar mensaje). Es el mismo enlace con la dirección nueva.
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                   <button type="button" style={btn} disabled={!data.url_publica || abriendo} onClick={() => whatsapp(a, h)}
                     title={data.agente.celular ? `WhatsApp a ${data.agente.celular}${data.agente.dudoso ? ' (celular dudoso)' : ''}` : 'Sin celular en la base'}>{abriendo ? '⏳ Abriendo WhatsApp…' : '📲 WhatsApp'}</button>
-                  <button type="button" style={btn} disabled={!data.url_publica} onClick={() => void copiar(mensaje(a, h), 'Mensaje con el enlace')}>Copiar mensaje</button>
+                  <button type="button" style={btn} disabled={!data.url_publica} onClick={() => void copiarMensaje(a, h)}>Copiar mensaje</button>
                   <button type="button" style={btn} disabled={!data.url_publica} onClick={() => void copiar(link(h), 'Enlace')}>🔗 Copiar enlace</button>
                   <button type="button" style={{ ...btn, color: '#f87171' }} onClick={() => void anular(a, h)}>Anular</button>
                 </div>

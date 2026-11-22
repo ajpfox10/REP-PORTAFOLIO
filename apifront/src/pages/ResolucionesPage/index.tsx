@@ -297,6 +297,13 @@ type ResViewer = {
 };
 
 // ─── Página ───────────────────────────────────────────────────────────────────
+// Resolución por defecto de TODOS los escaneos: 600 dpi; si el equipo no la tiene, la más alta que ofrezca.
+const DPI_PREFERIDO = 600;
+function dpiPreferido(res: number[] | null | undefined): number {
+  if (!Array.isArray(res) || !res.length) return DPI_PREFERIDO;
+  return res.includes(DPI_PREFERIDO) ? DPI_PREFERIDO : Math.max(...res);
+}
+
 export function ResolucionesPage() {
   const toast  = useToast();
   const { session } = useAuth();
@@ -501,7 +508,7 @@ export function ResolucionesPage() {
 
   // ── Scanner — config ───────────────────────────────────────────────────────
   const [scanSource,       setScanSource]       = useState<string>('flatbed');
-  const [scanDpi,          setScanDpi]          = useState<number>(300);
+  const [scanDpi,          setScanDpi]          = useState<number>(DPI_PREFERIDO);
   const [scanColor,        setScanColor]        = useState(true);
   const [scanDuplex,       setScanDuplex]       = useState(false);
   const [scanOutputFormat, setScanOutputFormat] = useState<OutputFormat>('pdf');
@@ -668,7 +675,7 @@ export function ResolucionesPage() {
     const caps = dev?.capabilities;
     if (!caps) return;
     if (!caps.sources.includes(scanSource as any)) setScanSource(caps.sources[0] || 'flatbed');
-    if (!caps.resolutions.includes(scanDpi)) setScanDpi(caps.resolutions.includes(300) ? 300 : caps.resolutions[0] || 300);
+    if (!caps.resolutions.includes(scanDpi)) setScanDpi(dpiPreferido(caps.resolutions));
     const colorKey = scanColor ? 'color' : 'grayscale';
     if (!caps.color_modes.includes(colorKey) && !caps.color_modes.includes(scanColor ? 'color' : 'gris')) {
       setScanColor(caps.color_modes.includes('color'));

@@ -71,7 +71,12 @@ async function main() {
   await sequelize.authenticate();
   logger.info({ msg: 'BD conectada', host: env.DB_HOST, db: env.DB_NAME });
 
-  await runMigrations(sequelize);
+  // una migración rota nunca deja la API sin arrancar: el error queda en el banner del dashboard
+  try {
+    await runMigrations(sequelize);
+  } catch (e: any) {
+    logger.error({ msg: 'Migraciones: error inesperado (la API sigue arrancando)', err: e?.message });
+  }
 
   const schema = await schemaBootstrap(sequelize);
   logger.info({ msg: 'Schema cargado', tablas: Object.keys(schema.tables || {}).length });

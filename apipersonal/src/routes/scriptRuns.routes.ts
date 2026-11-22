@@ -281,7 +281,18 @@ export function buildScriptRunsRouter(sequelize: Sequelize) {
       );
       if (!robot) return res.status(404).json({ ok: false, error: 'Robot inexistente' });
       if (!robot.comando) return res.status(400).json({ ok: false, error: 'Este robot lo lanza otra pantalla' });
-      const como = await ejecutarAhora(robot.script);
+      // Exámenes médicos desde Aptos × tanda: los certificados se bajan solo de esa tanda.
+      let pedido: { archivo: string; datos: Record<string, unknown> } | undefined;
+      const tanda = typeof req.body?.tanda === 'string' ? req.body.tanda.trim() : '';
+      if (robot.script === 'siape_examenes_medicos' && tanda) {
+        const [ex] = await sequelize.query<any>(
+          `SELECT 1 AS ok FROM tramites_tanda_interinos WHERE tanda = ? LIMIT 1`,
+          { type: QueryTypes.SELECT, replacements: [tanda] },
+        );
+        if (!ex) return res.status(400).json({ ok: false, error: `La tanda "${tanda}" no existe` });
+        pedido = { archivo: 'pedido_certificados_tanda.json', datos: { tanda } };
+      }
+      const como = await ejecutarAhora(robot.script, pedido);
       return res.json({ ok: true, como });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });

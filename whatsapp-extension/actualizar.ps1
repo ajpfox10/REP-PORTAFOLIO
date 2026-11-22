@@ -1,5 +1,5 @@
 # actualizar.ps1 - actualizador de la extension "Personal - Avisos por WhatsApp" (una PC).
-# Lo corre la tarea programada que crea instalar-actualizador.cmd (al iniciar sesion y cada 2 horas).
+# Lo corre la tarea programada que crea instalar-actualizador.cmd (al iniciar sesion y cada 10 minutos).
 # Consulta version.json en el servidor de la app; si hay una version mas nueva baja el zip y pisa
 # los archivos de esta carpeta (manifest.json al final). La extension ve el cambio y se recarga sola.
 # Servidores: uno por linea en servidores.txt (el primero que responda). Log: actualizador.log.
@@ -14,6 +14,25 @@ function Log($msg) {
     if ((Test-Path $log) -and (Get-Item $log).Length -gt 200KB) { Remove-Item $log -Force }
     Add-Content -Path $log -Value $linea -Encoding UTF8
   } catch { }
+}
+
+# Tareas viejas (cada 2 horas, de antes de la 1.9.0): se rehacen cada 10 minutos, una sola vez por PC.
+# La tarea apunta al actualizar-oculto.vbs de ESTA carpeta (la que esta corriendo).
+$marca = Join-Path $carpeta 'tarea-10min.ok'
+if (-not (Test-Path $marca)) {
+  try {
+    $vbs = Join-Path $carpeta 'actualizar-oculto.vbs'
+    # si la tarea es de OTRO usuario de Windows (Acceso denegado) se crea una propia con el nombre del usuario
+    $ErrorActionPreference = 'Continue'
+    $hecho = $false
+    foreach ($nombreTarea in @('Personal - Actualizar extension WhatsApp', "Personal - Actualizar extension WhatsApp ($env:USERNAME)")) {
+      & schtasks.exe /Create /SC MINUTE /MO 10 /TN $nombreTarea /TR "wscript.exe `"$vbs`"" /F 2>$null | Out-Null
+      if ($LASTEXITCODE -eq 0) { $hecho = $true; break }
+    }
+    $ErrorActionPreference = 'Stop'
+    if ($hecho) { Set-Content -Path $marca -Value (Get-Date -Format s) -Encoding ASCII; Log "Tarea de actualizacion pasada a cada 10 minutos ($nombreTarea)" }
+    else { Log 'No se pudo crear la tarea de cada 10 minutos (Acceso denegado)' }
+  } catch { Log "No se pudo rehacer la tarea: $($_.Exception.Message)" }
 }
 
 try {

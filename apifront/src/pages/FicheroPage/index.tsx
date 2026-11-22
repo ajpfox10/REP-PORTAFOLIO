@@ -3,6 +3,8 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Layout } from '../../components/Layout';
+import { useSearchParams } from 'react-router-dom';
+import { FicheroBiometriaLabPage } from '../FicheroBiometriaLabPage';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { useAuth } from '../../auth/AuthProvider';
@@ -45,7 +47,9 @@ export function FicheroPage() {
   const [exportando, setExportando] = useState(false);
   const [accionReloj, setAccionReloj] = useState<string | null>(null);
 
-  const [tab, setTab] = useState<'monitor' | 'adms' | 'pendientes' | 'exportar' | 'continu' | 'config'>('monitor');
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<'monitor' | 'adms' | 'lab' | 'pendientes' | 'exportar' | 'continu' | 'config'>(
+    searchParams.get('tab') === 'lab' ? 'lab' : 'monitor');
 
   // Fichadas sin marca de subida
   const [pendientes, setPendientes] = useState<FicheroPendientes | null>(null);
@@ -337,10 +341,11 @@ export function FicheroPage() {
 
       {/* Tabs */}
       <div style={S.tabs}>
-        {(['monitor', 'adms', 'pendientes', 'exportar', 'continu', 'config'] as const).map(t => (
+        {(['monitor', 'adms', 'lab', 'pendientes', 'exportar', 'continu', 'config'] as const).map(t => (
           <button key={t} style={{ ...S.tab, ...(tab === t ? S.tabActive : {}), ...(t === 'continu' && config?.modoContinu ? S.tabContinu : {}) }} onClick={() => setTab(t)}>
             {t === 'monitor'  ? '📊 Monitor'
            : t === 'adms'     ? 'ADMS'
+           : t === 'lab'      ? '🧪 Prueba lógica nueva'
            : t === 'pendientes' ? (pendientes && pendientes.total > 0 ? `⚠️ Sin subir (${pendientes.total})` : '✅ Sin subir')
            : t === 'exportar' ? '📅 Exportar por rango'
            : t === 'continu'  ? (config?.modoContinu ? '🔄 Continuo ●' : '🔄 Continuo desde fecha')
@@ -521,6 +526,7 @@ export function FicheroPage() {
       )}
 
       {tab === 'adms' && <AdmsConsole active={tab === 'adms'} />}
+      {tab === 'lab' && <FicheroBiometriaLabPage embedded />}
 
       {/* ══════════════════ TAB EXPORTAR ═════════════════════════════════════ */}
       {/* ══════════════════ TAB SIN SUBIR ════════════════════════════════════ */}

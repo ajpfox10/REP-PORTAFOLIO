@@ -27,15 +27,31 @@ chrome.alarms.create('hpw-version', { periodInMinutes: 5 });
 chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'hpw-version') void revisarVersionEnDisco(); });
 chrome.runtime.onStartup.addListener(() => { void revisarVersionEnDisco(); });
 
+// 1.9.3: los envíos hacen FILA. Dos a la vez en el mismo Chrome (un programado + un "Escribir" a
+// mano, o dos pestañas de la app) se pisaban: el /send?phone= de uno recargaba WhatsApp Web en medio
+// del otro ("message channel closed before a response was received"). Ahora cada uno espera al anterior.
+let colaEnvios = Promise.resolve();
+function enFila(fn) {
+  const p = colaEnvios.then(fn, fn);
+  colaEnvios = p.catch(() => {});
+  return p;
+}
+
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'hpw') return;
   port.onMessage.addListener(async ({ type, payload }) => {
     let r;
     ocupado++;
     try {
-      r = type === 'ENVIAR' ? await enviar(payload, port.sender?.tab)
+      r = type === 'ENVIAR' ? await enFila(() => enviar(payload, port.sender?.tab))
         : type === 'CONTACTOS' ? await contactos()
         : type === 'RECIBIDOS' ? await recibidos()
+        : type === 'SIN_LEER' ? await sinLeer(payload)
+        : type === 'ESTADO_WA' ? await estadoWhatsapp()
+        // 1.9.0: la app vio en el servidor una versión más nueva → si el actualizador ya la copió al disco,
+        // se recarga ya (sin esperar la alarma de 5 min). Las versiones viejas no conocen esta acción y
+        // se recargan igual (ver "Acción desconocida" abajo): por eso la app la manda.
+        : type === 'REVISAR_VERSION' ? (ocupado <= 1 ? (setTimeout(() => void revisarVersionEnDisco(), 300), { ok: true, estado: 'OK' }) : { ok: false, estado: 'OCUPADO' })
         : type === 'CUIL_ANSES' ? await cuilAnses(payload)
         : type === 'RDAM' ? await rdam(payload)
         : { ok: false, estado: 'ERROR', detalle: `Acción desconocida: ${type}` };
@@ -216,6 +232,82 @@ async function recibidos() {
   const r = res && res.result;
   if (!r || !r.ok) return { ok: false, estado: 'ERROR', detalle: (r && r.detalle) || 'No se pudieron leer los mensajes' };
   return { ok: true, estado: 'OK', chats: r.chats, sinNumero: r.sinNumero, mensajes: r.mensajes };
+}
+
+// ── ¿Hay WhatsApp Web abierto y listo en este navegador? (1.9.2) ─────────────
+// Lo usa la lista "PCs conectadas" de la agenda de turnos para saber cuál puede mandar.
+// No toca la pestaña: solo mira si existe y si WhatsApp terminó de cargar (con sesión iniciada).
+async function estadoWhatsapp() {
+  const tabs = await chrome.tabs.query({ url: `${WA}*` });
+  if (!tabs.length) return { ok: true, estado: 'OK', abierto: false, listo: false };
+  let listo = false;
+  try {
+    const [res] = await chrome.scripting.executeScript({
+      target: { tabId: tabs[0].id },
+      world: 'MAIN',
+      func: () => {
+        try {
+          const col = typeof window.require === 'function' && window.require('WAWebCollections');
+          const chats = col && col.Chat && (col.Chat.getModelsArray ? col.Chat.getModelsArray() : col.Chat._models);
+          return !!(chats && chats.length);
+        } catch { return false; }
+      },
+    });
+    listo = !!(res && res.result);
+  } catch { /* pestaña descartada o cargando */ }
+  return { ok: true, estado: 'OK', abierto: true, listo };
+}
+
+// ── Mensajes SIN LEER de un número (1.9.0, agenda de turnos) ─────────────────
+// Antes de mandar un enlace la app pregunta si esa persona tiene mensajes sin leer: al mandar,
+// WhatsApp marcaría el chat como leído y la oficina perdería lo que había escrito. Se lee de la
+// memoria de WhatsApp Web (mundo MAIN), SIN abrir el chat ni mandar el visto.
+// payload: { telefono } → { ok, estado: 'OK', encontrado, sinLeer (n; -1 = marcado como no leído a mano), mensajes: [{ t, tipo, texto }] }
+async function sinLeer(p) {
+  const tabs = await chrome.tabs.query({ url: `${WA}*` });
+  if (!tabs.length) return { ok: false, estado: 'ERROR', detalle: 'No hay ninguna pestaña de WhatsApp Web abierta' };
+  const tel = String((p && p.telefono) || '').replace(/\D/g, '');
+  if (tel.length < 10) return { ok: false, estado: 'ERROR', detalle: 'Número inválido' };
+  const [res] = await chrome.scripting.executeScript({
+    target: { tabId: tabs[0].id },
+    world: 'MAIN',
+    args: [tel.slice(-10)],
+    func: (ult10) => {
+      try {
+        const req = window.require;
+        if (typeof req !== 'function') return { ok: false, detalle: 'WhatsApp Web no terminó de cargar (o cambió su estructura)' };
+        const col = req('WAWebCollections');
+        const arr = (c) => (c && (c.getModelsArray ? c.getModelsArray() : c._models)) || [];
+        const IGNORAR = new Set(['e2e_notification', 'notification_template', 'gp2', 'protocol', 'call_log', 'ciphertext', 'revoked', 'notification']);
+        const TIPO = { image: '📷 foto', video: '🎥 video', ptt: '🎤 audio', audio: '🎤 audio', document: '📄 documento', sticker: '🏷 sticker', location: '📍 ubicación', vcard: '👤 contacto' };
+        for (const ch of arr(col.Chat)) {
+          const id = ch.id || {};
+          if (ch.isGroup || ['g.us', 'broadcast', 'newsletter'].includes(id.server)) continue;
+          const contacto = (col.Contact && col.Contact.get && col.Contact.get(id)) || ch.contact || {};
+          const numero = id.server === 'c.us' ? id.user : (contacto.phoneNumber && contacto.phoneNumber.user) || '';
+          if (!numero || String(numero).slice(-10) !== ult10) continue;
+          const n = Number(ch.unreadCount || 0);
+          if (n === 0) return { ok: true, encontrado: true, sinLeer: 0, mensajes: [] };
+          const recibidos = arr(ch.msgs)
+            .filter((m) => m.id && !m.id.fromMe && !m.isNotification && !IGNORAR.has(m.type))
+            .sort((a, b) => (a.t || 0) - (b.t || 0));
+          const cuantos = n > 0 ? Math.min(n, 15) : 1;
+          const mensajes = recibidos.slice(-cuantos).map((m) => {
+            const cuerpo = m.type === 'chat' ? (m.body || '') : (m.caption || '');
+            const tipo = m.type === 'chat' ? 'texto' : (TIPO[m.type] || m.type || 'otro');
+            return { t: m.t || null, tipo, texto: String(m.type === 'chat' ? cuerpo : [tipo, cuerpo].filter(Boolean).join(' · ')).slice(0, 1000) };
+          });
+          return { ok: true, encontrado: true, sinLeer: n, mensajes };
+        }
+        return { ok: true, encontrado: false, sinLeer: 0, mensajes: [] };
+      } catch (e) {
+        return { ok: false, detalle: 'No se pudo leer el chat: ' + String((e && e.message) || e).slice(0, 150) };
+      }
+    },
+  });
+  const r = res && res.result;
+  if (!r || !r.ok) return { ok: false, estado: 'ERROR', detalle: (r && r.detalle) || 'No se pudo leer el chat' };
+  return { ok: true, estado: 'OK', encontrado: r.encontrado, sinLeer: r.sinLeer, mensajes: r.mensajes };
 }
 
 // ── Constancia de CUIL (ANSES) ───────────────────────────────────────────────

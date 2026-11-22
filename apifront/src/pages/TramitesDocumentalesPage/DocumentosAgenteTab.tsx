@@ -27,6 +27,8 @@ export function DocumentosAgenteTab() {
   const [allPages, setAllPages] = useState<PageItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [oscMenu, setOscMenu] = useState<string | null>(null); // id de hoja (o '__doc__') con el menú ×1/×2/×3 abierto
+  const [oscAvance, setOscAvance] = useState<{ hecho: number; total: number } | null>(null); // 🌑 Oscurecer todas
   const [zoom, setZoom] = useState(1);
   const [ampliado, setAmpliado] = useState(false);
   const [lupaIdx, setLupaIdx] = useState<number | null>(null);
@@ -83,6 +85,12 @@ export function DocumentosAgenteTab() {
     return m;
   }, [allPages]);
   const pages = useMemo(() => allPages.filter((p) => p.doc === docSel), [allPages, docSel]);
+  // ↕ Ordenar: copia local del orden mientras se acomoda; null = modo normal
+  const [ordenando, setOrdenando] = useState<PageItem[] | null>(null);
+  const [guardandoOrden, setGuardandoOrden] = useState(false);
+  const dragOrden = useRef<number | null>(null);
+  useEffect(() => { setOrdenando(null); }, [docSel, agente]);
+  const vista = ordenando ?? pages;
 
   // Teclado: Esc cierra (primero la lupa), ← → cambian de hoja, + − zoom de la lupa.
   useEffect(() => {
@@ -166,6 +174,131 @@ export function DocumentosAgenteTab() {
     setBusyId(null);
   }
 
+  // 📷 Re-escanear documento: abre Escaneo en otra pestaña con DNI, carpeta y máx. resolución.
+  // Al guardar, Escaneo manda los archivos de antes a Trasladados y avisa por localStorage
+  // ('reescaneo-hecho') → acá se recarga el agente solo.
+  // modo 'reemplazar' = 📷 Re-escanear documento; 'agregar' = ➕ Agregar hoja (después de `despuesDe`,
+  // o al final si es null): Escaneo guarda la hoja y el back la mete en su lugar (/combinar-insertar).
+  function abrirEscaneo(modo: 'reemplazar' | 'agregar', despuesDe: PageItem | null = null) {
+    if (!agente || !docSel) return;
+    const carpeta = docs.find((d) => d.documento === docSel)?.carpeta || docSel;
+    const rels = Array.from(new Set(pages.map((p) => p.rel)));
+    const archivos = Array.from(new Set(pages.map((p) => p.archivo)));
+    const payload = {
+      id: `${Date.now()}`, modo, dni: agente.dni, documento: docSel, carpeta, rels, archivos,
+      despuesDe: despuesDe ? { rel: despuesDe.rel, page: despuesDe.page, n: pages.indexOf(despuesDe) + 1 } : null,
+    };
+    const q = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(payload)))));
+    window.open(`/app/escaneo?reescaneo=${q}`, '_blank');
+  }
+  const reescanear = () => abrirEscaneo('reemplazar');
+
+  function moverOrden(i: number, j: number) {
+    setOrdenando((prev) => {
+      if (!prev || j < 0 || j >= prev.length || i === j) return prev;
+      const n = prev.slice(); const [m] = n.splice(i, 1); n.splice(j, 0, m); return n;
+    });
+  }
+  // Guarda el orden en la carpeta: fotos → se renumeran; un PDF → se reordenan sus páginas;
+  // mezcla de archivos → hay que unirlos en un solo PDF (se pregunta antes).
+  async function guardarOrden() {
+    if (!agente || !docSel || !ordenando) return;
+    const carpeta = docs.find((d) => d.documento === docSel)?.carpeta || docSel;
+    const orden = ordenando.map((p) => ({ rel: p.rel, page: p.page }));
+    const enviar = (unir: boolean) => apiFetch<{ ok: boolean; data: { modo: string; archivos: string[]; backup?: string } }>(
+      '/tramites-documentales/combinar-reordenar',
+      { method: 'POST', body: JSON.stringify({ dni: agente.dni, carpeta, orden, unir }) });
+    setGuardandoOrden(true);
+    try {
+      let res;
+      try { res = await enviar(false); } catch (e: any) {
+        if (!/unirlos en un solo PDF/i.test(e?.message || '')) throw e;
+        const ok = window.confirm(`${e.message}.\n\n¿Unir las hojas en un solo PDF con este orden? Los archivos de antes quedan en Trasladados (se recuperan en ♻️ Restaurar).`);
+        if (!ok) return;
+        res = await enviar(true);
+      }
+      const detalle = res.data.modo === 'fotos' ? `${res.data.archivos.length} foto(s) renumeradas`
+        : res.data.modo === 'pdf' ? 'páginas reordenadas dentro del PDF (el anterior quedó en Trasladados)'
+          : `unidas en ${res.data.archivos[0]} (los de antes quedaron en Trasladados)`;
+      toast.ok('Orden guardado', detalle);
+      setOrdenando(null);
+      await cargarAgente(agente, docSel);
+    } catch (e: any) {
+      toast.error('No se pudo guardar el orden', e?.message || 'Error');
+    } finally { setGuardandoOrden(false); }
+  }
+
+  // 🌑 Oscurecer: corrige el original (copia previa en Trasladados) y se vuelven a leer las hojas.
+  //   ×1 suave · ×2 fuerte · ×3 muy fuerte (niveles 1-3 del back). Se acumula si se repite.
+  async function oscurecer(p: PageItem, nivel: 1 | 2 | 3) {
+    if (!agente || busyId) return;
+    setOscMenu(null);
+    setBusyId(p.id);
+    try {
+      const res = await apiFetch<{ ok: boolean; data: { backup: string } }>('/tramites-documentales/combinar-oscurecer',
+        { method: 'POST', body: JSON.stringify({ dni: agente.dni, rel: p.rel, page: p.page, nivel }) });
+      toast.ok(`Hoja oscurecida ×${nivel}`, `La anterior quedó en ${res.data.backup} (se recupera en ♻️ Restaurar)`);
+      setBusyId(null);
+      const idx = lupaIdx;
+      await cargarAgente(agente, docSel);
+      if (idx !== null) setLupaIdx(idx);
+      return;
+    } catch (e: any) { toast.error('No se pudo oscurecer', e?.message || 'Error'); }
+    setBusyId(null);
+  }
+  // 🌑 Oscurecer todas: cada ARCHIVO del documento una sola vez (un PDF de varias hojas = 1 pasada y
+  // 1 copia en Trasladados). Si uno falla sigue con los demás y avisa al final.
+  async function oscurecerTodas(nivel: 1 | 2 | 3) {
+    if (!agente || busyId || !pages.length) return;
+    setOscMenu(null);
+    const archivos = Array.from(new Map(pages.map((p) => [p.rel, p])).values());
+    setBusyId('__doc__');
+    setOscAvance({ hecho: 0, total: archivos.length });
+    const fallaron: string[] = [];
+    for (let i = 0; i < archivos.length; i += 1) {
+      const p = archivos[i];
+      try {
+        await apiFetch('/tramites-documentales/combinar-oscurecer',
+          { method: 'POST', body: JSON.stringify({ dni: agente.dni, rel: p.rel, page: 0, todas: true, nivel }) });
+      } catch (e: any) { fallaron.push(`${p.archivo}: ${e?.message || 'error'}`); }
+      setOscAvance({ hecho: i + 1, total: archivos.length });
+    }
+    setOscAvance(null);
+    setBusyId(null);
+    if (fallaron.length) toast.error(`No se pudieron oscurecer ${fallaron.length} de ${archivos.length}`, fallaron.join(' · '));
+    else toast.ok(`Documento oscurecido ×${nivel}`, `${archivos.length} archivo(s) · los anteriores quedaron en Trasladados (se recuperan en ♻️ Restaurar)`);
+    await cargarAgente(agente, docSel);
+  }
+
+  // Botón 🌑 + menú ×1/×2/×3 (por hoja, en la lupa, o '__doc__' para el documento entero)
+  const NIVELES_OSC: Array<{ n: 1 | 2 | 3; t: string }> = [
+    { n: 1, t: 'Suave: grises claros → gris medio' },
+    { n: 2, t: 'Fuerte' },
+    { n: 3, t: 'Muy fuerte: casi todo lo escrito → negro' },
+  ];
+  const menuOscurecer = (clave: string, aplicar: (n: 1 | 2 | 3) => void, etiqueta: string, titulo: string) => (
+    <>
+      <button type="button" style={{ ...off(iconBtn), ...(etiqueta.length > 2 ? { padding: '0 10px' } : {}), ...(oscMenu === clave ? { background: 'rgba(124,58,237,0.35)' } : {}) }}
+        disabled={!!busyId} title={titulo} onClick={() => setOscMenu((m) => (m === clave ? null : clave))}>{etiqueta}</button>
+      {oscMenu === clave && NIVELES_OSC.map((o) => (
+        <button key={o.n} type="button" style={{ ...iconBtn, color: '#fde68a', fontWeight: 700 }} title={`×${o.n} — ${o.t}`}
+          onClick={() => aplicar(o.n)}>×{o.n}</button>
+      ))}
+    </>
+  );
+
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key !== 'reescaneo-hecho' || !e.newValue || !agente) return;
+      try {
+        const d = JSON.parse(e.newValue);
+        if (Number(d?.dni) === Number(agente.dni)) void cargarAgente(agente, d?.documento || docSel);
+      } catch { /* noop */ }
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [agente, docSel, cargarAgente]);
+
   const chip: React.CSSProperties = { padding: '5px 14px', borderRadius: 999, fontSize: '0.78rem', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.15)' };
   const iconBtn: React.CSSProperties = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#cbd5e1', cursor: 'pointer', minWidth: 28, height: 26, fontSize: '0.8rem', padding: '0 4px' };
   const rojo: React.CSSProperties = { ...iconBtn, color: '#fca5a5', borderColor: 'rgba(248,113,113,0.4)' };
@@ -177,6 +310,9 @@ export function DocumentosAgenteTab() {
       <button type="button" style={off(iconBtn)} disabled={!!busyId} title="Rotar 90° a la izquierda (corrige el original)" onClick={() => void rotar(p, -90)}>↺</button>
       <button type="button" style={off(iconBtn)} disabled={!!busyId} title="Rotar 90° a la derecha (corrige el original)" onClick={() => void rotar(p, 90)}>↻</button>
       <button type="button" style={off(iconBtn)} disabled={!!busyId} title="Rotar 180° (corrige el original)" onClick={() => void rotar(p, 180)}>⟲180</button>
+      {menuOscurecer(p.id, (n) => void oscurecer(p, n), '🌑',
+        'Oscurecer esta hoja: elegí ×1 suave, ×2 fuerte o ×3 muy fuerte (corrige el original; la anterior queda en Trasladados)')}
+      <button type="button" style={off(iconBtn)} disabled={!!busyId} title="Agregar una hoja escaneada DESPUÉS de esta (la que se comió el escáner)" onClick={() => abrirEscaneo('agregar', p)}>➕</button>
       <button type="button" style={off(iconBtn)} disabled={!!busyId} title="Subir a otra carpeta (pasar la hoja a otro documento)" onClick={() => setSubirDe(p)}>⬆</button>
       <button type="button" style={off(rojo)} disabled={!!busyId} title="Extraer la hoja → Trasladados (se recupera en ♻️ Restaurar)" onClick={() => void extraer(p)}>{busyId === p.id ? '…' : '✕'}</button>
     </>
@@ -263,6 +399,30 @@ export function DocumentosAgenteTab() {
               <strong style={{ color: '#a5b4fc', fontSize: '0.9rem' }}>{docSel}</strong>
               <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>{pages.length} hoja(s)</span>
               <div style={{ flex: 1 }} />
+              <button type="button" onClick={reescanear} disabled={loading}
+                title="Re-escanear el documento completo a máxima resolución. Al guardar, las hojas actuales pasan a Trasladados (se recuperan en ♻️ Restaurar)."
+                style={{ ...iconBtn, padding: '0 10px', color: '#fde68a', borderColor: 'rgba(250,204,21,0.45)' }}>📷 Re-escanear documento</button>
+              {ordenando ? (
+                <>
+                  <span style={{ color: '#a5b4fc', fontSize: '0.78rem' }}>↕ Arrastrá las hojas o usá ▲▼</span>
+                  <button type="button" onClick={() => void guardarOrden()} disabled={guardandoOrden}
+                    style={{ ...iconBtn, padding: '0 10px', color: '#86efac', borderColor: 'rgba(134,239,172,0.45)' }}>{guardandoOrden ? 'Guardando…' : '💾 Guardar orden'}</button>
+                  <button type="button" onClick={() => setOrdenando(null)} disabled={guardandoOrden} style={{ ...iconBtn, padding: '0 10px' }}>Cancelar</button>
+                </>
+              ) : (
+                <button type="button" onClick={() => setOrdenando(pages.slice())} disabled={loading || !!busyId || pages.length < 2}
+                  title="Cambiar el orden de las hojas de este documento (queda guardado en la carpeta)"
+                  style={{ ...iconBtn, padding: '0 10px' }}>↕ Ordenar</button>
+              )}
+              {oscAvance
+                ? <span style={{ color: '#fde68a', fontSize: '0.78rem' }}>🌑 Oscureciendo {oscAvance.hecho} de {oscAvance.total}…</span>
+                : menuOscurecer('__doc__', (n) => void oscurecerTodas(n), '🌑 Oscurecer todas',
+                  'Oscurecer TODAS las hojas de este documento (×1 suave, ×2 fuerte, ×3 muy fuerte). Los originales quedan en Trasladados.')}
+              <button type="button" onClick={() => abrirEscaneo('agregar', null)} disabled={loading}
+                title="Escanear una hoja más y agregarla al FINAL del documento (para meterla en el medio, usá ➕ en la hoja de antes)"
+                style={{ ...iconBtn, padding: '0 10px' }}>➕ Agregar hoja</button>
+              <button type="button" onClick={() => agente && void cargarAgente(agente, docSel)} disabled={loading}
+                title="Volver a leer las hojas del agente" style={{ ...iconBtn, padding: '0 8px' }}>🔄</button>
               <button type="button" style={iconBtn} onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.15).toFixed(2)))}>−</button>
               <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: 42, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
               <button type="button" style={iconBtn} onClick={() => setZoom((z) => Math.min(2.5, +(z + 0.15).toFixed(2)))}>+</button>
@@ -273,17 +433,33 @@ export function DocumentosAgenteTab() {
               <div style={{ color: '#94a3b8', fontSize: '0.85rem', padding: 20 }}>Cargando hojas…</div>
             ) : (
               <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12, padding: 4 }}>
-                {pages.map((p, idx) => (
-                  <div key={p.id} style={{ display: 'flex', gap: 10, border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: 8, background: 'rgba(255,255,255,0.03)' }}>
+                {vista.map((p, idx) => (
+                  <div key={p.id}
+                    draggable={!!ordenando}
+                    onDragStart={() => { dragOrden.current = idx; }}
+                    onDragOver={(e) => { if (ordenando) e.preventDefault(); }}
+                    onDrop={() => { if (ordenando && dragOrden.current !== null) moverOrden(dragOrden.current, idx); dragOrden.current = null; }}
+                    style={{ display: 'flex', gap: 10, border: `1px solid ${ordenando ? 'rgba(165,180,252,0.45)' : 'rgba(255,255,255,0.12)'}`, borderRadius: 8, padding: 8,
+                      background: 'rgba(255,255,255,0.03)', cursor: ordenando ? 'grab' : undefined }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                       <span style={{ color: '#64748b', fontSize: '0.72rem' }}>#{idx + 1}</span>
-                      <button type="button" title="Lupa: ver esta hoja grande" style={iconBtn} onClick={() => { setLupaIdx(idx); setLupaZoom(1); }}>🔍</button>
-                      {acciones(p)}
+                      {ordenando ? (
+                        <>
+                          <span title="Arrastrar" style={{ color: '#a5b4fc', fontSize: '1rem' }}>⠿</span>
+                          <button type="button" style={{ ...iconBtn, opacity: idx === 0 ? 0.3 : 1 }} disabled={idx === 0} title="Subir una posición" onClick={() => moverOrden(idx, idx - 1)}>▲</button>
+                          <button type="button" style={{ ...iconBtn, opacity: idx === vista.length - 1 ? 0.3 : 1 }} disabled={idx === vista.length - 1} title="Bajar una posición" onClick={() => moverOrden(idx, idx + 1)}>▼</button>
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" title="Lupa: ver esta hoja grande" style={iconBtn} onClick={() => { setLupaIdx(idx); setLupaZoom(1); }}>🔍</button>
+                          {acciones(p)}
+                        </>
+                      )}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ color: '#cbd5e1', fontSize: '0.75rem', marginBottom: 4 }}>{p.archivo}{p.page > 0 ? ` (pág ${p.page + 1})` : ''}</div>
                       <div style={{ maxWidth: (ampliado ? 900 : 640) * zoom, cursor: 'zoom-in' }}
-                        onDoubleClick={() => { setLupaIdx(idx); setLupaZoom(1); }} title="Doble clic: lupa">
+                        onDoubleClick={() => { if (!ordenando) { setLupaIdx(idx); setLupaZoom(1); } }} title={ordenando ? 'Arrastrá para cambiar el orden' : 'Doble clic: lupa'}>
                         {pdf && <PageCanvas pdf={pdf} origIdx={p.origIdx} rot={p.rot} />}
                       </div>
                     </div>
@@ -325,7 +501,7 @@ export function DocumentosAgenteTab() {
               </div>
               <div ref={lupaScrollRef} style={{ flex: 1, overflow: 'auto', padding: 16, background: '#111827' }}>
                 <div style={{ width: `${lupaZoom * 100}%`, margin: lupaZoom <= 1 ? '0 auto' : 0 }}>
-                  <PageCanvas key={`${p.id}-${p.rot}`} pdf={pdf} origIdx={p.origIdx} rot={p.rot} scale={2.5} />
+                  <PageCanvas key={`${p.id}-${p.rot}`} pdf={pdf} origIdx={p.origIdx} rot={p.rot} scale={3.5} />
                 </div>
               </div>
             </div>

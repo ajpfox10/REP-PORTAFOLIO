@@ -109,6 +109,7 @@ export function CuilAnsesPanel({ tanda, onCerrar, onGuardado }: {
     const fd = new FormData();
     fd.append('dni', String(p.dni));
     fd.append('path', 'CUIL');
+    fd.append('robot', 'extension_cuil_anses');
     fd.append('files', new File([pdfBlob(b64)], ARCHIVO, { type: 'application/pdf' }));
     await apiFetch('/tramites-documentales/docu-upload', { method: 'POST', body: fd });
   }

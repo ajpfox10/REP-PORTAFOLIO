@@ -17,7 +17,7 @@ type Pendiente = {
   apellido: string;
   nombre: string;
   sexo: 'M' | 'F' | null;
-  tieneCuil: boolean; // = ya hay algo en la carpeta pedida (acá RDAM)
+  tieneCuil: boolean; // = ya tiene un RDAM vigente (< 60 días) en Libre de deuda (RDAM)
   archivos: string[];
 };
 
@@ -143,11 +143,12 @@ export function RdamPanel({ tanda, onCerrar, onGuardado }: {
   async function guardar(p: Pendiente, b64: string) {
     const fd = new FormData();
     fd.append('dni', String(p.dni));
-    fd.append('path', 'RDAM');
+    fd.append('path', 'Libre de deuda (RDAM)');
+    fd.append('robot', 'extension_rdam');
     const apNom = `${p.apellido} ${p.nombre}`.toUpperCase().replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || String(p.dni);
     fd.append('files', new File([pdfBlob(b64)], `${apNom} RDAM ${hoy()}.pdf`, { type: 'application/pdf' }));
     const r = await apiFetch<{ ok: boolean; data: { saved: string[] } }>('/tramites-documentales/docu-upload', { method: 'POST', body: fd });
-    // Recién con el nuevo guardado se borran los RDAM viejos de la carpeta.
+    // Recién con el nuevo guardado, lo viejo de la carpeta pasa a Trasladados (no se borra).
     const conservar = r.data?.saved?.[0];
     if (!conservar) return 0;
     const l = await apiFetch<{ ok: boolean; data: { borrados: string[] } }>('/tramites-documentales/docu-rdam-limpiar', {
@@ -292,7 +293,7 @@ export function RdamPanel({ tanda, onCerrar, onGuardado }: {
       {!tanda && !sueltos.length ? null : cargando ? <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Leyendo los agentes…</div> : (
         <>
           <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
-            {rows.length} agente(s) · <b>{conRdam}</b> ya tienen algo en la carpeta RDAM · <b>{aBajar.length}</b> a bajar
+            {rows.length} agente(s) · <b>{conRdam}</b> ya tienen un RDAM vigente · <b>{aBajar.length}</b> a bajar
             <label style={{ marginLeft: 12, cursor: 'pointer' }}>
               <input type="checkbox" checked={rebajar} disabled={corriendo} onChange={(e) => setRebajar(e.target.checked)} /> volver a bajar también los que ya tienen
             </label>
@@ -343,7 +344,7 @@ export function RdamPanel({ tanda, onCerrar, onGuardado }: {
                 </div>
               );
             })}
-            {!aBajar.length ? <div style={{ color: '#64748b', fontSize: '0.8rem', padding: 10 }}>{rows.length ? 'Todos los agentes ya tienen algo en la carpeta RDAM.' : 'Sin agentes.'}</div> : null}
+            {!aBajar.length ? <div style={{ color: '#64748b', fontSize: '0.8rem', padding: 10 }}>{rows.length ? 'Todos los agentes ya tienen un RDAM vigente.' : 'Sin agentes.'}</div> : null}
           </div>
         </>
       )}

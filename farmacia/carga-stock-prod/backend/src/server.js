@@ -2210,7 +2210,7 @@ function responderErrorOc(res, next, error) {
 
 function resumenImportacion(resultados) {
   const cuenta = (estado) => resultados.filter((r) => r.estado === estado).length;
-  return { nuevos: cuenta('nuevo'), yaCargados: cuenta('ya_cargado'), duplicados: cuenta('duplicado'), errores: cuenta('error') };
+  return { nuevos: cuenta('nuevo'), yaCargados: cuenta('ya_cargado'), duplicados: cuenta('duplicado'), errores: cuenta('error'), aRevisar: cuenta('revisar') };
 }
 
 app.get('/api/ordenes-compra/config', requireAuth, requireAdmin, (_req, res) => {
@@ -2335,7 +2335,8 @@ app.post('/api/ordenes-compra/subir', requireAuth, requireAdmin, uploadPdfOc.arr
     if (resultados.some((r) => r.estado === 'nuevo')) ordenesCompraDrive.sincronizarEnSegundoPlano();
     // los PDF de O.C. validos quedan en la carpeta de O.C., para poder verlos despues (boton Ver O.C.)
     archivos.forEach((a, i) => {
-      if (resultados[i]?.estado === 'error') return;
+      // los escaneos se guardan recien cuando el usuario confirma la carga
+      if (['error', 'revisar'].includes(resultados[i]?.estado)) return;
       try {
         ocPdf.guardarEnCarpeta(a.name, a.buffer);
       } catch (err) {
@@ -2355,7 +2356,7 @@ app.get('/api/ordenes-compra/:id/pdf', requireAuth, requireAdmin, async (req, re
   try {
     const orden = (await ordenesCompra.listarOrdenes()).find((o) => o.id === Number(req.params.id));
     if (!orden) return res.status(404).json({ error: 'No existe esa O.C.' });
-    const ruta = await ocPdf.buscarPdf(orden.oc);
+    const ruta = await ocPdf.buscarPdf(orden.oc, orden.archivo);
     if (!ruta) {
       return res.status(404).json({ error: `No está el PDF de la O.C. ${orden.oc} en ${config.ordenesCompraDir}. Copialo ahí (o subilo con "Subir PDF desde mi PC") y volvé a tocar Ver O.C.` });
     }
@@ -2371,6 +2372,27 @@ app.get('/api/ordenes-compra/:id/pdf', requireAuth, requireAdmin, async (req, re
     res.send(buffer);
   } catch (error) {
     next(error);
+  }
+});
+
+// O.C. escaneada leida por OCR: el usuario revisa numero y cantidades y confirma la carga
+app.post('/api/ordenes-compra/confirmar-escaneo', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const { hash, ...datos } = req.body || {};
+    const { buffer, ...resultado } = await ordenesCompra.confirmarEscaneo(hash, datos, req.user.sub);
+    if (resultado.estado === 'nuevo') {
+      ordenesCompraDrive.sincronizarEnSegundoPlano();
+      // queda en la carpeta de O.C. (si ya estaba ahi no se repite) para el boton Ver O.C.
+      try {
+        ocPdf.guardarEnCarpeta(`OC ${resultado.oc.replace('/', '-')}.pdf`, buffer);
+      } catch (err) {
+        console.error('[oc-pdf] no se pudo guardar el escaneo', resultado.oc, err.message);
+      }
+    }
+    await audit(req.user.sub, 'confirmar_escaneo_oc', 'oc_ordenes', null, { oc: resultado.oc, estado: resultado.estado, renglones: resultado.renglones || 0 });
+    res.status(201).json({ data: resultado });
+  } catch (error) {
+    responderErrorOc(res, next, error);
   }
 });
 

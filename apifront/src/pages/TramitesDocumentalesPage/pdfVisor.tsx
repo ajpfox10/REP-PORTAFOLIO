@@ -10,7 +10,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).href;
 
-export const RENDER_SCALE = 1.3; // resolución de render; el zoom es CSS sobre esto
+// Resolución de render, relativa a una hoja NORMAL (lado corto = 612 pt, carta/oficio): cada página
+// se dibuja a ~ RENDER_SCALE × 612 px de ancho sea cual sea su tamaño en puntos. Antes una foto metida
+// a 1 px = 1 pt (2480 pt) se dibujaba a ~3200 px y el navegador la achicaba ×5 → letra finita y clara.
+// El zoom es CSS sobre esto.
+export const RENDER_SCALE = 2;
+const LADO_NORMAL_PT = 612;
 
 export type TandaAgente = { id: number; tanda: string; dni: number; apellidoNombre: string };
 // rot = rotación aplicada después de combinar (ya guardada en el original; acá solo se
@@ -33,7 +38,9 @@ export function PageCanvas({ pdf, origIdx, rot = 0, scale = RENDER_SCALE }: { pd
       try {
         const page = await pdf.getPage(origIdx + 1);
         const rotation = ((((page.rotate || 0) + rot) % 360) + 360) % 360;
-        const viewport = page.getViewport({ scale, rotation });
+        const base = page.getViewport({ scale: 1, rotation });
+        const corto = Math.min(base.width, base.height) || LADO_NORMAL_PT;
+        const viewport = page.getViewport({ scale: scale * (LADO_NORMAL_PT / corto), rotation });
         const canvas = ref.current;
         if (!canvas || cancel) return;
         canvas.width = Math.ceil(viewport.width);

@@ -351,6 +351,10 @@ async function columnasManual(anio, semestre) {
       for (const d of dest(r.codigo)) {
         if (!d.proxVto) { d.proxVto = r.vto; d.proxVtoCant = 0; }
         if (d.proxVto === r.vto) d.proxVtoCant += Number(r.cantidad || 0);
+        // Todos los vencimientos con stock (fecha y unidades), del mas cercano al mas lejano
+        if (!d.vtos) d.vtos = [];
+        const ya = d.vtos.find((x) => x.vto === r.vto);
+        if (ya) ya.cant += Number(r.cantidad || 0); else d.vtos.push({ vto: r.vto, cant: Number(r.cantidad || 0) });
       }
     }
   }
@@ -487,6 +491,11 @@ async function comparacionManual(anio, semestre) {
         const minDroga = minItems.map((m) => ({ m, r: comparar(a, pfMin(m)) })).filter((x) => x.r.droga === 'si');
         if (minDroga.length) rel = `Ministerio menciona otra presentación: ${minDroga.map((x) => `${x.m.codigo} ${x.m.medicamento} «${x.m.habilitado}»`).join(' · ')}`;
       }
+    }
+    // Sin nada en el PDF y puesto en 0 a mano para el año siguiente: se decidio no agregarlo
+    if (motivo === 'sinNada' && grupo(f.codigo).some((x) => qMan.has(x)) && qPdfFam(f.codigo) === 0) {
+      motivo = 'noAgregar';
+      rel = `Decidiste no agregarlo al requerimiento ${sig} (queda en 0).`;
     }
     out[f.codigo] = { lado: 'soloEste', motivo, rel, ...(codigos ? { codigos } : {}) };
   }
@@ -651,6 +660,10 @@ async function columnasPorCodigos(codigosEntrada) {
       for (const d of dest(r.codigo)) {
         if (!d.proxVto) { d.proxVto = r.vto; d.proxVtoCant = 0; }
         if (d.proxVto === r.vto) d.proxVtoCant += Number(r.cantidad || 0);
+        // Todos los vencimientos con stock (fecha y unidades), del mas cercano al mas lejano
+        if (!d.vtos) d.vtos = [];
+        const ya = d.vtos.find((x) => x.vto === r.vto);
+        if (ya) ya.cant += Number(r.cantidad || 0); else d.vtos.push({ vto: r.vto, cant: Number(r.cantidad || 0) });
       }
     }
   }

@@ -7,6 +7,8 @@ import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
 import { apiFetch } from '../../api/http';
 import { exportToExcel } from '../../utils/export';
+import { useSearchParams } from 'react-router-dom';
+import { HistorialEstructuraPage } from '../HistorialEstructuraPage';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 interface Dependencia  { id: number; nombre: string; }
@@ -14,7 +16,7 @@ interface Reparticion  { id: number; reparticion_nombre: string; dependencia_id:
 interface Servicio     { id: number; nombre: string; reparticion_id: number | null; }
 interface Sector       { id: number; nombre: string; servicio_id: number | null; }
 
-type Tab = 'dependencias' | 'reparticiones' | 'servicios' | 'sectores';
+type Tab = 'dependencias' | 'reparticiones' | 'servicios' | 'sectores' | 'historial';
 
 // ─── Estilos base ────────────────────────────────────────────────────────────
 const card: React.CSSProperties = {
@@ -786,7 +788,8 @@ function SecTab({ servicios, reparticiones, dependencias, onChanged }: { servici
 // ─────────────────────────────────────────────────────────────────────────────
 export function EstructuraPage() {
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>('dependencias');
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(searchParams.get('tab') === 'historial' ? 'historial' : 'dependencias');
 
   // Catálogos compartidos entre tabs (cargados una sola vez)
   const [dependencias, setDependencias] = useState<Dependencia[]>([]);
@@ -819,6 +822,7 @@ export function EstructuraPage() {
     { key: 'reparticiones', label: '🗂 Reparticiones', count: reparticiones.length },
     { key: 'servicios',     label: '🏢 Servicios',      count: servicios.length },
     { key: 'sectores',      label: '📁 Sectores' },
+    { key: 'historial',     label: '🗂️ Historial Estructura' },
   ];
 
   return (
@@ -897,6 +901,7 @@ export function EstructuraPage() {
           {tab === 'reparticiones' && <RepTab dependencias={dependencias} onChanged={cargarCatalogos} />}
           {tab === 'servicios'     && <SvcTab reparticiones={reparticiones} dependencias={dependencias} onChanged={cargarCatalogos} />}
           {tab === 'sectores'      && <SecTab servicios={servicios} reparticiones={reparticiones} dependencias={dependencias} onChanged={cargarCatalogos} />}
+          {tab === 'historial'     && <HistorialEstructuraPage embedded />}
         </div>
 
       </div>

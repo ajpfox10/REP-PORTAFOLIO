@@ -61,6 +61,8 @@ def recurso_de(cfg):
         return "robots_gdeba"
     if grupo == "Archivos":             # solo copia carpetas (pase_planta): no espera a nadie
         return "robots_archivos"
+    if grupo == "RDAM":                 # sitio publico del RDAM, Chromium headless propio: no espera a nadie
+        return "robots_rdam"
     if cfg.get("script") == "comparacion_siape_ministerio_v2":   # solo lee Excel + base
         return "robots_comparacion"
     return "robots_siape"

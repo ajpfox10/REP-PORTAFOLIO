@@ -5,8 +5,12 @@ import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { exportToExcel, exportToPdf, printTable } from '../../utils/export';
 import { WhatsappAutomatico } from './WhatsappAutomatico';
+import { EstadisticasPage } from '../EstadisticasPage';
+import { AgentesServiciosPage } from '../AgentesServiciosPage';
+import { AlertasPage } from '../AlertasPage';
+import { useSearchParams } from 'react-router-dom';
 
-type TabKey = 'cumpleanos' | 'antiguedad' | 'estadisticas_consultas' | 'whatsapp' | 'consultas_dinamicas';
+type TabKey = 'estadisticas' | 'agentes_servicios' | 'alertas' | 'cumpleanos' | 'antiguedad' | 'estadisticas_consultas' | 'whatsapp' | 'consultas_dinamicas';
 
 const MESES = [
   'Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -1497,10 +1501,20 @@ function ConsultasDinamicasTab() {
 
 // ─── ReportesPage ─────────────────────────────────────────────────────────────
 export function ReportesPage() {
-  const [tab, setTab] = useState<TabKey>('cumpleanos');
+  const [params, setParams] = useSearchParams();
+  const TABS: TabKey[] = ['estadisticas', 'agentes_servicios', 'alertas', 'cumpleanos', 'antiguedad', 'estadisticas_consultas', 'whatsapp', 'consultas_dinamicas'];
+  const qTab = params.get('tab') as TabKey | null;
+  const tab: TabKey = qTab && TABS.includes(qTab) ? qTab : 'cumpleanos';
+  const setTab = (t: TabKey) => setParams(t === 'cumpleanos' ? {} : { tab: t }, { replace: true });
   return (
     <Layout title="Reportes" showBack>
       <div style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button className={`btn${tab === 'estadisticas' ? ' active' : ''}`}
+          onClick={() => setTab('estadisticas')}>📊 Estadísticas</button>
+        <button className={`btn${tab === 'agentes_servicios' ? ' active' : ''}`}
+          onClick={() => setTab('agentes_servicios')}>🏥 Agentes por Servicio</button>
+        <button className={`btn${tab === 'alertas' ? ' active' : ''}`}
+          onClick={() => setTab('alertas')}>🔔 Alertas</button>
         <button className={`btn${tab === 'cumpleanos' ? ' active' : ''}`}
           onClick={() => setTab('cumpleanos')}>🎂 Cumpleaños</button>
         <button className={`btn${tab === 'antiguedad' ? ' active' : ''}`}
@@ -1512,6 +1526,9 @@ export function ReportesPage() {
         <button className={`btn${tab === 'consultas_dinamicas' ? ' active' : ''}`}
           onClick={() => setTab('consultas_dinamicas')}>📊 Consultas dinámicas</button>
       </div>
+      {tab === 'estadisticas'           && <EstadisticasPage embedded />}
+      {tab === 'agentes_servicios'      && <AgentesServiciosPage embedded />}
+      {tab === 'alertas'                && <AlertasPage embedded />}
       {tab === 'cumpleanos'             && <CumpleanosTab />}
       {tab === 'antiguedad'             && <AntigüedadTab />}
       {tab === 'estadisticas_consultas' && <EstadisticasConsultasTab />}

@@ -107,12 +107,13 @@ def aptos_con_fecha(cn):
 
 
 def sin_ingreso_conocido(cn):
-    """DNIs que la tabla ya conoce (exportacion o grilla) y no tienen ningun examen de ingreso
-    APTO: no se abre SIAPE por ellos en cada corrida (ej. GIMENEZ 29655153, solo periodico).
-    Si despues aparece un ingreso APTO en la tabla, vuelven a entrar solos."""
+    """DNIs que la tabla ya conoce (exportacion o grilla) y no tienen NINGUN examen APTO (de
+    ningun tipo): no se abre SIAPE por ellos en cada corrida. Si despues aparece un APTO en
+    la tabla, vuelven a entrar solos. (20/11: antes pedia ingreso APTO y salteaba a los que
+    solo tenian periodico, ej. GIMENEZ 29655153; ahora el periodico tambien sirve.)"""
     with cn.cursor() as c:
         c.execute("SELECT dni FROM examenes_medicos_siape GROUP BY dni HAVING "
-                  "SUM(tipo_examen LIKE '%%INGRESO%%' AND UPPER(resolucion) LIKE 'APTO%%') = 0")
+                  "SUM(UPPER(resolucion) LIKE 'APTO%%') = 0")
         return {int(x["dni"]) for x in c.fetchall()}
 
 
@@ -236,11 +237,14 @@ def _num_codigo(f):
 
 
 def elegir_fila(filas):
+    """EXAMEN DE INGRESO APTO* (CODIGO mas alto). Si no hay ingreso (20/11: GIMENEZ 29655153,
+    TORRES 30264109, solo periodico), el apto PERIODICO/cualquier otro mas nuevo: el usuario
+    acepta el periodico vigente como apto ("es lo mismo")."""
     aptas = [f for f in filas
-             if "INGRESO" in (f.get("TIPO DE EXAMEN") or "").upper()
-             and (f.get("RESULTADO") or "").upper().startswith("APTO")
-             and f.get("_btn_ok")]
-    return max(aptas, key=_num_codigo) if aptas else None
+             if (f.get("RESULTADO") or "").upper().startswith("APTO") and f.get("_btn_ok")]
+    ingreso = [f for f in aptas if "INGRESO" in (f.get("TIPO DE EXAMEN") or "").upper()]
+    elegibles = ingreso or aptas
+    return max(elegibles, key=_num_codigo) if elegibles else None
 
 
 def resumen(filas):
@@ -344,6 +348,7 @@ def guardar_en_docu(pdf, fila, dni):
     destino_dir.mkdir(parents=True, exist_ok=True)
     destino = destino_dir / f"Apto Psicofisico SIAPE {fila.get('CODIGO') or dni}.pdf"
     shutil.move(str(pdf), str(destino))
+    MN.auditar_docu(SCRIPT_ID, dni, destino, detalle=f"fila {fila.get('CODIGO')} {fila.get('TIPO DE EXAMEN') or ''}".strip())
     return destino
 
 
@@ -386,7 +391,7 @@ def procesar(fr, r, dry_run=False):
     else:
         fila = elegir_fila(filas)
     if not fila:
-        return "sin_apto", f"Sin examen de ingreso APTO con certificado: {resumen(filas)}"
+        return "sin_apto", f"Sin examen APTO con certificado: {resumen(filas)}"
     det = f"{fila.get('CODIGO')} {fila.get('TIPO DE EXAMEN')} {fila.get('RESULTADO')}"
     sin_fecha = not EM._fecha(fila.get("FECHA"))
     if r.get("solo_fecha") and not sin_fecha:
@@ -413,7 +418,8 @@ def procesar(fr, r, dry_run=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tanda")
+    # CERT_TANDA: la pone la exportacion 123 cuando la lanzo el boton "Bajar de SIAPE" de una tanda
+    ap.add_argument("--tanda", default=(os.environ.get("CERT_TANDA") or "").strip() or None)
     ap.add_argument("--dni")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--forzar", action="store_true", help="baja aunque la subcarpeta ya tenga archivos")

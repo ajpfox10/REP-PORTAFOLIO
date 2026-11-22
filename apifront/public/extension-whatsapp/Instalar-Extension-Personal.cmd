@@ -121,17 +121,29 @@ try {
     T "  Extension copiada: version $(VersionDe $destino)" Green
   }
 
-  # 5) Actualizacion automatica: tarea de Windows (cada 2 horas) + acceso en Inicio (al prender la PC)
+  # 5) Actualizacion automatica: tarea de Windows (cada 10 minutos) + acceso en Inicio (al prender la PC)
   $vbs = Join-Path $destino 'actualizar-oculto.vbs'
   if (Test-Path $vbs) {
-    & schtasks.exe /Create /SC MINUTE /MO 120 /TN $tarea /TR "wscript.exe `"$vbs`"" /F | Out-Null
-    if ($LASTEXITCODE -ne 0) { T '  ATENCION: no se pudo crear la tarea de actualizacion automatica.' Yellow }
+    # Si ya hay una tarea con ese nombre creada por OTRO usuario de Windows (o como administrador),
+    # este usuario no la puede pisar ("Acceso denegado"): se crea una propia con el nombre del usuario.
+    $tareaOk = $false
+    $eapAntes = $ErrorActionPreference; $ErrorActionPreference = 'Continue'   # PS 5.1: el stderr de schtasks no debe cortar todo
+    foreach ($nombreTarea in @($tarea, "$tarea ($env:USERNAME)")) {
+      & schtasks.exe /Create /SC MINUTE /MO 10 /TN $nombreTarea /TR "wscript.exe `"$vbs`"" /F 2>$null | Out-Null
+      if ($LASTEXITCODE -eq 0) { $tareaOk = $true; break }
+    }
+    $ErrorActionPreference = $eapAntes
+    if ($tareaOk) { Set-Content -Path (Join-Path $destino 'tarea-10min.ok') -Value (Get-Date -Format s) -Encoding ASCII -ErrorAction SilentlyContinue }
     try {
       $lnk = Join-Path ([Environment]::GetFolderPath('Startup')) 'Personal - Actualizar extension WhatsApp.lnk'
       $sc = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
       $sc.TargetPath = 'wscript.exe'; $sc.Arguments = "`"$vbs`""; $sc.WindowStyle = 7; $sc.Save()
     } catch { }
-    T '  Actualizacion automatica: activada (al prender la PC y cada 2 horas).' Green
+    if ($tareaOk) { T '  Actualizacion automatica: activada (al prender la PC y cada 10 minutos).' Green }
+    else {
+      T '  ATENCION: Windows no dejo crear la tarea de cada 10 minutos.' Yellow
+      T '  Se actualiza igual al prender la PC (acceso en Inicio) y cuando la app detecta version nueva.' Yellow
+    }
   }
 
   # 6) Copias repetidas: no se actualizan solas y pueden mandar mensajes dos veces

@@ -78,7 +78,8 @@ chrome-dev-visible*/
 # documentos, planillas y archivos subidos/escaneados (datos personales)
 *.pdf
 **/*.pdf
-!apipersonal/assets/legajo/*.pdf
+!apipersonal/assets/**/*.pdf
+!apifront/public/normativa/*.pdf
 *.csv
 **/*.csv
 *.xlsx

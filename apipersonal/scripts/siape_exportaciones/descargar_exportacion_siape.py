@@ -186,8 +186,27 @@ def lanzar_certificados():
     run_robot: espera el turno de SIAPE (lo tiene esta exportacion) y queda en la pagina Robots.
     Si no hay nada que bajar termina enseguida sin abrir SIAPE."""
     scripts = Path(__file__).resolve().parents[1]
+    # Pedido del boton "Bajar de SIAPE" de Aptos x tanda: certificados SOLO de esa tanda.
+    # Se consume siempre (se borra); si es viejo (>6 h) se ignora y van todas las tandas.
+    env = dict(os.environ)
+    env.pop("CERT_TANDA", None)
+    pedido = scripts / "pedido_certificados_tanda.json"
+    if pedido.exists():
+        try:
+            d = json.loads(pedido.read_text(encoding="utf-8"))
+            from datetime import datetime, timezone
+            at = datetime.fromisoformat(str(d.get("at", "")).replace("Z", "+00:00"))
+            if (datetime.now(timezone.utc) - at).total_seconds() < 6 * 3600 and d.get("tanda"):
+                env["CERT_TANDA"] = str(d["tanda"])
+                F.log(f"Certificados solo de la tanda: {d['tanda']}")
+        except Exception as e:
+            F.log(f"AVISO: pedido de tanda ilegible ({e}); van todas las tandas")
+        try:
+            pedido.unlink()
+        except Exception:
+            pass
     try:
-        subprocess.Popen([sys.executable, "run_robot.py", "siape_certificados_examen"], cwd=str(scripts),
+        subprocess.Popen([sys.executable, "run_robot.py", "siape_certificados_examen"], cwd=str(scripts), env=env,
                          creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         F.log("Lance el robot de certificados (siape_certificados_examen).")

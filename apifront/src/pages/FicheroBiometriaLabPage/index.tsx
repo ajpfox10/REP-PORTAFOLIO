@@ -167,7 +167,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function FicheroBiometriaLabPage() {
+// embedded: se muestra como pestaña dentro de Módulo Fichero (sin Layout propio)
+function WrapLab({ embedded, children }: { embedded: boolean; children?: React.ReactNode }) {
+  return embedded ? <>{children}</> : <Layout title="Fichero biometria y mensajes">{children}</Layout>;
+}
+
+export function FicheroBiometriaLabPage({ embedded = false }: { embedded?: boolean } = {}) {
   const toast = useToast();
   const [devices, setDevices] = useState<Device[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -438,7 +443,7 @@ export function FicheroBiometriaLabPage() {
   }, [devices, users, lastIds]);
 
   return (
-    <Layout title="Fichero biometria y mensajes">
+    <WrapLab embedded={embedded}>
       <div style={S.shell}>
         <div style={S.header}>
           <div style={S.subtitle}>
@@ -674,7 +679,7 @@ export function FicheroBiometriaLabPage() {
           </main>
         </div>
       </div>
-    </Layout>
+    </WrapLab>
   );
 }
 

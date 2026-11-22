@@ -1408,6 +1408,231 @@
         }
       }
     },
+    "/api/v1/agenda_envios_cola": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List agenda_envios_cola",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_agenda_envios_cola"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create agenda_envios_cola",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_agenda_envios_cola_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/agenda_envios_cola/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get agenda_envios_cola by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update agenda_envios_cola by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_agenda_envios_cola"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch agenda_envios_cola by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_agenda_envios_cola_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete agenda_envios_cola by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/agenda_franjas": {
       "get": {
         "tags": [
@@ -20758,6 +20983,231 @@
         }
       }
     },
+    "/api/v1/docu_auditoria": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List docu_auditoria",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_docu_auditoria"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create docu_auditoria",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_docu_auditoria_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/docu_auditoria/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get docu_auditoria by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update docu_auditoria by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_docu_auditoria"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch docu_auditoria by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_docu_auditoria_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete docu_auditoria by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/document_pages": {
       "get": {
         "tags": [
@@ -25621,6 +26071,231 @@
         }
       }
     },
+    "/api/v1/gp_avisos_equipos": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List gp_avisos_equipos",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_gp_avisos_equipos"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create gp_avisos_equipos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_gp_avisos_equipos_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/gp_avisos_equipos/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get gp_avisos_equipos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update gp_avisos_equipos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_gp_avisos_equipos"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch gp_avisos_equipos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_gp_avisos_equipos_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete gp_avisos_equipos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/gp_avisos_historial": {
       "get": {
         "tags": [
@@ -25826,6 +26501,456 @@
           }
         ],
         "summary": "Delete gp_avisos_historial by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/gp_avisos_pcs": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List gp_avisos_pcs",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_gp_avisos_pcs"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create gp_avisos_pcs",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_gp_avisos_pcs_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/gp_avisos_pcs/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get gp_avisos_pcs by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update gp_avisos_pcs by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_gp_avisos_pcs"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch gp_avisos_pcs by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_gp_avisos_pcs_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete gp_avisos_pcs by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/gp_avisos_programados": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List gp_avisos_programados",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_gp_avisos_programados"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create gp_avisos_programados",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_gp_avisos_programados_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/gp_avisos_programados/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get gp_avisos_programados by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update gp_avisos_programados by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_gp_avisos_programados"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch gp_avisos_programados by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_gp_avisos_programados_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete gp_avisos_programados by id",
         "parameters": [
           {
             "name": "id",
@@ -40901,6 +42026,231 @@
           }
         ],
         "summary": "Delete papcolpo by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/pcs_visitas": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List pcs_visitas",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_pcs_visitas"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create pcs_visitas",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_pcs_visitas_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/pcs_visitas/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get pcs_visitas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update pcs_visitas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_pcs_visitas"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch pcs_visitas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_pcs_visitas_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete pcs_visitas by id",
         "parameters": [
           {
             "name": "id",
@@ -61368,6 +62718,245 @@
           }
         }
       },
+      "Table_agenda_envios_cola": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "habilitacion_id": {
+            "type": "number"
+          },
+          "agenda_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "prueba_destino": {
+            "type": "string",
+            "nullable": true
+          },
+          "celular": {
+            "type": "string",
+            "nullable": true
+          },
+          "url_usada": {
+            "type": "string",
+            "nullable": true
+          },
+          "toma": {
+            "type": "string",
+            "nullable": true
+          },
+          "pc": {
+            "type": "string",
+            "nullable": true
+          },
+          "detalle": {
+            "type": "string",
+            "nullable": true
+          },
+          "intentos": {
+            "type": "number"
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tomado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "terminado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "sin_leer": {
+            "type": "number",
+            "nullable": true
+          },
+          "sin_leer_json": {
+            "type": "string",
+            "nullable": true
+          },
+          "forzar": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "habilitacion_id",
+          "agenda_id",
+          "dni"
+        ]
+      },
+      "Table_agenda_envios_cola_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "habilitacion_id": {
+            "type": "number"
+          },
+          "agenda_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "prueba_destino": {
+            "type": "string",
+            "nullable": true
+          },
+          "celular": {
+            "type": "string",
+            "nullable": true
+          },
+          "url_usada": {
+            "type": "string",
+            "nullable": true
+          },
+          "toma": {
+            "type": "string",
+            "nullable": true
+          },
+          "pc": {
+            "type": "string",
+            "nullable": true
+          },
+          "detalle": {
+            "type": "string",
+            "nullable": true
+          },
+          "intentos": {
+            "type": "number"
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tomado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "terminado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "sin_leer": {
+            "type": "number",
+            "nullable": true
+          },
+          "sin_leer_json": {
+            "type": "string",
+            "nullable": true
+          },
+          "forzar": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "habilitacion_id",
+          "agenda_id",
+          "dni"
+        ]
+      },
+      "Table_agenda_envios_cola_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "habilitacion_id": {
+            "type": "number"
+          },
+          "agenda_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "prueba_destino": {
+            "type": "string",
+            "nullable": true
+          },
+          "celular": {
+            "type": "string",
+            "nullable": true
+          },
+          "url_usada": {
+            "type": "string",
+            "nullable": true
+          },
+          "toma": {
+            "type": "string",
+            "nullable": true
+          },
+          "pc": {
+            "type": "string",
+            "nullable": true
+          },
+          "detalle": {
+            "type": "string",
+            "nullable": true
+          },
+          "intentos": {
+            "type": "number"
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tomado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "terminado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "sin_leer": {
+            "type": "number",
+            "nullable": true
+          },
+          "sin_leer_json": {
+            "type": "string",
+            "nullable": true
+          },
+          "forzar": {
+            "type": "number"
+          }
+        }
+      },
       "Table_agenda_franjas": {
         "type": "object",
         "additionalProperties": false,
@@ -61525,6 +63114,18 @@
           "motivo": {
             "type": "string",
             "nullable": true
+          },
+          "enviado_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "enviado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "envios": {
+            "type": "number"
           }
         },
         "required": [
@@ -61592,6 +63193,18 @@
           "motivo": {
             "type": "string",
             "nullable": true
+          },
+          "enviado_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "enviado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "envios": {
+            "type": "number"
           }
         },
         "required": [
@@ -61661,6 +63274,18 @@
           "motivo": {
             "type": "string",
             "nullable": true
+          },
+          "enviado_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "enviado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "envios": {
+            "type": "number"
           }
         }
       },
@@ -75254,6 +76879,152 @@
           }
         }
       },
+      "Table_docu_auditoria": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "ruta": {
+            "type": "string"
+          },
+          "documento": {
+            "type": "string",
+            "nullable": true
+          },
+          "origen": {
+            "type": "string"
+          },
+          "usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "pc": {
+            "type": "string",
+            "nullable": true
+          },
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "robot": {
+            "type": "string",
+            "nullable": true
+          },
+          "detalle": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "dni",
+          "ruta",
+          "origen"
+        ]
+      },
+      "Table_docu_auditoria_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "ruta": {
+            "type": "string"
+          },
+          "documento": {
+            "type": "string",
+            "nullable": true
+          },
+          "origen": {
+            "type": "string"
+          },
+          "usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "pc": {
+            "type": "string",
+            "nullable": true
+          },
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "robot": {
+            "type": "string",
+            "nullable": true
+          },
+          "detalle": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "dni",
+          "ruta",
+          "origen"
+        ]
+      },
+      "Table_docu_auditoria_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "ruta": {
+            "type": "string"
+          },
+          "documento": {
+            "type": "string",
+            "nullable": true
+          },
+          "origen": {
+            "type": "string"
+          },
+          "usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "pc": {
+            "type": "string",
+            "nullable": true
+          },
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "robot": {
+            "type": "string",
+            "nullable": true
+          },
+          "detalle": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "Table_document_pages": {
         "type": "object",
         "additionalProperties": false,
@@ -78827,6 +80598,27 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "auto_activo": {
+            "type": "number"
+          },
+          "auto_hora": {
+            "type": "string"
+          },
+          "auto_pc": {
+            "type": "string",
+            "nullable": true
+          },
+          "auto_modo": {
+            "type": "string"
+          },
+          "auto_solo_habiles": {
+            "type": "number"
+          },
+          "auto_ultimo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "required": [
@@ -78847,6 +80639,27 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "auto_activo": {
+            "type": "number"
+          },
+          "auto_hora": {
+            "type": "string"
+          },
+          "auto_pc": {
+            "type": "string",
+            "nullable": true
+          },
+          "auto_modo": {
+            "type": "string"
+          },
+          "auto_solo_habiles": {
+            "type": "number"
+          },
+          "auto_ultimo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "required": [
@@ -78865,6 +80678,136 @@
             "type": "string"
           },
           "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "auto_activo": {
+            "type": "number"
+          },
+          "auto_hora": {
+            "type": "string"
+          },
+          "auto_pc": {
+            "type": "string",
+            "nullable": true
+          },
+          "auto_modo": {
+            "type": "string"
+          },
+          "auto_solo_habiles": {
+            "type": "number"
+          },
+          "auto_ultimo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "Table_gp_avisos_equipos": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "usuario_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "ext_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "ultima_senal": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "ultima_senal",
+          "creado_at"
+        ]
+      },
+      "Table_gp_avisos_equipos_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "usuario_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "ext_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "ultima_senal": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "ultima_senal",
+          "creado_at"
+        ]
+      },
+      "Table_gp_avisos_equipos_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "usuario_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "ext_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "ultima_senal": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "creado_at": {
             "type": "string",
             "format": "date-time"
           }
@@ -79013,6 +80956,253 @@
           "at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "Table_gp_avisos_pcs": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string"
+          },
+          "ultima_senal": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ext_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "usuario_email": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "nombre",
+          "ultima_senal"
+        ]
+      },
+      "Table_gp_avisos_pcs_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string"
+          },
+          "ultima_senal": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ext_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "usuario_email": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "nombre",
+          "ultima_senal"
+        ]
+      },
+      "Table_gp_avisos_pcs_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string"
+          },
+          "ultima_senal": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ext_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "usuario_email": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "Table_gp_avisos_programados": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "aviso_ids": {
+            "type": "string"
+          },
+          "telefonos": {
+            "type": "string",
+            "nullable": true
+          },
+          "cuando": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pc": {
+            "type": "string"
+          },
+          "modo": {
+            "type": "string"
+          },
+          "mensaje": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "creado_por": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tomado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "terminado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "aviso_ids",
+          "cuando",
+          "pc",
+          "modo",
+          "mensaje",
+          "creado_at"
+        ]
+      },
+      "Table_gp_avisos_programados_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "aviso_ids": {
+            "type": "string"
+          },
+          "telefonos": {
+            "type": "string",
+            "nullable": true
+          },
+          "cuando": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pc": {
+            "type": "string"
+          },
+          "modo": {
+            "type": "string"
+          },
+          "mensaje": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "creado_por": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tomado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "terminado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "aviso_ids",
+          "cuando",
+          "pc",
+          "modo",
+          "mensaje",
+          "creado_at"
+        ]
+      },
+      "Table_gp_avisos_programados_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "aviso_ids": {
+            "type": "string"
+          },
+          "telefonos": {
+            "type": "string",
+            "nullable": true
+          },
+          "cuando": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pc": {
+            "type": "string"
+          },
+          "modo": {
+            "type": "string"
+          },
+          "mensaje": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "creado_por": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tomado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "terminado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -91304,6 +93494,96 @@
           "deleted_by": {
             "type": "number",
             "nullable": true
+          }
+        }
+      },
+      "Table_pcs_visitas": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ip": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "user_agent": {
+            "type": "string",
+            "nullable": true
+          },
+          "primer_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ultimo_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pedidos": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "ip"
+        ]
+      },
+      "Table_pcs_visitas_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ip": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "user_agent": {
+            "type": "string",
+            "nullable": true
+          },
+          "primer_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ultimo_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pedidos": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "ip"
+        ]
+      },
+      "Table_pcs_visitas_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ip": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "user_agent": {
+            "type": "string",
+            "nullable": true
+          },
+          "primer_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ultimo_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pedidos": {
+            "type": "number"
           }
         }
       },

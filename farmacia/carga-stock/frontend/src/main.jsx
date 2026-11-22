@@ -200,6 +200,7 @@ function apiClient(token) {
       return request('/ordenes-compra/subir', { method: 'POST', body });
     },
     ocImportarCarpeta: (carpetaPdf) => request('/ordenes-compra/importar-carpeta', { method: 'POST', body: JSON.stringify({ carpetaPdf }) }),
+    ocConfirmarEscaneo: (payload) => request('/ordenes-compra/confirmar-escaneo', { method: 'POST', body: JSON.stringify(payload) }),
     ocEditarRenglon: (id, payload) => request(`/ordenes-compra/renglones/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
     ocAgregarEntrega: (renglonId, payload) => request(`/ordenes-compra/renglones/${renglonId}/entregas`, { method: 'POST', body: JSON.stringify(payload) }),
     ocEliminarEntrega: (entregaId) => request(`/ordenes-compra/entregas/${entregaId}`, { method: 'DELETE' }),
@@ -2745,8 +2746,116 @@ const OC_ESTADOS_ARCHIVO = {
   nuevo: { label: 'Nueva', className: 'listo' },
   ya_cargado: { label: 'Ya estaba', className: 'cargado' },
   duplicado: { label: 'Duplicado', className: 'iniciado' },
+  revisar: { label: 'Escaneo: confirmar', className: 'iniciado' },
   error: { label: 'Error', className: 'error' }
 };
+
+// O.C. escaneada leida por OCR: se muestra lo leido para que el usuario corrija numero y cantidades
+// y confirme. Nada se guarda hasta tocar "Confirmar carga".
+function ConfirmarEscaneoOc({ client, item, onListo, onCerrar }) {
+  const b = item.borrador;
+  const [oc, setOc] = useState(b.oc || '');
+  const [proveedor, setProveedor] = useState(b.proveedor || '');
+  const [fecha, setFecha] = useState(b.fecha || '');
+  const [vence, setVence] = useState(b.vence || '');
+  const [renglones, setRenglones] = useState(() => (b.renglones || []).map((r, i) => ({
+    key: i,
+    renglon: r.renglon ?? '',
+    codigo: r.codigo || '',
+    descripcion: r.descripcion || '',
+    cantidad: r.cantidad ?? '',
+    unitario: r.unitario ?? '',
+    total: r.total ?? ''
+  })));
+  const [verTexto, setVerTexto] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+
+  function cambiar(key, campo, valor) {
+    setRenglones((prev) => prev.map((r) => (r.key === key ? { ...r, [campo]: valor } : r)));
+  }
+  function agregar() {
+    setRenglones((prev) => [...prev, { key: Date.now(), renglon: '', codigo: '', descripcion: '', cantidad: '', unitario: '', total: '' }]);
+  }
+  function quitar(key) {
+    setRenglones((prev) => prev.filter((r) => r.key !== key));
+  }
+
+  async function confirmar() {
+    const lista = renglones.map((r) => `  Renglón ${r.renglon || '?'} · ${r.codigo || '?'} · cantidad ${r.cantidad || '?'}`).join('\n');
+    if (!window.confirm(`¿Confirmás la carga de la O.C. ${oc}?\n\n${lista}\n\nRevisá que el número y las cantidades sean los del papel.`)) return;
+    setGuardando(true);
+    setError('');
+    try {
+      const { data } = await client.ocConfirmarEscaneo({
+        hash: item.hash,
+        oc, proveedor, fecha, vence, procedimiento: b.procedimiento || '',
+        renglones: renglones.map(({ key, ...r }) => r)
+      });
+      onListo(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return createPortal(
+    <div className="folder-overlay">
+      <div className="folder-picker oc-escaneo">
+        <div className="section-head">
+          <h2>Confirmar O.C. escaneada</h2>
+          <button type="button" className="ghost small" onClick={onCerrar} disabled={guardando}>Cancelar</button>
+        </div>
+        <p className="oc-help" style={{ marginTop: 0 }}>
+          <strong>{item.name}</strong> no trae texto: se leyó con OCR (confianza {b.confianza}%). Controlá contra el papel
+          el <strong>N° de O.C.</strong> y las <strong>cantidades</strong> de cada renglón antes de confirmar.
+        </p>
+        {(b.avisos || []).map((a) => <div key={a} className="alert">{a}</div>)}
+        {error ? <div className="alert">{error}</div> : null}
+        <div className="oc-escaneo-body">
+          <div className="oc-escaneo-cab">
+            <label>N° de O.C. <input value={oc} onChange={(e) => setOc(e.target.value)} placeholder="500/2026" className="oc-escaneo-nro" /></label>
+            <label>Proveedor <input value={proveedor} onChange={(e) => setProveedor(e.target.value)} /></label>
+            <label>Fecha O.C. <input value={fecha} onChange={(e) => setFecha(e.target.value)} placeholder="DD/MM/AAAA" /></label>
+            <label>Vence <input value={vence} onChange={(e) => setVence(e.target.value)} placeholder="DD/MM/AAAA" /></label>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Renglón</th><th>Código</th><th>Descripción</th><th>Cantidad</th><th>Unitario</th><th>Total</th><th /></tr>
+            </thead>
+            <tbody>
+              {renglones.map((r) => (
+                <tr key={r.key}>
+                  <td><input className="oc-escaneo-num" value={r.renglon} onChange={(e) => cambiar(r.key, 'renglon', e.target.value)} /></td>
+                  <td><input className="oc-escaneo-cod" value={r.codigo} onChange={(e) => cambiar(r.key, 'codigo', e.target.value)} /></td>
+                  <td><input className="oc-escaneo-desc" value={r.descripcion} onChange={(e) => cambiar(r.key, 'descripcion', e.target.value)} /></td>
+                  <td><input className="oc-escaneo-num oc-escaneo-cant" value={r.cantidad} onChange={(e) => cambiar(r.key, 'cantidad', e.target.value)} /></td>
+                  <td><input className="oc-escaneo-imp" value={r.unitario} onChange={(e) => cambiar(r.key, 'unitario', e.target.value)} /></td>
+                  <td><input className="oc-escaneo-imp" value={r.total} onChange={(e) => cambiar(r.key, 'total', e.target.value)} /></td>
+                  <td><button type="button" className="ghost small" onClick={() => quitar(r.key)} title="Quitar renglón">✕</button></td>
+                </tr>
+              ))}
+              {!renglones.length ? <tr><td colSpan={7} className="empty">Sin renglones: agregalos a mano</td></tr> : null}
+            </tbody>
+          </table>
+          <button type="button" className="ghost small" onClick={agregar}>+ Agregar renglón</button>
+          <button type="button" className="ghost small" onClick={() => setVerTexto((v) => !v)} style={{ marginLeft: 8 }}>
+            {verTexto ? 'Ocultar' : 'Ver'} texto leído por OCR
+          </button>
+          {verTexto ? <pre className="oc-escaneo-texto">{b.texto}</pre> : null}
+        </div>
+        <div className="folder-actions">
+          <span />
+          <button type="button" className="script-button" onClick={confirmar} disabled={guardando || !oc || !renglones.length}>
+            <Check size={18} /> {guardando ? 'Guardando...' : 'Confirmar carga'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 function descargarBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -3558,6 +3667,7 @@ function OrdenesCompraPage({ token }) {
   const [destino, setDestino] = useState('pc');
   const [picker, setPicker] = useState(null);
   const [importacion, setImportacion] = useState(null);
+  const [escaneo, setEscaneo] = useState(null); // resultado 'revisar' que se esta confirmando
   const [expandido, setExpandido] = useState(null);
   const [search, setSearch] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
@@ -3616,6 +3726,7 @@ function OrdenesCompraPage({ token }) {
     if (data.yaCargados) partes.push(`${data.yaCargados} ya estaban cargadas`);
     if (data.duplicados) partes.push(`${data.duplicados} duplicadas descartadas`);
     if (data.errores) partes.push(`${data.errores} con error`);
+    if (data.aRevisar) partes.push(`${data.aRevisar} escaneadas para confirmar (tocá «Revisar y confirmar»)`);
     return `Listo: ${partes.join(', ')}.`;
   }
 
@@ -3818,13 +3929,39 @@ function OrdenesCompraPage({ token }) {
                     <td>{r.name}</td>
                     <td><span className={`status ${est.className}`}>{est.label}</span></td>
                     <td className="code">{r.oc || '-'}</td>
-                    <td>{r.estado === 'nuevo' ? `${r.proveedor} · ${r.renglones} renglones · ${formatPesos(r.total)}` : r.detalle}</td>
+                    <td>
+                      {r.estado === 'nuevo' ? `${r.proveedor} · ${r.renglones} renglones · ${formatPesos(r.total)}` : r.detalle}
+                      {r.estado === 'revisar' ? (
+                        <button type="button" className="script-button small" style={{ marginLeft: 8 }} onClick={() => setEscaneo(r)}>
+                          <FileSearch size={16} /> Revisar y confirmar
+                        </button>
+                      ) : null}
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </section>
+      ) : null}
+
+      {escaneo ? (
+        <ConfirmarEscaneoOc
+          client={client}
+          item={escaneo}
+          onCerrar={() => setEscaneo(null)}
+          onListo={async (data) => {
+            setEscaneo(null);
+            setImportacion((prev) => prev && {
+              ...prev,
+              resultados: prev.resultados.map((x) => (x.hash === escaneo.hash ? { ...x, ...data } : x))
+            });
+            await cargarOrdenes().catch(() => {});
+            setMessage(data.estado === 'nuevo'
+              ? `O.C. ${data.oc} cargada desde el escaneo (${data.renglones} renglones).`
+              : data.detalle);
+          }}
+        />
       ) : null}
 
       {mostrarAlertaVto ? <AlertaVencimientos grupos={porVencer} onVer={verOrdenVto} onCerrar={() => setAlertaVto('cerrada')} /> : null}
@@ -4651,10 +4788,12 @@ function motivosComparacion(anio, semCorto) {
         texto: `En el PDF ${sig} está la misma droga, pero en otra concentración o presentación. Revisá si la reemplaza o si faltó pedirla.` },
       { k: 'ceroAMano', tono: 'revisado', label: `En 0 a mano para ${sig}`, corto: 'Lo pusiste vos',
         texto: `El PDF ${sig} lo pide, pero en «Pedido ${semCorto} sem. ${sig}» lo pusiste en 0 a mano. Borrá el 0 (dejalo vacío) para volver a lo del PDF.` },
-      { k: 'revisadoNo', tono: 'revisado', label: 'Revisado: no es la misma droga', corto: `No se pide en ${sig}`,
-        texto: `Se revisó y la droga que está en el PDF ${sig} NO es la misma («No es la misma droga»). Queda como no pedida en ${sig}; si hace falta, cargá la cantidad en «Pedido ${semCorto} sem. ${sig}». Se deshace desde «Códigos equivalentes».` },
+      { k: 'revisadoNo', tono: 'revisado', label: 'Revisado: no es la misma droga', corto: `Lo de ${sig} lo cargaste a mano`,
+        texto: `Se revisó y la droga que está en el PDF ${sig} NO es la misma («No es la misma droga»). Esta presentación no está en el PDF ${sig}: la cantidad de ${sig} es la que cargaste a mano en «Pedido ${semCorto} sem. ${sig}». Se deshace desde «Códigos equivalentes».` },
       { k: 'sinNada', tono: 'alerta', label: `No hay nada en ${sig}`, corto: 'Revisar',
-        texto: `Esta droga no está en ningún PDF ${sig} ni en la comunicación del Ministerio. Puede faltar un PDF (por ejemplo el de psicofármacos y estupefacientes) o quedó afuera del pedido.` }
+        texto: `Esta droga no está en ningún PDF ${sig} ni en la comunicación del Ministerio. Puede faltar un PDF (por ejemplo el de psicofármacos y estupefacientes) o quedó afuera del pedido.` },
+      { k: 'noAgregar', tono: 'revisado', label: `No se agrega en ${sig}`, corto: 'Lo decidiste vos',
+        texto: `No está en ningún PDF ${sig} y decidiste no agregarlo al requerimiento ${sig} (botón «No agregar al requerimiento ${sig}»). Queda en 0 para ${sig}. Se deshace con «Deshacer» en el renglón.` }
     ],
     soloSig: [
       { k: 'reemplaza', tono: 'ok', label: `Código nuevo de algo pedido en ${anio}`, corto: 'No es una diferencia real',
@@ -4715,6 +4854,9 @@ function columnasCargaManual(anio, semestre) {
       title: 'Fecha de vencimiento más cercana (desde hoy) de lo que hay en stock, según la última descarga de Vencimientos de Farmacia MS.' },
     { key: 'proxVtoCant', grupo: 'Vencimientos', label: 'Unidades que vencen en esa fecha', get: (d) => num(d.proxVtoCant),
       title: 'Cuántas unidades en stock vencen en la fecha de «Próximo vencimiento».' },
+    { key: 'vtosStock', grupo: 'Vencimientos', label: 'Vencimientos en stock', tipo: 'texto',
+      get: (d) => (d.vtos?.length ? d.vtos.map((x) => `${fmtFechaAr(x.vto)}: ${Number(x.cant).toLocaleString('es-AR')}`).join('\n') : null),
+      title: 'Cada fecha de vencimiento de lo que hay en stock (desde hoy) y cuántas unidades vencen en esa fecha, según la última descarga de Vencimientos de Farmacia MS.' },
     { key: 'ocPedida', grupo: 'Compras', label: `Comprado (O.C.) ${sem} ${anio}`, get: (d) => num(d.ocPedida),
       title: `Unidades pedidas en las órdenes de compra del ${sem} ${anio}, según la planilla de O.C. de Drive. ${EQUIV_TXT}` },
     { key: 'ocEntregada', grupo: 'Compras', label: `Entregado (O.C.) ${sem} ${anio}`, get: (d) => num(d.ocEntregada),
@@ -4731,9 +4873,9 @@ function columnasCargaManual(anio, semestre) {
       title: 'Cálculo: cantidad cargada × justiprecio.' }
   ];
 }
-const COLUMNAS_MANUAL_DEFAULT = ['consumoSemAnt3', 'consumoSemAnt2', 'consumoSemAnt', 'consumoSem', 'stockActual', 'difConsumo'];
+const COLUMNAS_MANUAL_DEFAULT = ['consumoSemAnt3', 'consumoSemAnt2', 'consumoSemAnt', 'consumoSem', 'stockActual', 'vtosStock', 'difConsumo'];
 // Columnas que se agregaron despues: se muestran una vez aunque ya haya una eleccion guardada
-const COLUMNAS_MANUAL_NUEVAS = [['v2', ['consumoSemAnt3', 'consumoSemAnt2', 'consumoSemAnt']]];
+const COLUMNAS_MANUAL_NUEVAS = [['v2', ['consumoSemAnt3', 'consumoSemAnt2', 'consumoSemAnt']], ['v3', ['vtosStock']]];
 // Columnas fijas que se pueden ocultar desde el boton Columnas
 function basicasReqCodigo(ciclo) {
   return [
@@ -5292,6 +5434,48 @@ function CargaRequerimientoManualPage({ token, anio }) {
   const gruposCols = useMemo(() => Array.from(new Set(todasCols.map((c) => c.grupo))), [todasCols]);
   const [ocultasMan, setOcultasMan] = useColumnasOcultas('reqManualOcultas');
   const verMan = (k) => !ocultasMan.includes(k);
+  // Ancho de cada columna: se cambia arrastrando el borde derecho del titulo (doble clic = vuelve al automatico).
+  // El texto se parte en lineas y el renglon se hace mas alto. Queda guardado en este navegador.
+  const [anchosMan, setAnchosManState] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('anchosCargaManual') || '{}'); } catch { return {}; }
+  });
+  const setAnchosMan = (a) => {
+    setAnchosManState(a);
+    try { localStorage.setItem('anchosCargaManual', JSON.stringify(a)); } catch { /* sin localStorage */ }
+  };
+  const tablaManRef = useRef(null);
+  function empezarAncho(e, key) {
+    e.preventDefault();
+    e.stopPropagation();
+    // Al primer arrastre se fijan todas las columnas con el ancho que tienen ahora, asi no saltan las demas
+    const base = { ...anchosMan };
+    for (const th of tablaManRef.current?.querySelectorAll('thead th[data-col]') || []) {
+      if (base[th.dataset.col] == null) base[th.dataset.col] = Math.round(th.getBoundingClientRect().width);
+    }
+    const x0 = e.clientX;
+    const w0 = base[key] || 80;
+    let ultimo = base;
+    const mover = (ev) => { ultimo = { ...base, [key]: Math.max(36, Math.round(w0 + ev.clientX - x0)) }; setAnchosManState(ultimo); };
+    const soltar = () => {
+      window.removeEventListener('mousemove', mover);
+      window.removeEventListener('mouseup', soltar);
+      document.body.style.cursor = '';
+      setAnchosMan(ultimo);
+    };
+    document.body.style.cursor = 'col-resize';
+    window.addEventListener('mousemove', mover);
+    window.addEventListener('mouseup', soltar);
+  }
+  const anchoFijo = Object.keys(anchosMan).length > 0;
+  const thAncho = (key, style = {}) => ({
+    'data-col': key,
+    style: { ...style, ...(anchosMan[key] != null ? { width: anchosMan[key], minWidth: 0, maxWidth: anchosMan[key] } : {}) }
+  });
+  const tirador = (key) => (
+    <span className="col-tirador" onMouseDown={(e) => empezarAncho(e, key)} onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => { e.stopPropagation(); const a = { ...anchosMan }; delete a[key]; setAnchosMan(a); }}
+      title="Arrastrá para cambiar el ancho de la columna. Doble clic: ancho automático." />
+  );
 
   async function cargarFilas() {
     const r = await client.reqManual(anio);
@@ -5354,6 +5538,9 @@ function CargaRequerimientoManualPage({ token, anio }) {
     if (!k) return true;
     const sig = pedidoSigDe(f) || 0; // PDF + carga manual del año siguiente: al cargarle una cantidad sale de la lista
     const este = Number(f.cantidad) || 0;
+    // Con sugerencias del PDF (otra presentacion / cambio de codigo) sigue en la lista hasta que se ate
+    const mo = comp.porCodigo?.[f.codigo];
+    if (k === 'soloEste' && este > 0 && mo?.lado === 'soloEste' && mo.codigos?.length) return true;
     return k === 'soloSig' ? sig > 0 && este === 0 : este > 0 && sig === 0;
   };
   const semCorto = semestre === 1 ? '1er' : '2do';
@@ -5432,7 +5619,7 @@ function CargaRequerimientoManualPage({ token, anio }) {
   // Cuantos renglones (de las dos pestañas) caen en cada filtro de comparacion
   const cuentaComp = useMemo(() => {
     return { soloSig: filas.filter((f) => pasaComp(f, 'soloSig')).length, soloEste: filas.filter((f) => pasaComp(f, 'soloEste')).length };
-  }, [filas, pestana, colData, semestre]);
+  }, [filas, pestana, colData, semestre, comp]);
 
   // Guarda la cantidad escrita en la tabla (si cambio)
   async function guardarCantidadFila(f) {
@@ -5536,7 +5723,7 @@ ${e.message}`);
     if (resp == null) return;
     const cant = Number(String(resp).replace(',', '.'));
     if (String(resp).trim() === '' || !Number.isFinite(cant) || cant < 0) { window.alert('Cantidad inválida: no se marcó nada.'); return; }
-    setUniendo(f.codigo);
+    setUniendo(`${f.codigo}:noEs`); // no muestra «Atando…» en el otro boton
     try {
       await client.equivDescartar({ codigo: f.codigo, con: c.codigo, revisado: true });
       const llevar = true;
@@ -5550,6 +5737,30 @@ ${e.message}`);
     } catch (e) {
       setMessage(`No se pudo marcar: ${e.message}`);
       window.alert(`No se pudo marcar.
+
+${e.message}`);
+    } finally {
+      setUniendo('');
+    }
+  }
+  // «No agregar al requerimiento»: sin nada en el PDF del año siguiente, se deja en 0 a mano para ese año
+  async function noAgregar(f, deshacer) {
+    setUniendo(`${f.codigo}:noAg`);
+    try {
+      if (deshacer) {
+        const id = (colData.datos[f.codigo] || {})[`manSigSem${semestre}Id`];
+        if (id) await client.reqManualEliminar(id);
+      } else {
+        await client.reqManualGuardar({ anio: anio + 1, semestre, codigo: f.codigo, droga: f.droga, descripcion: f.descripcion, cantidad: 0 });
+      }
+      if (filtroComp) setQuedanVista((x) => new Set(x).add(f.id));
+      const [r, cols] = await Promise.all([client.reqManualComparacion(anio, semestre), client.reqManualColumnas(anio, semestre)]);
+      setColData(cols);
+      setComp({ ...r, listo: true });
+      setMessage(deshacer ? `${f.descripcion || f.droga}: vuelve a «No hay nada en ${anio + 1}».` : `${f.descripcion || f.droga}: no se agrega al requerimiento ${anio + 1} (queda en 0).`);
+    } catch (e) {
+      setMessage(`No se pudo guardar: ${e.message}`);
+      window.alert(`No se pudo guardar.
 
 ${e.message}`);
     } finally {
@@ -5648,6 +5859,20 @@ ${e.message}`);
       ? `-${filtroComp === 'soloEste' ? `pedido${anio}-no${anio + 1}` : `pedido${anio + 1}-no${anio}`}${filtroMotivo ? `-${filtroMotivo}` : ''}`
       : `-${pestana === 'controlados' ? 'controlados' : 'por-controlar'}`;
     descargarLibro(wb, `requerimiento-${anio}-sem${semestre}${sufijo}`);
+  }
+  // Excel limpio con lo cargado a mano para el año siguiente (una fila por código, una sola columna de cantidad)
+  async function exportarExcelSig() {
+    try {
+      const r = await client.reqManual(anio + 1);
+      const sig = (r.data || []).filter((f) => Number(f.semestre) === semestre)
+        .sort((a, b) => String(a.descripcion || a.droga).localeCompare(String(b.descripcion || b.droga), 'es'));
+      if (!sig.length) { setMessage(`No hay nada cargado para el ${semCorto} semestre ${anio + 1}.`); return; }
+      const aoa = [['Código', 'Droga', 'Descripción', `Cantidad ${semCorto} sem. ${anio + 1}`],
+        ...sig.map((f) => [f.codigo, f.droga || '', f.descripcion || '', Number(f.cantidad)])];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), `${semCorto} sem ${anio + 1}`);
+      descargarLibro(wb, `requerimiento-${anio + 1}-sem${semestre}-cargado`);
+    } catch (e) { setMessage(e.message); }
   }
   const cuentaSem = (s) => filasTodas.filter((f) => Number(f.semestre) === s).length;
   const cargados = useMemo(() => new Map(filas.map((f) => [f.codigo, f])), [filas]);
@@ -5854,7 +6079,8 @@ ${e.message}`);
         <button type="button" className={`ghost small ${panelCols ? 'active' : ''}`} onClick={() => setPanelCols(!panelCols)}>
           <Sigma size={15} /> Columnas ({cols.length}){ocultasMan.length ? ` · ${ocultasMan.length} ocultas` : ''}
         </button>
-        <button type="button" className="ghost small" onClick={exportarExcel} disabled={!filasVista.length} title="Exporta los renglones que muestra la tabla con los filtros aplicados (todas las páginas)"><Download size={15} /> Exportar a Excel ({filasVista.length})</button>
+        <button type="button" className="ghost small" onClick={exportarExcel} disabled={!filasVista.length} title="Baja un Excel listo para imprimir en hoja Legal apaisada (todas las columnas en una página de ancho) con los renglones que muestra la tabla y los filtros aplicados (todas las páginas)"><Download size={15} /> Excel Legal apaisado ({filasVista.length})</button>
+        <button type="button" className="ghost small" onClick={exportarExcelSig} style={{ border: '1px solid #7c3aed', color: '#5b21b6' }} title={`Baja un Excel solo con lo cargado para el ${semCorto} semestre ${anio + 1}: código, droga, descripción y cantidad`}><Download size={15} /> Excel cargado {semCorto} sem. {anio + 1}</button>
         <button type="button" className="ghost small" onClick={imprimir} disabled={!filasVista.length} title="Imprime los renglones que muestra la tabla con los filtros aplicados (todas las páginas), en hoja oficio apaisada"><Printer size={15} /> Imprimir ({filasVista.length})</button>
         <input value={filtroTabla} onChange={(e) => setFiltroTabla(e.target.value)} placeholder="Filtrar tabla: código, droga o expediente" style={{ minWidth: 220 }} />
         <select value={filtroFuente} onChange={(e) => setFiltroFuente(e.target.value)} style={{ width: 'auto', flex: '0 1 auto', maxWidth: 420 }} title="Formulario de requerimiento / expediente en papel donde figura el código">
@@ -5994,21 +6220,34 @@ ${e.message}`);
 
       {barraPaginas('arriba')}
 
-      <section className="table-wrap" style={{ marginTop: 8 }}>
-        <table className="carga-manual">
+      <section className="table-wrap carga-manual-wrap" style={{ marginTop: 8 }}>
+        {anchoFijo ? (
+          <div style={{ padding: '4px 8px', fontSize: 12, color: '#5b6b76', background: '#f8fafb', borderBottom: '1px solid #e2e8ed' }}>
+            Anchos de columna cambiados a mano.{' '}
+            <button type="button" className="ghost compact" style={{ fontSize: 12, width: 'auto', height: 'auto', padding: '1px 8px' }} onClick={() => setAnchosMan({})}>Volver a los anchos automáticos</button>
+          </div>
+        ) : null}
+        <table className={`carga-manual${anchoFijo ? ' anchos-fijos' : ''}`} ref={tablaManRef}
+          style={anchoFijo ? {
+            tableLayout: 'fixed',
+            // Suma de las columnas que se ven (una que se prendio despues y no tiene ancho guardado: 100)
+            width: ['contr', 'codigo', ...['droga', 'descripcion', 'fuentes', 'cantidad'].filter(verMan),
+              ...(verMan('pedidoSig') ? ['pedidoSig', 'pedidoSigNueva'] : []), ...(filtroComp ? ['motivo'] : []),
+              ...cols.map((c) => c.key), ...(verMan('acciones') ? ['acciones'] : [])].reduce((a, k) => a + (anchosMan[k] ?? 100), 0)
+          } : undefined}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'center', width: 56 }} title="Controlado. Al tildar, el renglón pasa a la pestaña Controlados">Contr.</th>
-              <th title={BASICAS_CARGA_MANUAL[1].title}>Código</th>
-              {verMan('droga') ? <th title={BASICAS_CARGA_MANUAL[2].title}>Droga</th> : null}
-              {verMan('descripcion') ? <th title={BASICAS_CARGA_MANUAL[3].title}>Descripción</th> : null}
-              {verMan('fuentes') ? <th title="Formularios de requerimiento / expedientes en papel donde figura">Formulario / Exp.</th> : null}
-              {verMan('cantidad') ? <th style={{ textAlign: 'right' }} title={BASICAS_CARGA_MANUAL[5].title}>Cantidad {anio}</th> : null}
-              {verMan('pedidoSig') ? <th style={{ textAlign: 'right' }} title={`Lo pedido en los PDF de requerimiento del Ministerio para el ${semCorto} semestre ${anio + 1}. Naranja: pedido en ${anio + 1} y en 0 en ${anio}. Rojo: pedido en ${anio} y no en ${anio + 1}. ${EQUIV_TXT}`}>Pedido {semCorto} sem. {anio + 1}</th> : null}
-              {verMan('pedidoSig') ? <th style={{ textAlign: 'right', color: '#5b21b6' }} title={`Cantidad del ${semCorto} sem. ${anio + 1} de este producto cuando es una presentación nueva (no está en el PDF ${anio + 1}). Se carga sola al apretar «No es la misma droga».`}>Presentación nueva {semCorto} sem. {anio + 1}</th> : null}
-              {filtroComp ? <th style={{ minWidth: 220 }} title="Motivo probable de la diferencia entre los dos años y con qué se relacionó">Motivo</th> : null}
-              {cols.map((c) => <th key={c.key} style={{ textAlign: 'right' }} title={c.title || ''}>{c.label}</th>)}
-              {verMan('acciones') ? <th /> : null}
+              <th {...thAncho('contr', { textAlign: 'center', width: 56 })} title="Controlado. Al tildar, el renglón pasa a la pestaña Controlados">Contr.{tirador('contr')}</th>
+              <th {...thAncho('codigo')} title={BASICAS_CARGA_MANUAL[1].title}>Código{tirador('codigo')}</th>
+              {verMan('droga') ? <th {...thAncho('droga')} title={BASICAS_CARGA_MANUAL[2].title}>Droga{tirador('droga')}</th> : null}
+              {verMan('descripcion') ? <th {...thAncho('descripcion')} title={BASICAS_CARGA_MANUAL[3].title}>Descripción{tirador('descripcion')}</th> : null}
+              {verMan('fuentes') ? <th {...thAncho('fuentes')} title="Formularios de requerimiento / expedientes en papel donde figura">Formulario / Exp.{tirador('fuentes')}</th> : null}
+              {verMan('cantidad') ? <th {...thAncho('cantidad', { textAlign: 'right' })} title={BASICAS_CARGA_MANUAL[5].title}>Cantidad {anio}{tirador('cantidad')}</th> : null}
+              {verMan('pedidoSig') ? <th {...thAncho('pedidoSig', { textAlign: 'right' })} title={`Lo pedido en los PDF de requerimiento del Ministerio para el ${semCorto} semestre ${anio + 1}. Naranja: pedido en ${anio + 1} y en 0 en ${anio}. Rojo: pedido en ${anio} y no en ${anio + 1}. ${EQUIV_TXT}`}>Pedido {semCorto} sem. {anio + 1}{tirador('pedidoSig')}</th> : null}
+              {verMan('pedidoSig') ? <th {...thAncho('pedidoSigNueva', { textAlign: 'right', color: '#5b21b6' })} title={`Cantidad del ${semCorto} sem. ${anio + 1} de este producto cuando es una presentación nueva (no está en el PDF ${anio + 1}). Se carga sola al apretar «No es la misma droga».`}>Presentación nueva {semCorto} sem. {anio + 1}{tirador('pedidoSigNueva')}</th> : null}
+              {filtroComp ? <th {...thAncho('motivo', { minWidth: 190 })} title="Motivo probable de la diferencia entre los dos años y con qué se relacionó">Motivo{tirador('motivo')}</th> : null}
+              {cols.map((c) => <th key={c.key} {...thAncho(c.key, { textAlign: 'right' })} title={c.title || ''}>{c.label}{tirador(c.key)}</th>)}
+              {verMan('acciones') ? <th {...thAncho('acciones')}>{tirador('acciones')}</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -6103,7 +6342,7 @@ ${e.message}`);
                         if (pdf != null || !(mo?.motivo === 'otraConc' || mo?.motivo === 'revisadoNo') || !mo.codigos?.length) return null;
                         const total = mo.codigos.reduce((a, c) => a + c.cantidad, 0);
                         return (
-                          <div style={{ fontSize: 11, color: '#b54708', whiteSpace: 'normal', width: 170, textAlign: 'left', marginTop: 4, border: '1px dashed #e8b980', borderRadius: 4, padding: '2px 4px', background: '#fffaf2' }} title="Solo para mirar: lo que pide el PDF de la misma droga en otras presentaciones. No se suma a este renglón.">
+                          <div style={{ fontSize: 11, color: '#b54708', whiteSpace: 'normal', width: 150, textAlign: 'left', marginTop: 4, border: '1px dashed #e8b980', borderRadius: 4, padding: '2px 4px', background: '#fffaf2' }} title="Solo para mirar: lo que pide el PDF de la misma droga en otras presentaciones. No se suma a este renglón.">
                             <strong>En el PDF {anio + 1}</strong>, otras presentaciones de la droga:
                             {mo.codigos.map((c) => (
                               <div key={c.codigo} style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
@@ -6148,7 +6387,8 @@ ${e.message}`);
                         style={{ width: 84, textAlign: 'right', padding: '4px 6px', color: '#5b21b6', fontWeight: 700, borderColor: '#c4b5fd' }}
                       />
                       {quedanVista.has(f.id) && filtroComp && !pasaComp(f, filtroComp) ? <div style={{ fontSize: 11, color: '#fff', background: '#1d4ed8', borderRadius: 4, padding: '1px 4px', marginTop: 2 }} title="Ya no cumple este filtro: sale de la lista cuando cambies de filtro. No se ató nada.">guardado · sale de la lista</div> : null}
-                      {man != null ? <div style={{ fontSize: 11, color: '#fff', background: '#7c3aed', borderRadius: 4, padding: '1px 4px', marginTop: 2, whiteSpace: 'normal', maxWidth: 130 }} title={`Agregado a mano en esta pantalla: no está en ningún PDF de requerimiento ${anio + 1}.`}>agregado a mano · no está en el PDF {anio + 1}</div> : null}
+                      {moN?.motivo === 'noAgregar' ? <div style={{ fontSize: 11, color: '#fff', background: '#b42318', borderRadius: 4, padding: '1px 4px', marginTop: 2, whiteSpace: 'normal', maxWidth: 130 }} title={`Decidiste no agregarlo al requerimiento ${anio + 1}.`}>no se agrega en {anio + 1}</div>
+                        : man != null ? <div style={{ fontSize: 11, color: '#fff', background: '#7c3aed', borderRadius: 4, padding: '1px 4px', marginTop: 2, whiteSpace: 'normal', maxWidth: 130 }} title={`Agregado a mano en esta pantalla: no está en ningún PDF de requerimiento ${anio + 1}.`}>agregado a mano · no está en el PDF {anio + 1}</div> : null}
                     </td>
                   );
                 })() : null}
@@ -6199,7 +6439,7 @@ ${e.message}`);
                           })() : null}
                           {c.noEs ? <div style={{ marginTop: 4, color: '#5b21b6', fontWeight: 700 }}>Marcado: no es la misma droga</div> : <>
                           <button type="button" className="ghost compact" style={{ fontSize: 12, marginTop: 4, marginRight: 6, border: '1px solid #7c3aed', color: '#5b21b6', background: '#f5f2fe', whiteSpace: 'nowrap', width: 'auto', height: 'auto', padding: '4px 10px' }} disabled={!!uniendo} onClick={() => noEsMisma(f, c)}
-                            title="Marca que NO es la misma droga: no se vuelve a sugerir y el renglón queda como «Revisado: no se pide». No borra nada. Se deshace desde «Códigos equivalentes».">
+                            title="Marca que NO es la misma droga: te pide la cantidad de esta presentación para el año siguiente y queda como «Revisado: no es la misma droga». No borra nada. Se deshace desde «Códigos equivalentes».">
                             No es la misma droga
                           </button>
                           <button type="button" className="ghost compact" style={{ fontSize: 12, marginTop: 4, border: '1px solid #1f7a3a', color: '#1f7a3a', background: '#eef8f1', whiteSpace: 'nowrap', width: 'auto', height: 'auto', padding: '4px 10px' }} disabled={!!uniendo} onClick={() => unirConPdf(f, c)}
@@ -6209,12 +6449,27 @@ ${e.message}`);
                           </>}
                         </div>
                       )) : mo.rel ? <div style={{ color: '#3b4a55', marginTop: 3 }}>{mo.rel}</div> : null}
+                      {mo.motivo === 'sinNada' ? (
+                        <div><button type="button" className="ghost compact" style={{ fontSize: 12, marginTop: 4, border: '1px solid #b42318', color: '#b42318', background: '#fef3f2', whiteSpace: 'nowrap', width: 'auto', height: 'auto', padding: '4px 10px' }} disabled={!!uniendo} onClick={() => noAgregar(f)}
+                          title={`No se agrega al requerimiento ${anio + 1}: queda en 0 para el ${semCorto} sem. ${anio + 1} y pasa a «No se agrega en ${anio + 1}». No borra nada de ${anio}.`}>
+                          {uniendo === `${f.codigo}:noAg` ? 'Guardando…' : `No agregar al requerimiento ${anio + 1}`}
+                        </button></div>
+                      ) : null}
+                      {mo.motivo === 'noAgregar' ? (
+                        <div><button type="button" className="ghost compact" style={{ fontSize: 12, marginTop: 4, whiteSpace: 'nowrap', width: 'auto', height: 'auto', padding: '4px 10px' }} disabled={!!uniendo} onClick={() => noAgregar(f, true)}
+                          title={`Saca el 0 de ${anio + 1}: vuelve a «No hay nada en ${anio + 1}».`}>
+                          {uniendo === `${f.codigo}:noAg` ? 'Guardando…' : 'Deshacer'}
+                        </button></div>
+                      ) : null}
                     </td>
                   );
                 })() : null}
                 {cols.map((c) => {
                   const v = c.get(datosDe(f), { ...f, cantidad: edits[f.id] ?? f.cantidad }, colData.meta);
                   const color = c.key === 'difConsumo' && v != null ? (v < 0 ? '#b42318' : v > 0 ? '#1f7a3a' : undefined) : undefined;
+                  if (c.tipo === 'texto' && v != null) {
+                    return <td key={c.key} style={{ textAlign: 'right', fontSize: c.key === 'vtosStock' ? 12 : undefined }}>{String(v).split('\n').map((l, i) => <div key={i}>{l.replace(': ', ':\u00a0')}</div>)}</td>;
+                  }
                   return <td key={c.key} style={{ textAlign: 'right', whiteSpace: 'nowrap', color }}>{formatoColumna(c, v)}</td>;
                 })}
                 {verMan('acciones') ? (

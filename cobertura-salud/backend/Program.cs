@@ -97,7 +97,7 @@ app.MapPost("/api/auth/login", async Task<Results<Ok<LoginResponse>, Unauthorize
 
 // Ingreso de la app de escritorio sin pantalla de login: todas las PC usan el
 // usuario fijo "escritorio" (se crea solo). Si control lo da de baja, no entra nadie.
-app.MapPost("/api/auth/escritorio", async Task<Results<Ok<LoginResponse>, UnauthorizedHttpResult>> (Db db, AppSettings s) =>
+app.MapPost("/api/auth/escritorio", async Task<Results<Ok<LoginResponse>, UnauthorizedHttpResult>> (Db db, AppSettings s, HttpContext http) =>
 {
     await using var conn = await db.OpenAsync();
     await using (var cmd = new MySqlCommand("""
@@ -111,6 +111,11 @@ app.MapPost("/api/auth/escritorio", async Task<Results<Ok<LoginResponse>, Unauth
     var user = await db.GetUserByUsernameAsync(conn, "escritorio");
     if (user is null || user.Activo == 0)
         return TypedResults.Unauthorized();
+    // Queda registrado cada vez que una PC abre el programa (o renueva la sesion),
+    // con su nombre, IP y version de la app: sirve para ver que PC esta desactualizada.
+    var (ip, equipo) = await Equipo.DeAsync(http);
+    await db.AuditAsync(conn, user.Id, "abrir_escritorio", "equipos", equipo ?? ip,
+        new { equipo, ip, version = Equipo.Version(http) });
     return TypedResults.Ok(new LoginResponse(SignToken(user, s), UserDto.From(user)));
 });
 
@@ -249,13 +254,14 @@ app.MapPatch("/api/usuarios/{id:int}", [Authorize(Policy = "ControlOrAdmin")] as
 app.MapPost("/api/consultas", [Authorize] async (
     ConsultaCreateRequest request,
     ClaimsPrincipal principal,
+    HttpContext http,
     Db db,
     CoverageWorkflow workflow) =>
 {
     var user = CurrentUser.From(principal);
     var parsed = PatientInput.Parse(request.Entrada, request.Apellido, request.FechaPrestacion);
     await using var conn = await db.OpenAsync();
-    var consultaId = await db.CreateConsultaAsync(conn, user.Id, parsed);
+    var consultaId = await db.CreateConsultaAsync(conn, user.Id, parsed, http);
     var pasos = await workflow.RunAsync(parsed);
 
     foreach (var paso in pasos)
@@ -422,6 +428,7 @@ app.MapPost("/api/sss/iniciar", [Authorize] async Task<Results<Ok<SssStart>, Bad
 app.MapPost("/api/sss/resolver", [Authorize] async Task<Results<Ok<SssResolveResult>, BadRequest<ErrorResponse>>> (
     SssResolveRequest request,
     ClaimsPrincipal principal,
+    HttpContext http,
     Db db,
     SssService sss) =>
 {
@@ -434,7 +441,7 @@ app.MapPost("/api/sss/resolver", [Authorize] async Task<Results<Ok<SssResolveRes
     if (result.Estado is "afiliado" or "sin_cobertura" or "sin_diagnostico")
     {
         await using var conn = await db.OpenAsync();
-        var consultaId = await db.CreateConsultaAsync(conn, user.Id, result.Paciente);
+        var consultaId = await db.CreateConsultaAsync(conn, user.Id, result.Paciente, http);
         var paso = new PasoResultado(
             1, result.Codigo, result.Nombre, result.Url,
             result.Estado == "sin_diagnostico" ? "requiere_operador" : "consultado",
@@ -454,6 +461,7 @@ app.MapPost("/api/sss/resolver", [Authorize] async Task<Results<Ok<SssResolveRes
 app.MapPost("/api/consulta-local", [Authorize] async Task<Results<Ok<ConsultaLocalResponse>, BadRequest<ErrorResponse>>> (
     ConsultaLocalRequest request,
     ClaimsPrincipal principal,
+    HttpContext http,
     Db db,
     CoverageWorkflow workflow) =>
 {
@@ -473,7 +481,7 @@ app.MapPost("/api/consulta-local", [Authorize] async Task<Results<Ok<ConsultaLoc
     };
 
     await using var conn = await db.OpenAsync();
-    var consultaId = await db.CreateConsultaAsync(conn, user.Id, patient);
+    var consultaId = await db.CreateConsultaAsync(conn, user.Id, patient, http);
     await db.InsertPasoAsync(conn, consultaId, user.Id, paso);
     await db.FinishConsultaAsync(conn, consultaId, estadoConsulta, paso.Resumen);
     await db.AuditAsync(conn, user.Id, $"local_{paso.Codigo}", "consultas", consultaId.ToString(),
@@ -487,6 +495,7 @@ app.MapPost("/api/consulta-local", [Authorize] async Task<Results<Ok<ConsultaLoc
 app.MapPost("/api/desktop/recorrido", [Authorize] async Task<Results<Ok<DesktopRecorridoResponse>, BadRequest<ErrorResponse>>> (
     DesktopRecorridoRequest request,
     ClaimsPrincipal principal,
+    HttpContext http,
     Db db) =>
 {
     PatientInput patient;
@@ -497,7 +506,7 @@ app.MapPost("/api/desktop/recorrido", [Authorize] async Task<Results<Ok<DesktopR
     var resultados = request.Resultados ?? new List<DesktopResultado>();
 
     await using var conn = await db.OpenAsync();
-    var consultaId = await db.CreateConsultaAsync(conn, user.Id, patient);
+    var consultaId = await db.CreateConsultaAsync(conn, user.Id, patient, http);
     await using (var extra = new MySqlCommand("""
         UPDATE consultas SET sexo = @sexo, fecha_nacimiento = @fnac, cuil_generado = @gen WHERE id = @id
         """, conn))
@@ -549,7 +558,7 @@ app.MapGet("/api/control", [Authorize(Policy = "ControlOnly")] async (string? de
     await using var conn = await db.OpenAsync();
     await using var cmd = new MySqlCommand($"""
         SELECT c.id, c.created_at, u.username, u.activo, c.dni, c.cuil, c.apellido,
-               {PersonaCols.Select},
+               {PersonaCols.Select}, c.equipo, c.ip,
                p.nombre AS fuente, p.resultado, p.estado
         FROM consultas c
         JOIN usuarios u ON u.id = c.creado_por
@@ -582,7 +591,9 @@ app.MapGet("/api/control", [Authorize(Policy = "ControlOnly")] async (string? de
                     reader.IsDBNull(reader.GetOrdinal("apellido")) ? null : reader.GetString("apellido"),
                     "sin_determinar",
                     new List<ControlFuente>(),
-                    PersonaCols.Sexo(reader), PersonaCols.FechaNac(reader), PersonaCols.CuilGenerado(reader));
+                    PersonaCols.Sexo(reader), PersonaCols.FechaNac(reader), PersonaCols.CuilGenerado(reader),
+                    reader.IsDBNull(reader.GetOrdinal("equipo")) ? null : reader.GetString("equipo"),
+                    reader.IsDBNull(reader.GetOrdinal("ip")) ? null : reader.GetString("ip"));
                 mapa[cid] = row;
                 orden.Add(cid);
             }
@@ -620,7 +631,7 @@ app.MapGet("/api/reporte", [Authorize(Policy = "ControlOrAdmin")] async (string?
 
     await using var cmd = new MySqlCommand($"""
         SELECT c.id, c.created_at, u.username, c.entrada, c.dni, c.cuil, c.apellido,
-               {PersonaCols.Select},
+               {PersonaCols.Select}, c.equipo, c.ip,
                p.nombre AS fuente, p.resultado, p.estado, p.resumen
         FROM consulta_pasos p
         JOIN consultas c ON c.id = p.consulta_id
@@ -883,7 +894,10 @@ sealed class Db(AppSettings settings)
         foreach (var (col, def) in new[] {
             ("sexo", "CHAR(1) NULL"),
             ("fecha_nacimiento", "DATE NULL"),
-            ("cuil_generado", "TINYINT(1) NOT NULL DEFAULT 0") })
+            ("cuil_generado", "TINYINT(1) NOT NULL DEFAULT 0"),
+            // PC desde la que se hizo la consulta (todas usan el usuario "escritorio").
+            ("equipo", "VARCHAR(80) NULL"),
+            ("ip", "VARCHAR(45) NULL") })
         {
             await using var has = new MySqlCommand("""
                 SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -941,13 +955,16 @@ sealed class Db(AppSettings settings)
         return await reader.ReadAsync() ? ReadUser(reader) : null;
     }
 
-    public async Task<long> CreateConsultaAsync(MySqlConnection conn, int userId, PatientInput input)
+    public async Task<long> CreateConsultaAsync(MySqlConnection conn, int userId, PatientInput input, HttpContext? http = null)
     {
+        var (ip, equipo) = http is null ? (null, null) : await Equipo.DeAsync(http);
         await using var cmd = new MySqlCommand("""
-            INSERT INTO consultas (entrada, dni, cuil, apellido, fecha_prestacion, creado_por)
-            VALUES (@entrada, @dni, @cuil, @apellido, @fecha, @userId);
+            INSERT INTO consultas (entrada, dni, cuil, apellido, fecha_prestacion, creado_por, equipo, ip)
+            VALUES (@entrada, @dni, @cuil, @apellido, @fecha, @userId, @equipo, @ip);
             SELECT LAST_INSERT_ID();
             """, conn);
+        cmd.Parameters.AddWithValue("@equipo", (object?)equipo ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@ip", (object?)ip ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@entrada", input.Entrada);
         cmd.Parameters.AddWithValue("@dni", (object?)input.Dni ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@cuil", (object?)input.Cuil ?? DBNull.Value);
@@ -1967,10 +1984,60 @@ static class PersonaCols
         r.IsDBNull(r.GetOrdinal("fecha_nacimiento")) ? null : r.GetDateTime("fecha_nacimiento").ToString("yyyy-MM-dd");
     public static bool CuilGenerado(MySqlDataReader r) => r.GetInt32("cuil_generado") == 1;
 }
+// Identifica la PC que hace el pedido: IP de la conexion y nombre del equipo.
+// El nombre lo manda la app de escritorio (header X-Equipo, desde v0.2.21); si no
+// viene (versiones viejas o la web) se intenta por DNS inverso de la IP (con cache).
+static class Equipo
+{
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string? Nombre, DateTime Hasta)> cache = new();
+
+    public static async Task<(string? Ip, string? Nombre)> DeAsync(HttpContext http)
+    {
+        var addr = http.Connection.RemoteIpAddress;
+        if (addr is { IsIPv4MappedToIPv6: true }) addr = addr.MapToIPv4();
+        var ip = addr?.ToString();
+        var nombre = Limpiar(http.Request.Headers["X-Equipo"].ToString());
+        if (nombre is null && addr is not null && !System.Net.IPAddress.IsLoopback(addr))
+            nombre = await PorDnsAsync(ip!, addr);
+        return (ip, nombre);
+    }
+
+    public static string? Version(HttpContext http) => Limpiar(http.Request.Headers["X-Version"].ToString());
+
+    static string? Limpiar(string? s)
+    {
+        s = new string((s ?? "").Where(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.').ToArray());
+        return s.Length == 0 ? null : s.Length > 80 ? s[..80] : s;
+    }
+
+    // La resolucion inversa en la red local tarda ~4-5 s (NetBIOS/mDNS): no se espera.
+    // Se lanza en segundo plano (la primera vez es al abrir el programa) y las consultas
+    // siguientes de esa PC ya encuentran el nombre en la cache.
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> buscando = new();
+
+    static Task<string?> PorDnsAsync(string ip, System.Net.IPAddress addr)
+    {
+        cache.TryGetValue(ip, out var c);
+        if (c.Hasta <= DateTime.UtcNow && buscando.TryAdd(ip, 0))
+        {
+            _ = Task.Run(async () =>
+            {
+                string? nombre = null;
+                try { nombre = Limpiar((await System.Net.Dns.GetHostEntryAsync(addr)).HostName.Split('.')[0].ToUpperInvariant()); }
+                catch { }
+                // Si no resolvio, se conserva el nombre anterior (si habia) y se reintenta en 10 min.
+                cache[ip] = (nombre ?? c.Nombre, DateTime.UtcNow.Add(nombre is null ? TimeSpan.FromMinutes(10) : TimeSpan.FromHours(6)));
+                buscando.TryRemove(ip, out _);
+            });
+        }
+        return Task.FromResult(c.Nombre);
+    }
+}
 sealed record ControlFuente(string Fuente, string? Resultado, string Estado);
 sealed record ControlRow(long ConsultaId, DateTime Fecha, string Usuario, bool UsuarioActivo,
     string? Dni, string? Cuil, string? Apellido, string Cobertura, List<ControlFuente> Fuentes,
-    string? Sexo = null, string? FechaNacimiento = null, bool CuilGenerado = false);
+    string? Sexo = null, string? FechaNacimiento = null, bool CuilGenerado = false,
+    string? Equipo = null, string? Ip = null);
 
 sealed record LoginRequest(string? Username, string? Password);
 sealed record LoginResponse(string Token, UserDto User);

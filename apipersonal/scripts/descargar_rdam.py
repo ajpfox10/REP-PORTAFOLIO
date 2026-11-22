@@ -1,8 +1,10 @@
 """
 Baja el certificado del RDAM (Registro de Deudores Alimentarios Morosos, Ministerio de Justicia PBA)
 de los agentes de las tandas de nombramiento (tramites_tanda_interinos) o de DNIs sueltos, y lo deja
-en D:\\G\\DOCU\\<dni>\\RDAM\\<APELLIDO NOMBRE> RDAM aaaa-mm-dd.pdf (crea la carpeta si no existe).
-Recién con el nuevo guardado borra los RDAM viejos de esa carpeta (archivos con "RDAM" en el nombre).
+en D:\\G\\DOCU\\<dni>\\Libre de deuda (RDAM)\\<APELLIDO NOMBRE> RDAM aaaa-mm-dd.pdf (crea la carpeta
+si no existe). Recién con el nuevo guardado, lo que había antes en esa carpeta pasa a
+DOCU\\<dni>\\Trasladados\\Libre de deuda (RDAM)\\ (nunca se borra; se recupera en Restaurar).
+Solo saltea a quien ya tiene un certificado VIGENTE (menos de 60 días); los vencidos se vuelven a pedir.
 
 Usa el trámite PÚBLICO https://rdam.mjus.gba.gob.ar/solicitudCertificado: no pide login ni captcha
 (el login de GDEBA sí tiene captcha: por eso no se usa). Mapeado en vivo el 03/11/2026:
@@ -30,6 +32,7 @@ import argparse
 import datetime as dt
 import os
 import re
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -40,7 +43,10 @@ import mapeo_novedades as MN
 
 SCRIPT_ID = "rdam_certificados"
 DOCU = Path(os.environ.get("DOCU_DIR", r"D:\G\DOCU"))
-SUBCARPETA = "RDAM"
+SUBCARPETA = "Libre de deuda (RDAM)"   # 19/11/2026: antes "RDAM" (se unificó en la carpeta del orden)
+TRASLADADOS = "Trasladados"
+VIGENCIA_DIAS = 60
+RE_FECHA_NOMBRE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 BASE = "https://rdam.mjus.gba.gob.ar"
 URL_FORM = f"{BASE}/solicitudCertificado"
 RE_COD = re.compile(r"/certificado-(?:libre-deuda|ver)-RDAM/([^/?#]+)")
@@ -87,9 +93,34 @@ def carpeta_destino(dni):
     return DOCU / str(dni) / SUBCARPETA
 
 
+def fecha_certificado(f):
+    """Fecha del certificado: la del nombre (... RDAM aaaa-mm-dd.pdf) o, si no tiene, la del archivo."""
+    m = RE_FECHA_NOMBRE.search(f.name)
+    if m:
+        try:
+            return dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            pass
+    return dt.date.fromtimestamp(f.stat().st_mtime)
+
+
 def ya_tiene(dni):
+    """True si la carpeta tiene un certificado VIGENTE (menos de VIGENCIA_DIAS días)."""
     d = carpeta_destino(dni)
-    return d.is_dir() and any(p.is_file() for p in d.iterdir())
+    if not d.is_dir():
+        return False
+    limite = dt.date.today() - dt.timedelta(days=VIGENCIA_DIAS)
+    return any(p.is_file() and fecha_certificado(p) > limite for p in d.iterdir())
+
+
+def nombre_libre(d, nombre):
+    """'x.pdf' -> 'x (2).pdf', 'x (3).pdf'... hasta que no pise nada en d."""
+    f = d / nombre
+    n = 2
+    while f.exists():
+        f = d / f"{Path(nombre).stem} ({n}){Path(nombre).suffix}"
+        n += 1
+    return f
 
 
 def nombre_archivo(r):
@@ -101,23 +132,26 @@ def nombre_archivo(r):
 
 
 def guardar(r, datos):
-    """Guarda el certificado nuevo y recién ahí borra los RDAM viejos de la carpeta (solo los que
-    tienen 'RDAM' en el nombre). Devuelve (archivo, cantidad de viejos borrados)."""
+    """Guarda el certificado nuevo y recién ahí pasa todo lo anterior de la carpeta a
+    Trasladados\\Libre de deuda (RDAM)\\ (nunca borra). Devuelve (archivo, cantidad de viejos)."""
     d = carpeta_destino(r["dni"])
     d.mkdir(parents=True, exist_ok=True)
     f = d / nombre_archivo(r)
     tmp = f.with_suffix(".tmp")
     tmp.write_bytes(datos)
     tmp.replace(f)
-    borrados = 0
-    for viejo in d.iterdir():
-        if viejo.is_file() and viejo != f and "RDAM" in viejo.name.upper():
+    MN.auditar_docu(SCRIPT_ID, r["dni"], f)
+    movidos = 0
+    tras = DOCU / str(r["dni"]) / TRASLADADOS / SUBCARPETA
+    for viejo in list(d.iterdir()):
+        if viejo.is_file() and viejo != f:
             try:
-                viejo.unlink()
-                borrados += 1
+                tras.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(viejo), str(nombre_libre(tras, viejo.name)))
+                movidos += 1
             except OSError as e:
-                log(f"   AVISO: no pude borrar {viejo.name}: {e}")
-    return f, borrados
+                log(f"   AVISO: no pude trasladar {viejo.name}: {e}")
+    return f, movidos
 
 
 # ───────────────────────── RDAM ─────────────────────────
@@ -210,7 +244,7 @@ def main():
     ap.add_argument("--tanda")
     ap.add_argument("--dni", help="uno o varios DNIs separados por coma (no hace falta que estén en una tanda)")
     ap.add_argument("--limit", type=int)
-    ap.add_argument("--forzar", action="store_true", help="pide aunque la carpeta RDAM ya tenga archivos")
+    ap.add_argument("--forzar", action="store_true", help="pide aunque ya tenga un certificado vigente")
     ap.add_argument("--solo-lista", action="store_true", help="lista los agentes, sin tocar el RDAM")
     ap.add_argument("--headed", action="store_true", help="muestra el navegador")
     args = ap.parse_args()
@@ -221,7 +255,7 @@ def main():
     pend = [r for r in todos if args.forzar or not ya_tiene(r["dni"])]
     if args.limit:
         pend = pend[:args.limit]
-    log(f"Agentes: {len(todos)}; ya tienen RDAM: {len(todos) - len([r for r in todos if not ya_tiene(r['dni'])])}; "
+    log(f"Agentes: {len(todos)}; ya tienen RDAM vigente: {len(todos) - len([r for r in todos if not ya_tiene(r['dni'])])}; "
         f"para procesar: {len(pend)}")
     if args.solo_lista:
         for r in pend:

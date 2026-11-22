@@ -36,7 +36,12 @@ const toRow = (r: HistRow) => ({
   'Fecha baja': r.fecha_baja, Cargo: r.cargo, Estado: r.estado, Detalle: r.detalle,
 });
 
-export function HistorialEstructuraPage() {
+// embedded: se muestra como pestaña dentro de Estructura Organizacional (sin Layout propio)
+function WrapHE({ embedded, children }: { embedded: boolean; children?: React.ReactNode }) {
+  return embedded ? <>{children}</> : <Layout title="Historial de Estructura" showBack>{children}</Layout>;
+}
+
+export function HistorialEstructuraPage({ embedded = false }: { embedded?: boolean } = {}) {
   const toast = useToast();
   const [dep, setDep]           = useState<Dep>('HOSPITAL');
   const [filas, setFilas]       = useState<HistRow[]>([]);
@@ -173,7 +178,7 @@ export function HistorialEstructuraPage() {
   };
 
   return (
-    <Layout title="Historial de Estructura" showBack>
+    <WrapHE embedded={embedded}>
       <strong>🗂 Historial de Estructura (Intranet Ministerio)</strong>
       <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 12 }}>
         Recorre los DNIs de personalv5 en Buscar Personal y descarga todas las filas del plantel ·
@@ -329,6 +334,6 @@ export function HistorialEstructuraPage() {
           )}
         </div>
       )}
-    </Layout>
+    </WrapHE>
   );
 }

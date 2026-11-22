@@ -7,8 +7,11 @@
 // Backend: /gp-avisos (mig 127; historial con usuario en mig 128 → pestaña 📜 Historial).
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { apiFetch } from '../../api/http';
+import ReseteosTab from './ReseteosTab';
 import { useToast } from '../../ui/toast';
-import { aExtension, celularPrueba } from '../LicenciasMedicasControlPage/WhatsappTab';
+import {
+  ESPERA_ENVIO_MS, EXT_MIN, aExtensionGp as aExtension, avisarUno, celular549 as celularPrueba, idPcGp, nombreDe, textoPara, verMayorIgual,
+} from './gpEnvio';
 
 export interface GpAviso {
   id: number; dni: number; cuil: string; legajo: string | null; agente: string | null;
@@ -17,36 +20,28 @@ export interface GpAviso {
   apellido: string | null; nombre: string | null; celular: string | null; dudoso: boolean;
 }
 interface Corrida { id: number; estado: string; motivo: string | null; duracion_seg: number | null; at: string }
-type Tab = 'avisar' | 'escritos' | 'enviados' | 'error' | 'omitidos' | 'historial' | 'robot';
+type Tab = 'avisar' | 'escritos' | 'enviados' | 'error' | 'omitidos' | 'programados' | 'historial' | 'reseteos' | 'robot';
+interface PcGp {
+  id: string; nombre: string | null; etiqueta: string; ip: string | null; usuario_email: string | null;
+  ext_version: string | null; ultima_senal: string; minutos: number; activa: boolean;
+}
+interface Programado {
+  id: number; cuando: string; pc: string; pc_etiqueta: string; modo: 'ESCRIBIR' | 'ENVIAR'; estado: 'PROGRAMADO' | 'EN_CURSO' | 'HECHO' | 'CANCELADO' | 'ERROR';
+  creado_por: string | null; creado_at: string; terminado_at: string | null; resultado: string | null; vencido: boolean; ids: number[]; agentes: string[];
+}
+type Modo = 'ESCRIBIR' | 'ENVIAR';
+interface AutoCfg { activo: boolean; hora: string; pc: string; modo: Modo; solo_habiles: boolean; ultimo?: string | null }
+const COLOR_PROG: Record<Programado['estado'], string> = { PROGRAMADO: '#fbbf24', EN_CURSO: '#60a5fa', HECHO: '#4ade80', CANCELADO: '#94a3b8', ERROR: '#f87171' };
+const enUnaHora = () => { const d = new Date(Date.now() + 60 * 60 * 1000); d.setSeconds(0, 0); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 interface Mov {
   id: number; aviso_id: number; dni: number; agente: string | null; estado_anterior: string | null; estado: string;
   telefono: string | null; detalle: string | null; usuario_email: string | null; at: string;
 }
 
-// Desde la 1.8.0 la extensión deja el mensaje escrito sin enviar. Con una más vieja lo MANDARÍA: no se usa.
-const EXT_MIN = '1.8.0';
-const verMayorIgual = (a: string, b: string) => {
-  const x = a.split('.').map(Number), y = b.split('.').map(Number);
-  for (let i = 0; i < 3; i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0; }
-  return true;
-};
-const palabrasDe = (s: string) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().split(/[^A-Z]+/).filter(w => w.length > 1);
-const tc = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, m => m.toUpperCase());
+// Desde la 1.8.0 (EXT_MIN) la extensión deja el mensaje escrito sin enviar. Con una más vieja lo MANDARÍA: no se usa.
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const fh = (s: string | null) => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)} ${s.slice(11)}` : '');
 const LS_PRUEBA = 'gp_avisos_prueba';
-
-function nombreDe(a: GpAviso) {
-  const [apeGp, nomGp] = String(a.agente || '').split(',').map(s => s.trim());
-  return { apellido: a.apellido || apeGp || '', nombre: a.nombre || nomGp || '' };
-}
-function textoPara(plantilla: string, a: GpAviso) {
-  const { apellido, nombre } = nombreDe(a);
-  return plantilla
-    .replace(/\{nombre\}/g, tc(nombre.split(/\s+/)[0] || ''))
-    .replace(/\{apellido\}/g, tc(apellido))
-    .replace(/\{dni\}/g, String(a.dni));
-}
 
 const BTN: CSSProperties = { padding: '4px 10px', fontSize: '0.78rem', whiteSpace: 'nowrap' };
 const COLOR: Record<GpAviso['estado'], string> = { PENDIENTE: '#fbbf24', ESCRITO: '#60a5fa', ENVIADO: '#4ade80', OMITIDO: '#94a3b8' };
@@ -68,18 +63,53 @@ export function GpAvisosPage() {
     try { return JSON.parse(localStorage.getItem(LS_PRUEBA) || '') || { activa: true, numero: '' }; } catch { return { activa: true, numero: '' }; }
   });
   useEffect(() => { try { localStorage.setItem(LS_PRUEBA, JSON.stringify(prueba)); } catch { /* sin storage */ } }, [prueba]);
+  // Elegidos (casillas), modo (dejar escrito / enviar solo) y programación
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [modo, setModo] = useState<Modo>('ESCRIBIR');
+  const [pcs, setPcs] = useState<PcGp[]>([]);
+  const [programados, setProgramados] = useState<Programado[]>([]);
+  const [progCuando, setProgCuando] = useState(enUnaHora);
+  const [progPc, setProgPc] = useState('');
+  const miPc = useMemo(() => idPcGp(), []);
+  // Envío automático diario: lo guardado (auto) y lo que se está editando (autoForm)
+  const [auto, setAuto] = useState<AutoCfg | null>(null);
+  const [autoForm, setAutoForm] = useState<AutoCfg | null>(null);
 
   const cargar = useCallback(async () => {
     try {
-      const [r, rb] = await Promise.all([apiFetch<any>('/gp-avisos?todos=1'), apiFetch<any>('/gp-avisos/robot')]);
+      const [r, rb, rp, rg] = await Promise.all([
+        apiFetch<any>('/gp-avisos?todos=1'), apiFetch<any>('/gp-avisos/robot'),
+        apiFetch<any>('/gp-avisos/pcs').catch(() => null), apiFetch<any>('/gp-avisos/programados').catch(() => null),
+      ]);
       if (r?.ok) {
         setAvisos(r.data || []);
         setMensajeGuardado(prev => { setMensaje(m => (m && m !== prev ? m : r.mensaje)); return r.mensaje; });
+        if (r.auto) {
+          setAuto(prev => {
+            // si no se está editando nada, el formulario sigue a lo guardado
+            setAutoForm(f => (!f || !prev || JSON.stringify({ ...f, ultimo: null }) === JSON.stringify({ ...prev, ultimo: null }) ? r.auto : f));
+            return r.auto;
+          });
+        }
+        // los elegidos que ya no están para avisar se sueltan
+        const vivos = new Set((r.data || []).filter((a: GpAviso) => a.estado === 'PENDIENTE' || a.estado === 'ESCRITO').map((a: GpAviso) => a.id));
+        setSel(s => new Set([...s].filter(id => vivos.has(id))));
       }
       if (rb?.ok) setCorridas(rb.data || []);
+      if (rp?.ok) setPcs(rp.data || []);
+      if (rg?.ok) setProgramados(rg.data || []);
     } catch (e: any) { toast.error('Avisos Gestiones Personales', e?.message); }
   }, [toast]);
   useEffect(() => { void cargar(); }, [cargar]);
+  // Programados y PCs se refrescan solos cada 30 s (para ver cuándo arranca/termina)
+  useEffect(() => {
+    const t = setInterval(() => {
+      void Promise.all([apiFetch<any>('/gp-avisos/pcs'), apiFetch<any>('/gp-avisos/programados')])
+        .then(([rp, rg]) => { if (rp?.ok) setPcs(rp.data || []); if (rg?.ok) setProgramados(rg.data || []); }).catch(() => {});
+    }, 30000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => { if (!progPc && pcs.length) setProgPc(pcs.find(p => p.activa)?.id || pcs[0].id); }, [pcs, progPc]);
 
   const grupos = useMemo(() => ({
     avisar: avisos.filter(a => a.estado === 'PENDIENTE'),
@@ -110,25 +140,81 @@ export function GpAvisosPage() {
     return true;
   };
 
-  /** Deja escrito el mensaje de UN aviso. En prueba va a tu número y no cambia el estado. */
+  /** Avisa UN aviso según el modo (dejar escrito / enviar solo). En prueba va a tu número y no cambia el estado. */
   const escribirUno = async (a: GpAviso): Promise<boolean> => {
-    const texto = textoPara(mensaje, a);
-    const enPrueba = prueba.activa;
-    const tel = enPrueba ? celularPrueba(prueba.numero) : (numeros[a.id] ? celularPrueba(numeros[a.id]) : a.celular);
-    if (!tel) {
-      if (!enPrueba) await marcar([a.id], 'PENDIENTE', { detalle: 'Sin celular en la base' });
-      return false;
+    const enviar = modo === 'ENVIAR';
+    if (prueba.activa) {
+      const tel = celularPrueba(prueba.numero);
+      if (!tel) return false;
+      const r = await aExtension('ENVIAR', { modo: 'TELEFONO', telefono: tel, texto: `[PRUEBA] ${textoPara(mensaje, a)}`, sinEnviar: !enviar }, ESPERA_ENVIO_MS);
+      return r.ok;
     }
-    const { apellido, nombre } = nombreDe(a);
-    const ape = palabrasDe(apellido), nom = palabrasDe(nombre);
-    const r = await aExtension('ENVIAR', enPrueba
-      ? { modo: 'TELEFONO', telefono: tel, texto: `[PRUEBA] ${texto}`, sinEnviar: true }
-      : { modo: numeros[a.id] ? 'TELEFONO' : 'NOMBRE_TELEFONO', buscar: ape[0] || '', palabras: [ape[0], nom[0]].filter(Boolean), telefono: tel, texto, sinEnviar: true },
-    150000);
-    if (enPrueba) return r.ok;
-    if (r.ok) await marcar([a.id], 'ESCRITO', { telefono: r.modo === 'TELEFONO' ? tel : null, detalle: r.modo === 'NOMBRE' ? 'Chat encontrado por nombre' : null });
-    else await marcar([a.id], 'PENDIENTE', { detalle: `${r.estado}: ${r.detalle || ''}`.slice(0, 300) });
-    return r.ok;
+    return avisarUno(a, mensaje, { enviar, telManual: numeros[a.id] || null });
+  };
+
+  // Los elegidos que siguen para avisar (PENDIENTE / ESCRITO), en el orden de la lista
+  const elegidos = useMemo(() => avisos.filter(a => sel.has(a.id) && (a.estado === 'PENDIENTE' || a.estado === 'ESCRITO')), [avisos, sel]);
+  const pcElegida = pcs.find(p => p.id === progPc);
+
+  /** ya=true → "Enviar ahora en esa PC": se programa para este minuto y la PC lo toma en menos de 1 min. */
+  const programar = async (ya = false) => {
+    if (!elegidos.length) { toast.warning('Elegí a quién', 'Tildá en la lista los agentes a los que se les manda.'); return; }
+    if (!progPc || !pcElegida) { toast.warning('Elegí la PC', 'Aparecen solas las PCs que tienen la app abierta con la extensión de WhatsApp.'); return; }
+    const cuando = ya ? new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : progCuando;
+    if (!cuando) { toast.warning('Falta día y hora', ''); return; }
+    const cuandoTxt = cuando.replace('T', ' ');
+    const accion = modo === 'ENVIAR' ? 'ENVIAR SOLO (sin que nadie toque Enviar)' : 'dejar ESCRITO (alguien toca Enviar)';
+    const cuandoDicho = ya ? 'AHORA (en menos de un minuto)' : `el ${cuandoTxt.slice(8, 10)}/${cuandoTxt.slice(5, 7)} a las ${cuandoTxt.slice(11)}`;
+    const aviso = ya && !pcElegida.activa ? `\n\n⚠️ Esa PC no da señales desde ${fh(pcElegida.ultima_senal)}: va a salir cuando se abra.` : '';
+    if (!window.confirm(`${ya ? 'Mandar' : 'Programar'} ${elegidos.length} aviso(s) ${cuandoDicho} desde la PC "${pcElegida.etiqueta}", modo ${accion}.${aviso}\n\nEsa PC tiene que estar prendida con la app y WhatsApp Web abiertos. ¿Seguir?`)) return;
+    try {
+      const telefonos: Record<number, string> = {};
+      for (const a of elegidos) if (numeros[a.id]) telefonos[a.id] = numeros[a.id];
+      const r = await apiFetch<any>('/gp-avisos/programados', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: elegidos.map(a => a.id), cuando, pc: progPc, modo, mensaje, telefonos }),
+      });
+      toast.ok(ya ? 'Mandado a la PC' : 'Programado',
+        `${r?.programados ?? elegidos.length} aviso(s) en "${pcElegida.etiqueta}"${ya ? ': arranca en menos de un minuto' : ''}. Lo seguís en ⏰ Programados.`);
+      setSel(new Set()); void cargar();
+    } catch (e: any) { toast.error('No se pudo programar', e?.message); }
+  };
+
+  const cancelarProgramado = async (p: Programado) => {
+    if (!window.confirm(`¿Cancelar el envío programado #${p.id} (${p.ids.length} aviso/s)?`)) return;
+    try { await apiFetch(`/gp-avisos/programados/${p.id}/cancelar`, { method: 'POST' }); void cargar(); }
+    catch (e: any) { toast.error('No se pudo cancelar', e?.message); }
+  };
+
+  const autoCambiado = !!auto && !!autoForm && JSON.stringify({ ...autoForm, ultimo: null }) !== JSON.stringify({ ...auto, ultimo: null });
+  const guardarAuto = async () => {
+    if (!autoForm) return;
+    if (autoForm.activo && !autoForm.pc) { toast.warning('Elegí la PC', 'La PC que va a mandar el automático todos los días.'); return; }
+    if (autoForm.activo && autoForm.modo === 'ENVIAR' && !auto?.activo
+        && !window.confirm('El automático en modo ENVIAR SOLO manda los mensajes sin que nadie toque Enviar, todos los días. WhatsApp puede bloquear el número si detecta envíos automáticos. ¿Activarlo igual?')) return;
+    try {
+      await apiFetch('/gp-avisos/auto', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(autoForm) });
+      setAuto(autoForm);
+      toast.ok(autoForm.activo ? 'Automático diario activado' : 'Automático diario apagado',
+        autoForm.activo ? `Todos los ${autoForm.solo_habiles ? 'días hábiles' : 'días'} a las ${autoForm.hora}. Usa el mensaje GUARDADO.` : '');
+      void cargar();
+    } catch (e: any) { toast.error('No se guardó el automático', e?.message); }
+  };
+
+  /** Ponerle nombre a la PC elegida (desde cualquier PC). Vacío = vuelve a mostrarse por IP · usuario. */
+  const renombrarPc = async () => {
+    if (!pcElegida) return;
+    const v = window.prompt(`Nombre para la PC ${pcElegida.ip || ''}${pcElegida.usuario_email ? ` (${pcElegida.usuario_email.split('@')[0]})` : ''}:\n(vacío = mostrar por IP y usuario)`, pcElegida.nombre || '');
+    if (v == null) return;
+    try {
+      await apiFetch(`/gp-avisos/pcs/${encodeURIComponent(pcElegida.id)}/nombre`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: v.trim() }) });
+      void cargar();
+    } catch (e: any) { toast.error('No se pudo poner el nombre', e?.message); }
+  };
+  const quitarPc = async () => {
+    if (!pcElegida || !window.confirm(`¿Sacar "${pcElegida.etiqueta}" de la lista? Si sigue abierta con la extensión, vuelve a aparecer sola.`)) return;
+    try { await apiFetch(`/gp-avisos/pcs/${encodeURIComponent(pcElegida.id)}`, { method: 'DELETE' }); setProgPc(''); void cargar(); }
+    catch (e: any) { toast.error('No se pudo sacar', e?.message); }
   };
 
   const uno = async (a: GpAviso) => {
@@ -137,17 +223,21 @@ export function GpAvisosPage() {
     setOcupado(a.id);
     try {
       const ok = await escribirUno(a);
-      if (ok) toast.ok('Mensaje escrito en WhatsApp', prueba.activa ? 'Prueba: quedó escrito en tu chat, sin enviar.' : 'Revisalo en el chat y tocá Enviar.');
+      if (ok && modo === 'ENVIAR') toast.ok('Mensaje enviado por WhatsApp', prueba.activa ? 'Prueba: se envió a tu número.' : '');
+      else if (ok) toast.ok('Mensaje escrito en WhatsApp', prueba.activa ? 'Prueba: quedó escrito en tu chat, sin enviar.' : 'Revisalo en el chat y tocá Enviar.');
       else toast.warning('No se pudo dejar escrito', 'Mirá el detalle en la pestaña Con error.');
     } catch (e: any) { toast.error('WhatsApp', e?.message); }
     finally { setOcupado(null); void cargar(); }
   };
 
   const tanda = async () => {
-    const lista = grupos.avisar;
+    const lista = elegidos.length ? elegidos : grupos.avisar;
     if (!lista.length) return;
     if (prueba.activa) { toast.warning('Modo prueba', 'La tanda es solo para el envío real: probá con ✍️ de una fila.'); return; }
-    if (!window.confirm(`Se va a dejar el mensaje ESCRITO (sin enviar) en el chat de ${lista.length} agente(s). Después entrás a cada chat y tocás Enviar. ¿Seguir?`)) return;
+    const pregunta = modo === 'ENVIAR'
+      ? `Se va a ENVIAR el mensaje (solo, sin que toques Enviar) a ${lista.length} agente(s). ¿Seguir?`
+      : `Se va a dejar el mensaje ESCRITO (sin enviar) en el chat de ${lista.length} agente(s). Después entrás a cada chat y tocás Enviar. ¿Seguir?`;
+    if (!window.confirm(pregunta)) return;
     if (!(await extensionLista())) return;
     setOcupado('TANDA'); setCortando(false); (window as any).__gpCortar = false;
     let ok = 0, mal = 0;
@@ -156,10 +246,12 @@ export function GpAvisosPage() {
         if ((window as any).__gpCortar) break;
         setProgreso(`${i + 1}/${lista.length}: ${nombreDe(lista[i]).apellido}`);
         try { (await escribirUno(lista[i])) ? ok++ : mal++; } catch { mal++; }
-        if (i < lista.length - 1) await sleep(3000 + Math.random() * 2000);
+        if (i < lista.length - 1) await sleep(modo === 'ENVIAR' ? 20000 + Math.random() * 20000 : 3000 + Math.random() * 2000);
       }
-      toast.ok('Tanda terminada', `${ok} escritos${mal ? `, ${mal} con error` : ''}. Ahora entrá a cada chat en WhatsApp y tocá Enviar.`);
-    } finally { (window as any).__gpCortar = false; setOcupado(null); setProgreso(''); void cargar(); }
+      toast.ok('Tanda terminada', modo === 'ENVIAR'
+        ? `${ok} enviados${mal ? `, ${mal} con error` : ''}.`
+        : `${ok} escritos${mal ? `, ${mal} con error` : ''}. Ahora entrá a cada chat en WhatsApp y tocá Enviar.`);
+    } finally { (window as any).__gpCortar = false; setOcupado(null); setProgreso(''); setSel(new Set()); void cargar(); }
   };
 
   const marcarTodos = async (lista: GpAviso[], estado: GpAviso['estado'], pregunta: string) => {
@@ -168,12 +260,14 @@ export function GpAvisosPage() {
   };
 
   const q = buscar.trim().toUpperCase();
-  const filas = (tab === 'robot' || tab === 'historial' ? [] : grupos[tab]).filter(a => !q || `${a.agente} ${a.apellido} ${a.nombre} ${a.dni}`.toUpperCase().includes(q));
+  const filas = (tab === 'robot' || tab === 'historial' || tab === 'reseteos' || tab === 'programados' ? [] : grupos[tab]).filter(a => !q || `${a.agente} ${a.apellido} ${a.nombre} ${a.dni}`.toUpperCase().includes(q));
 
   const TABS: [Tab, string, number | null][] = [
     ['avisar', '📲 Para avisar', grupos.avisar.length], ['escritos', '✍️ Escritos (falta Enviar)', grupos.escritos.length],
     ['enviados', '✅ Enviados', grupos.enviados.length], ['error', '⚠️ Con error', grupos.error.length],
-    ['omitidos', '⊘ Omitidos', grupos.omitidos.length], ['historial', '📜 Historial', null], ['robot',robotMal ? '🤖❌ Robot' : '🤖 Robot', null],
+    ['omitidos', '⊘ Omitidos', grupos.omitidos.length],
+    ['programados', '⏰ Programados', programados.filter(p => p.estado === 'PROGRAMADO' || p.estado === 'EN_CURSO').length],
+    ['historial', '📜 Historial', null], ['reseteos', '📊 Reseteos', null], ['robot',robotMal ? '🤖❌ Robot' : '🤖 Robot', null],
   ];
 
   return (
@@ -195,13 +289,102 @@ export function GpAvisosPage() {
             <input type="checkbox" checked={prueba.activa} onChange={e => setPrueba(p => ({ ...p, activa: e.target.checked }))} /> Prueba (escribe en tu número, no cambia nada)
           </label>
           {prueba.activa && <input value={prueba.numero} onChange={e => setPrueba(p => ({ ...p, numero: e.target.value }))} placeholder="Tu celular" style={{ ...INPUT, width: 150 }} />}
+          <span style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: '0.82rem', marginLeft: 8 }}>
+            <b>Modo:</b>
+            <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <input type="radio" checked={modo === 'ESCRIBIR'} onChange={() => setModo('ESCRIBIR')} /> ✍️ Dejar escrito
+            </label>
+            <label style={{ display: 'flex', gap: 4, alignItems: 'center', color: modo === 'ENVIAR' ? '#fca5a5' : undefined }}
+              title="La extensión toca Enviar sola. WhatsApp puede bloquear el número si detecta envíos automáticos.">
+              <input type="radio" checked={modo === 'ENVIAR'} onChange={() => setModo('ENVIAR')} /> 📤 Enviar solo
+            </label>
+          </span>
           <span style={{ flex: 1 }} />
           {ocupado === 'TANDA'
-            ? <><b>✍️ {progreso}</b><button type="button" className="btn" style={BTN} disabled={cortando} onClick={() => { (window as any).__gpCortar = true; setCortando(true); }}>⏹ Cortar</button></>
-            : <button type="button" className="btn" style={{ ...BTN, fontWeight: 700 }} disabled={!!ocupado || prueba.activa || !grupos.avisar.length} onClick={tanda}
-                title={prueba.activa ? 'Destildá Prueba para la tanda real' : ''}>✍️ Dejar escritos los {grupos.avisar.length} para avisar</button>}
+            ? <><b>{modo === 'ENVIAR' ? '📤' : '✍️'} {progreso}</b><button type="button" className="btn" style={BTN} disabled={cortando} onClick={() => { (window as any).__gpCortar = true; setCortando(true); }}>⏹ Cortar</button></>
+            : (() => {
+                const n = elegidos.length || grupos.avisar.length;
+                const quien = elegidos.length ? `los ${n} elegidos` : `los ${n} para avisar`;
+                return (
+                  <button type="button" className="btn" style={{ ...BTN, fontWeight: 700 }} disabled={!!ocupado || prueba.activa || !n} onClick={tanda}
+                    title={prueba.activa ? 'Destildá Prueba para la tanda real' : ''}>
+                    {modo === 'ENVIAR' ? `📤 Enviar desde esta PC a ${quien}` : `✍️ Dejar escritos en esta PC ${quien}`}
+                  </button>
+                );
+              })()}
         </div>
       </div>
+
+      {/* Programar: a quién (casillas), cuándo, qué PC. Y el nombre de esta PC. */}
+      <div className="card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.82rem' }}>
+        <b>⏰ Programar</b>
+        <span style={{ color: elegidos.length ? '#e2e8f0' : '#94a3b8' }}>
+          {elegidos.length ? `${elegidos.length} elegido(s)` : 'tildá en la lista a quiénes'}
+        </span>
+        día y hora <input type="datetime-local" value={progCuando} onChange={e => setProgCuando(e.target.value)} style={INPUT} />
+        en la PC
+        <select value={progPc} onChange={e => setProgPc(e.target.value)} style={{ ...INPUT, minWidth: 220 }}>
+          {!pcs.length && <option value="">(ninguna PC con la extensión abierta)</option>}
+          {pcs.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.activa ? '🟢' : '⚪'} {p.etiqueta}{p.nombre && p.ip ? ` (${p.ip})` : ''}{p.id === miPc ? ' · esta PC' : ''}
+              {p.ext_version ? ` · ext ${p.ext_version}` : ''}{p.activa ? '' : ` · visto ${fh(p.ultima_senal)}`}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="btn" style={BTN} disabled={!pcElegida} onClick={renombrarPc} title="Ponerle nombre a esta PC (se ve igual desde todas)">✏️</button>
+        <button type="button" className="btn" style={BTN} disabled={!pcElegida} onClick={quitarPc} title="Sacarla de la lista">🗑</button>
+        <button type="button" className="btn" style={{ ...BTN, fontWeight: 700 }} disabled={!elegidos.length || !progPc || prueba.activa} onClick={() => void programar(false)}
+          title={prueba.activa ? 'Destildá Prueba: lo programado es siempre real' : ''}>
+          ⏰ Programar ({modo === 'ENVIAR' ? 'enviar solo' : 'dejar escrito'})
+        </button>
+        <button type="button" className="btn" style={{ ...BTN, fontWeight: 700 }} disabled={!elegidos.length || !progPc || prueba.activa} onClick={() => void programar(true)}
+          title={prueba.activa ? 'Destildá Prueba: lo que se manda a otra PC es siempre real' : 'Lo manda YA la PC elegida (no esta), sin poner hora'}>
+          ▶ Enviar ahora en esa PC
+        </button>
+        {pcElegida && !pcElegida.activa && <span style={{ color: '#fbbf24' }}>⚠️ esa PC no da señales desde {fh(pcElegida.ultima_senal)}</span>}
+        {pcElegida?.activa && (!pcElegida.ext_version || !verMayorIgual(pcElegida.ext_version, EXT_MIN)) && <span style={{ color: '#fbbf24' }}>⚠️ esa PC no tiene la extensión {EXT_MIN}+</span>}
+        <div style={{ flexBasis: '100%', color: '#64748b', fontSize: '0.75rem' }}>
+          Las PCs aparecen solas: cualquier PC con la app abierta y la extensión de WhatsApp se anota cada minuto (🟢 = conectada ahora).
+          Para que mande lo programado tiene que estar prendida con la app y WhatsApp Web abiertos a esa hora.
+        </div>
+      </div>
+
+      {/* Envío automático diario: todos los pendientes, sin elegir ni programar */}
+      {autoForm && (
+        <div className="card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.82rem',
+          borderColor: auto?.activo ? 'rgba(74,222,128,0.5)' : undefined }}>
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 700 }}>
+            <input type="checkbox" checked={autoForm.activo} onChange={e => setAutoForm(f => f && { ...f, activo: e.target.checked })} />
+            🔁 Automático diario
+          </label>
+          <span style={{ color: '#94a3b8' }}>avisa a todos los "Para avisar" (sin error) todos los</span>
+          <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <input type="checkbox" checked={autoForm.solo_habiles} onChange={e => setAutoForm(f => f && { ...f, solo_habiles: e.target.checked })} /> días hábiles
+          </label>
+          a las <input type="time" value={autoForm.hora} onChange={e => setAutoForm(f => f && { ...f, hora: e.target.value })} style={INPUT} />
+          en
+          <select value={autoForm.pc} onChange={e => setAutoForm(f => f && { ...f, pc: e.target.value })} style={{ ...INPUT, minWidth: 200 }}>
+            <option value="">(elegí la PC)</option>
+            {autoForm.pc && !pcs.some(p => p.id === autoForm.pc) && <option value={autoForm.pc}>⚠️ PC que ya no está en la lista</option>}
+            {pcs.map(p => <option key={p.id} value={p.id}>{p.activa ? '🟢' : '⚪'} {p.etiqueta}{p.id === miPc ? ' · esta PC' : ''}</option>)}
+          </select>
+          <select value={autoForm.modo} onChange={e => setAutoForm(f => f && { ...f, modo: e.target.value as Modo })} style={INPUT}>
+            <option value="ESCRIBIR">✍️ Dejar escrito</option>
+            <option value="ENVIAR">📤 Enviar solo</option>
+          </select>
+          <button type="button" className="btn" style={{ ...BTN, fontWeight: 700 }} disabled={!autoCambiado} onClick={guardarAuto}>💾 Guardar</button>
+          {auto?.activo && !autoCambiado && (
+            <span style={{ color: '#4ade80' }}>
+              Activo{auto.ultimo ? ` · última vez ${auto.ultimo.slice(8, 10)}/${auto.ultimo.slice(5, 7)}` : ''}
+            </span>
+          )}
+          <div style={{ flexBasis: '100%', color: '#64748b', fontSize: '0.75rem' }}>
+            Usa el mensaje <b>guardado</b> (💾 Guardar mensaje). Cada día arma un envío en ⏰ Programados con los pendientes de ese momento;
+            los que se confirman después de la hora salen al día siguiente. Si la PC está apagada a esa hora, sale cuando se prenda ese mismo día.
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }}>
         {TABS.map(([k, t, n]) => (
@@ -210,7 +393,7 @@ export function GpAvisosPage() {
           </button>
         ))}
         <span style={{ flex: 1 }} />
-        {tab !== 'robot' && tab !== 'historial' && <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar apellido o DNI" style={{ ...INPUT, width: 200 }} />}
+        {tab !== 'robot' && tab !== 'historial' && tab !== 'reseteos' && tab !== 'programados' && <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar apellido o DNI" style={{ ...INPUT, width: 200 }} />}
         <button type="button" className="btn" style={BTN} onClick={() => void cargar()}>↻ Actualizar</button>
       </div>
 
@@ -222,7 +405,31 @@ export function GpAvisosPage() {
         </div>
       )}
 
-      {tab === 'historial' ? <HistorialTab /> : tab === 'robot' ? (
+      {tab === 'programados' ? (
+        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            <thead><tr style={{ textAlign: 'left', color: '#94a3b8' }}>
+              <th style={{ padding: 8 }}>#</th><th>Cuándo</th><th>PC</th><th>Modo</th><th>A quiénes</th><th>Estado</th><th>Resultado</th><th>Programó</th><th></th>
+            </tr></thead>
+            <tbody>
+              {programados.map(p => (
+                <tr key={p.id} style={{ borderTop: '1px solid #1e293b', verticalAlign: 'top' }}>
+                  <td style={{ padding: 8 }}>{p.id}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{fh(p.cuando)}{p.estado === 'PROGRAMADO' && p.vencido ? <div style={{ color: '#fbbf24', fontSize: '0.7rem' }}>atrasado: esperando la PC</div> : null}</td>
+                  <td>{p.pc_etiqueta}</td>
+                  <td style={{ whiteSpace: 'nowrap', color: p.modo === 'ENVIAR' ? '#fca5a5' : '#93c5fd' }}>{p.modo === 'ENVIAR' ? '📤 Enviar solo' : '✍️ Dejar escrito'}</td>
+                  <td style={{ maxWidth: 320 }}><b>{p.ids.length}</b>: <span style={{ color: '#94a3b8' }}>{p.agentes.join(' · ')}</span></td>
+                  <td style={{ color: COLOR_PROG[p.estado], fontWeight: 700, whiteSpace: 'nowrap' }}>{p.estado.replace('_', ' ')}</td>
+                  <td style={{ color: '#94a3b8', maxWidth: 260, overflowWrap: 'anywhere' }}>{p.resultado}{p.terminado_at ? <div style={{ fontSize: '0.7rem' }}>{fh(p.terminado_at)}</div> : null}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{p.creado_por ? p.creado_por.split('@')[0] : ''}<div style={{ color: '#64748b', fontSize: '0.7rem' }}>{fh(p.creado_at)}</div></td>
+                  <td style={{ padding: '4px 8px' }}>{p.estado === 'PROGRAMADO' && <button type="button" className="btn" style={BTN} onClick={() => cancelarProgramado(p)}>✖ Cancelar</button>}</td>
+                </tr>
+              ))}
+              {!programados.length && <tr><td colSpan={9} style={{ padding: 12, color: '#94a3b8' }}>No hay envíos programados. Tildá agentes en "Para avisar", elegí día, hora y PC, y tocá ⏰ Programar.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      ) : tab === 'historial' ? <HistorialTab /> : tab === 'reseteos' ? <ReseteosTab /> : tab === 'robot' ? (
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
             <thead><tr style={{ textAlign: 'left', color: '#94a3b8' }}><th style={{ padding: 8 }}>Cuándo</th><th>Resultado</th><th>Duró</th><th>Detalle</th></tr></thead>
@@ -244,6 +451,15 @@ export function GpAvisosPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
             <thead>
               <tr style={{ textAlign: 'left', color: '#94a3b8' }}>
+                <th style={{ padding: '8px 4px 8px 8px', width: 24 }}>
+                  {(() => {
+                    const marcables = filas.filter(a => a.estado === 'PENDIENTE' || a.estado === 'ESCRITO');
+                    if (!marcables.length) return null;
+                    const todas = marcables.every(a => sel.has(a.id));
+                    return <input type="checkbox" checked={todas} title="Elegir todos los de esta pestaña"
+                      onChange={() => setSel(s => { const n = new Set(s); marcables.forEach(a => (todas ? n.delete(a.id) : n.add(a.id))); return n; })} />;
+                  })()}
+                </th>
                 <th style={{ padding: 8 }}>Agente</th><th>DNI</th><th>Confirmado</th><th>Celular</th><th>Estado</th><th>Detalle</th><th></th>
               </tr>
             </thead>
@@ -252,7 +468,11 @@ export function GpAvisosPage() {
                 const { apellido, nombre } = nombreDe(a);
                 const editable = a.estado === 'PENDIENTE' || a.estado === 'ESCRITO';
                 return (
-                  <tr key={a.id} style={{ borderTop: '1px solid #1e293b' }}>
+                  <tr key={a.id} style={{ borderTop: '1px solid #1e293b', background: sel.has(a.id) ? 'rgba(124,58,237,0.12)' : undefined }}>
+                    <td style={{ padding: '8px 4px 8px 8px' }}>
+                      {editable && <input type="checkbox" checked={sel.has(a.id)}
+                        onChange={() => setSel(s => { const n = new Set(s); if (n.has(a.id)) n.delete(a.id); else n.add(a.id); return n; })} />}
+                    </td>
                     <td style={{ padding: 8 }}><b>{apellido}</b>{nombre ? `, ${nombre}` : ''}</td>
                     <td>{a.dni}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{fh(a.confirmado_at)}</td>
@@ -275,7 +495,7 @@ export function GpAvisosPage() {
                   </tr>
                 );
               })}
-              {!filas.length && <tr><td colSpan={7} style={{ padding: 12, color: '#94a3b8' }}>Nada en esta pestaña.</td></tr>}
+              {!filas.length && <tr><td colSpan={8}style={{ padding: 12, color: '#94a3b8' }}>Nada en esta pestaña.</td></tr>}
             </tbody>
           </table>
         </div>

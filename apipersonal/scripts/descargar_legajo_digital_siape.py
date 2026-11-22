@@ -1,6 +1,6 @@
 """
 Baja de SIAPE (Personas -> Administracion -> pestaña LEGAJO DIGITAL) el CURRICULUM VITAE
-y la PLANILLA DE DATOS PERSONALES Y DE CONTACTOS de los agentes de las tandas de
+la PLANILLA DE DATOS PERSONALES Y DE CONTACTOS y la CONSTANCIA ACEPTO DESIGNACION de los agentes de las tandas de
 Tramites Documentales (tramites_tanda_interinos) y los deja en
 D:\\G\\DOCU\\<dni>\\Curriculum\\ y D:\\G\\DOCU\\<dni>\\Planilla de datos personales\\
 (las mismas carpetas que lee pase_planta.py). Si no existe la carpeta, la crea.
@@ -49,8 +49,14 @@ import io
 
 import cargar_francos_siape as F
 from cargar_francos_siape import log, cerrar_modales
+# cargar_stress_jab al importarse REEMPLAZA el login/entrada a eRreH de F por los suyos, y ese
+# login hace caer SIAPE apenas se aprieta INGRESAR (19/11: SIAPE cerrado -> el robot quedaba
+# esperando una ventana que no existe). De S/C solo se usan helpers de clic/teclado: se vuelve
+# al login normal de F, el mismo de los otros robots de SIAPE.
+_login_f, _erreh_f = F._hacer_login, F._entrar_erreh
 import cargar_stress_jab as S
 import corregir_stress_jab as C
+F._hacer_login, F._entrar_erreh = _login_f, _erreh_f
 import mapeo_novedades as MN
 
 SCRIPT_ID = "siape_legajo_digital"
@@ -67,7 +73,16 @@ DOCS = [
     ("CURRICULUM VITAE", "Curriculum", "Curriculum SIAPE"),
     ("PLANILLA DE DATOS PERSONALES Y DE CONTACTOS", "Planilla de datos personales",
      "Planilla de datos personales SIAPE"),
+    ("CONSTANCIA ACEPTO DESIGNACION", "Constancia de Aceptacion SIAPE",
+     "Constancia de aceptacion SIAPE"),
 ]
+# La constancia de aceptacion se baja SIEMPRE, aunque falten los antecedentes (pedido 22/11).
+SIEMPRE = {"CONSTANCIA ACEPTO DESIGNACION"}
+# Si alguno de estos figura SIN fecha (en rojo en SIAPE) el agente no hizo la documentación:
+# se deja de recorrer la lista y no se baja el CV ni la planilla (pedido del usuario 20/11);
+# solo lo de SIEMPRE. En SIAPE los documentos con fecha van antes que los en rojo, asi que
+# cortar ahi no pierde una constancia ya hecha.
+CORTE_SI_FALTA = ("CERTIFICADO DE ANTECEDENTES PROVINCIALES", "CERTIFICADO DE REINCIDENCIA")
 RX_FECHA = re.compile(r"^(.*?)\s*\((\d{2})/(\d{2})/(\d{4})\)\s*$")
 
 
@@ -136,8 +151,9 @@ def nombre_ag(r):
     return f"{r.get('apellido') or ''}, {r.get('nombre') or ''}".strip(", ")
 
 
+
 def ya_tiene_siape(dni):
-    """True si las dos subcarpetas ya tienen un archivo bajado por este robot."""
+    """True si todas las subcarpetas de DOCS ya tienen un archivo bajado por este robot."""
     for _doc, sub, base in DOCS:
         d = DOCU / str(dni) / sub
         if not (d.is_dir() and any(p.name.startswith(base) for p in d.iterdir())):
@@ -336,9 +352,12 @@ def buscar_persona(p, dni):
             if fila_y is not None and b.get("y") == fila_y:
                 celdas.setdefault(nom, F._jab_read_text(el).strip())
         ape, nro = celdas.get("APELLIDO Y NOMBRE", ""), celdas.get("", "")
-        if ape:
+        # 19/11: el Buscador de SIAPE trae la fila SIN apellido ni CUIL (legajo 0, CUIL "--")
+        # aunque la persona existe y al ACEPTAR carga completa. Vale la fila si el DNI coincide;
+        # después de ACEPTAR se confirma con el CUIL de la ficha.
+        if ape or nro == str(dni):
             break
-    if not ape:
+    if not ape and nro != str(dni):
         if canc:
             S._click(canc, simulate=False)
         raise RuntimeError(f"El Buscador de SIAPE no encontro el DNI {dni}.")
@@ -351,7 +370,11 @@ def buscar_persona(p, dni):
     while time.time() < limite:
         time.sleep(2)
         if re.sub(r"\D", "", p.cuil()).find(str(dni)) >= 0:
-            return ape
+            if not ape:  # el Buscador no lo trajo: se toma de la ficha
+                p.releer()
+                ape = ", ".join(x for x in (F._jab_read_text(p.header[k]).strip()
+                                            for k in ("APELLIDO", "NOMBRE") if p.header.get(k)) if x)
+            return ape or str(dni)
     raise RuntimeError(f"Despues de ACEPTAR la pantalla no muestra el CUIL de {dni} (lei {p.cuil()!r}).")
 
 
@@ -477,6 +500,12 @@ def _al_principio(p):
     return p.actual()
 
 
+def _faltan_antecedentes(lista):
+    """Certificados de antecedentes que figuran sin fecha (= en rojo, no hechos)."""
+    vistos = {(t or "").strip().upper() for t in lista}
+    return [d for d in CORTE_SI_FALTA if d in vistos]
+
+
 def leer_lista(p):
     """Recorre la lista entera con las flechas y devuelve [texto] en orden."""
     primero = _al_principio(p)
@@ -497,6 +526,9 @@ def leer_lista(p):
             break           # no se movio: era el ultimo (Forms avisa "Ultimo Dato")
         prev = f
         lista.append(a)
+        if _faltan_antecedentes([a]):
+            log(f"   {a.strip()} en rojo (sin fecha): dejo de recorrer la lista")
+            break
     aviso = _cerrar_aviso(buscar_boton=True)
     if aviso and not _es_ultimo_dato(aviso) and aviso != "(cartel)":
         raise RuntimeError(f"SIAPE recorriendo la lista: {aviso[:200]}")
@@ -654,8 +686,10 @@ def procesar(p, r, dry_run=False):
     if not tramite:
         return "sin_tramite", f"{ape}: no tiene {TRAMITE_PREF} en Legajo Digital (no esta en la tanda 2026 de SIAPE)"
     lista = leer_lista(p)
+    faltan = _faltan_antecedentes(lista)
+    docs = [d for d in DOCS if d[0] in SIEMPRE] if faltan else DOCS
     partes, errores, bajados = [], 0, 0
-    for doc, sub, base in DOCS:
+    for doc, sub, base in docs:
         e = elegir(lista, doc)
         if not e:
             partes.append(f"{sub}: no esta en SIAPE")
@@ -675,6 +709,7 @@ def procesar(p, r, dry_run=False):
                 data, job = abrir_y_bajar(p, dni)
                 destino.parent.mkdir(parents=True, exist_ok=True)
                 destino.write_bytes(data)
+                MN.auditar_docu(SCRIPT_ID, dni, destino, sub, f"{lista[k]} | job {job} | {tramite}")
                 partes.append(f"{sub}: {destino.name} (job {job})" + (" [2do intento]" if intento else ""))
                 bajados += 1
                 ultimo_error = None
@@ -687,6 +722,10 @@ def procesar(p, r, dry_run=False):
             errores += 1
             partes.append(f"{sub}: ERROR {str(ultimo_error)[:200]}")
     det = f"[{tramite}] " + " | ".join(partes)
+    if faltan:
+        det = (f"[{tramite}] {ape}: no hizo " + " ni ".join(faltan)
+               + " (en rojo en SIAPE); no se baja CV ni Planilla | " + " | ".join(partes))
+        return ("error" if errores else "sin_documentacion"), det
     if errores:
         return "error", det
     if dry_run:
