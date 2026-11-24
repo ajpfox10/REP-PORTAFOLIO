@@ -18,8 +18,9 @@ const ROOT = path.resolve(DIR, '..', '..');
 const env = readEnv(path.join(ROOT, '.env'));
 const USER = env.SIAPE_USER;
 const PASS = env.SIAPE_PASS;
-const ANIO = String(new Date().getFullYear() - 1);       // año ANTERIOR al en curso (dinámico)
-const DEST = 'D:\\G\\comparacion\\TIEMPO ACUMULADO.xls';  // destino que lee el pipeline
+const ARG = (k) => { const a = process.argv.find(x => x.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : null; };
+const ANIO = ARG('anio') || String(new Date().getFullYear() - 1);       // año ANTERIOR al en curso; --anio=YYYY lo pisa
+const DEST = ARG('dest') || 'D:\\G\\comparacion\\TIEMPO ACUMULADO.xls';  // destino que lee el pipeline; --dest= para bajadas ad hoc
 const URL  = 'http://app.siape.gba.gov.ar/discoverer/app/econnection?event=connectWithKey&connectionKey=cf_a633&clientType=viewer';
 const HEADLESS = process.argv.includes('--headless');
 const LOG = (m) => { const s = `${new Date().toISOString()}  ${m}`; console.log(s); fs.appendFileSync(path.join(DIR, 'bajar.log'), s + '\n'); };

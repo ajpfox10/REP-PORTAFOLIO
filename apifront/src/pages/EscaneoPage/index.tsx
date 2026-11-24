@@ -113,6 +113,7 @@ interface PaperStatus {
 interface ScanJob {
   id: number; status: string; page_count: number | null;
   error_message: string | null; personal_dni: number | null;
+  progress_message?: string | null;
   personal_ref: string | null; created_at: string;
   completed_at: string | null; device_id: number;
   doc_class?: string;
@@ -341,6 +342,8 @@ export function EscaneoPage() {
   // Sesión multi-página
   const [session, setSession]     = useState<ScannedPage[]>([]);
   const [scanPhase, setScanPhase] = useState<ScanPhase>('idle');
+  // Lo que informa el agente mientras escanea + segundos transcurridos.
+  const [scanProgress, setScanProgress] = useState<{ msg: string; seg: number }>({ msg: '', seg: 0 });
   const [scanError, setScanError] = useState<string | null>(null);
   const [saving, setSaving]       = useState(false);
   const blobUrlsRef = useRef<string[]>([]);
@@ -663,9 +666,11 @@ export function EscaneoPage() {
   // ── Poll job ────────────────────────────────────────────────────────────────
   async function pollJob(jobId: number, maxMs = 20 * 60_000): Promise<ScanJob> {
     const start = Date.now();
+    setScanProgress({ msg: '', seg: 0 });
     while (Date.now() - start < maxMs) {
       await new Promise(r => setTimeout(r, 2500));
       const job = await scannerFetch<ScanJob>(`/v1/scan-jobs/${jobId}`);
+      setScanProgress({ msg: job.progress_message || '', seg: Math.round((Date.now() - start) / 1000) });
       if (['completed', 'failed', 'canceled'].includes(job.status)) return job;
     }
     throw new Error('Tiempo de espera agotado (20 min)');
@@ -1867,7 +1872,19 @@ export function EscaneoPage() {
                     background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)',
                     fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="scan-pulse-dot" />
-                    {scanPhaseLabel[scanPhase]}
+                    <div>
+                      <div>
+                        {scanPhaseLabel[scanPhase]}
+                        {scanPhase === 'waiting' && scanProgress.seg > 0 && (
+                          <span className="muted"> ({Math.floor(scanProgress.seg / 60)}:{String(scanProgress.seg % 60).padStart(2, '0')})</span>
+                        )}
+                      </div>
+                      {scanPhase === 'waiting' && (
+                        <div style={{ marginTop: 4, fontSize: '0.8rem', opacity: 0.9 }}>
+                          {scanProgress.msg || 'Espere: no cierre esta pantalla ni retire las hojas. En 600 dpi color puede tardar varios minutos.'}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

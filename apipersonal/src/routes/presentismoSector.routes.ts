@@ -378,6 +378,8 @@ async function leerNovedades(sequelize: Sequelize, dnis: string[], desde: string
 // Presentes en SIAPE (para separar "presente sin fichar") y hasta qué día llega la última descarga del historial.
 // La descarga trae PRESENTE de los días ya procesados; el último día "cubierto" es el último con un volumen razonable
 // de presentes (≥ 25 % del máximo diario de los últimos 30 días), porque el día de la descarga viene casi vacío.
+// 24/11: el máximo se toma por tipo de día (hábil / sábado / domingo y feriado). Antes se comparaba todo contra el
+// máximo hábil y los fines de semana descargados (menos gente trabajando) salían como "Falta descargar SIAPE".
 async function leerSiapePresentes(sequelize: Sequelize, dnis: string[], desde: string, hasta: string) {
   const presente = new Set<string>();
   if (dnis.length) {
@@ -391,8 +393,18 @@ async function leerSiapePresentes(sequelize: Sequelize, dnis: string[], desde: s
     `SELECT DATE_FORMAT(fecha_desde,'%Y-%m-%d') f, COUNT(*) n FROM historial
       WHERE novedad = 'PRESENTE' AND fecha_desde >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND fecha_desde <= CURDATE()
       GROUP BY f ORDER BY f`, { type: QueryTypes.SELECT });
-  const max = Math.max(0, ...cob.map((x: any) => Number(x.n)));
-  const cubreHasta: string | null = [...cob].reverse().find((x: any) => Number(x.n) >= max * 0.25)?.f ?? null;
+  const fer = new Set((await sequelize.query<any>(
+    `SELECT DATE_FORMAT(fecha,'%Y-%m-%d') AS fecha FROM feriados
+      WHERE fecha >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND fecha <= CURDATE()`,
+    { type: QueryTypes.SELECT })).map((x: any) => x.fecha));
+  const tipo = (f: string) => {
+    const dow = new Date(`${f}T12:00:00`).getDay();
+    return fer.has(f) || dow === 0 ? 'dom' : dow === 6 ? 'sab' : 'habil';
+  };
+  const maxTipo = new Map<string, number>();
+  for (const x of cob) maxTipo.set(tipo(x.f), Math.max(maxTipo.get(tipo(x.f)) ?? 0, Number(x.n)));
+  const cubreHasta: string | null =
+    [...cob].reverse().find((x: any) => Number(x.n) >= (maxTipo.get(tipo(x.f)) ?? 0) * 0.25)?.f ?? null;
   return { presente, cubreHasta };
 }
 

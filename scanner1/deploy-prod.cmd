@@ -10,6 +10,8 @@ set "DST=C:\apps\personalprod\scanner1-prod"
 set "BCK=C:\apps\personalback\scanner1-backup"
 set "LOG=C:\apps\logs\deploy-scanner.log"
 set "NPM=C:\Program Files\nodejs\npm.cmd"
+REM Reinicio sin huerfanos (mismo script que usa el deploy de apipersonal)
+set REINICIO=powershell -NoProfile -ExecutionPolicy Bypass -File "C:\apps\personaldev\apipersonal\scripts\pm2-reinicio-limpio.ps1"
 
 if not exist "C:\apps\logs" mkdir "C:\apps\logs"
 
@@ -24,6 +26,8 @@ if /I "%~1"=="rollback" (
   if exist "%DST%" rmdir /s /q "%DST%"
   robocopy "%BCK%" "%DST%" /MIR /XD node_modules /NFL /NDL /R:2 /W:2 >>"%LOG%" 2>&1
   call pm2 start "%DST%\ecosystem.config.js"
+  %REINICIO% -App scanner-api-prod -Puerto 3002
+  if errorlevel 1 ( echo ERROR: scanner-api-prod no quedo escuchando :3002 tras el rollback & exit /b 1 )
   echo [%date% %time%] ROLLBACK completado>>"%LOG%"
   echo Rollback completado.
   exit /b 0
@@ -80,10 +84,15 @@ echo [7/7] Reiniciando servicios...
 call pm2 describe scanner-api-prod >nul 2>&1
 if errorlevel 1 (
   call pm2 start "%DST%\ecosystem.config.js"
+  if errorlevel 1 exit /b 1
 ) else (
-  call pm2 restart "%DST%\ecosystem.config.js" --only scanner-api-prod,scanner-agent-prod --update-env
+  REM API: reinicio limpio (pm2 en Windows deja huerfanos con el :3002 y la instancia
+  REM nueva queda en bucle EADDRINUSE; paso el 08/10, 11/10 y 24/11/2026).
+  %REINICIO% -App scanner-api-prod -Puerto 3002
+  if errorlevel 1 ( echo ERROR: scanner-api-prod no quedo escuchando :3002 - revisar pm2 & echo [%date% %time%] ERROR reinicio scanner-api-prod>>"%LOG%" & exit /b 1 )
+  call pm2 restart scanner-agent-prod --update-env
+  if errorlevel 1 exit /b 1
 )
-if errorlevel 1 exit /b 1
 
 echo [%date% %time%] Deploy completado OK>>"%LOG%"
 echo Deploy completado exitosamente.

@@ -11,6 +11,7 @@ import { copiarTexto, lanzarExplorador } from '../../utils/abrirCarpeta';
 import {
   VERSION_EXT_IMAGEN, TXT_ESTADO_WSP, textoFelicitacion, esAtrasado, fechaCumpleTexto, destinoDe, enviarFelicitacion, esPcAutomatica, leerConfigFelicitacion,
   nombreTarjeta, setPcAutomatica, versionExtension, type CarpetaTarjetas, type ConfigFelicitacion, type CumpleFelicitable,
+  PC_SIN_SENAL_MIN, TXT_ESTADO_PC, pcIdNavegador, type PcAutomatica,
 } from './felicitar';
 
 type Fila = CumpleanosAlerta & CumpleFelicitable;
@@ -119,6 +120,7 @@ export function CumpleanosFelicitacionesPage() {
   const [verDescarga, setVerDescarga] = useState(false);
   const publicada = useVersionPublicada();
   const [pcAuto, setPcAuto] = useState(esPcAutomatica());
+  const [pcs, setPcs] = useState<PcAutomatica[]>([]);
   const [enviando, setEnviando] = useState<string | null>(null);
   const [tanda, setTanda] = useState<{ hechos: number; total: number } | null>(null);
   const detenerRef = useRef(false);
@@ -134,6 +136,7 @@ export function CumpleanosFelicitacionesPage() {
       setGuardada(JSON.stringify(d.config));
       setImagenes(d.imagenes);
       setCarpeta(d.carpeta);
+      setPcs(d.pcs || []);
       setPlantillaDefault(d.plantilla_default);
       setAtrasadoDefault(d.plantilla_atrasado_default);
     } catch (e: any) {
@@ -166,6 +169,13 @@ export function CumpleanosFelicitacionesPage() {
   useEffect(() => { void cargarConfig(); void detectar(); }, [cargarConfig, detectar]);
   useEffect(() => { void cargarLista(); }, [cargarLista]);
   useEffect(() => () => { detenerRef.current = true; }, []);
+  // Estado de la(s) PC(s) automática(s): se refresca solo cada minuto
+  useEffect(() => {
+    const t = setInterval(async () => {
+      try { setPcs((await leerConfigFelicitacion()).pcs || []); } catch { /* reintenta */ }
+    }, 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   // Miniaturas de las opciones de imagen (con nombre de ejemplo)
   const opciones = useMemo(() => [
@@ -482,6 +492,7 @@ export function CumpleanosFelicitacionesPage() {
                 El automático solo corre en la PC que tenga tildado “Esta PC manda…”. Si ninguna lo tiene, no sale nada.
               </div>
             )}
+            <EstadoPcsAutomaticas pcs={pcs} automatico={!!cfg.automatico} />
 
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <button className="btn primary" onClick={guardar} disabled={!sinGuardar}>💾 Guardar</button>
@@ -613,3 +624,53 @@ export function CumpleanosFelicitacionesPage() {
 }
 
 export default CumpleanosFelicitacionesPage;
+
+/** Navegadores con "Esta PC manda…" tildado y cuándo se reportaron por última vez (latido cada 5 min). */
+function EstadoPcsAutomaticas({ pcs, automatico }: { pcs: PcAutomatica[]; automatico: boolean }) {
+  const yo = pcIdNavegador();
+  const vivas = pcs.filter((p) => p.minutos <= PC_SIN_SENAL_MIN);
+  if (!automatico && pcs.length === 0) return null;
+  const hace = (m: number) => (m < 1 ? 'recién' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.floor(m / 60)} h ${m % 60} min` : `hace ${Math.floor(m / 1440)} día(s)`);
+  const navegador = (ua: string | null) => (!ua ? '' : /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : 'otro');
+  const alerta = automatico && vivas.length === 0;
+  return (
+    <div style={{ padding: 8, borderRadius: 8, fontSize: '0.8rem', background: alerta ? 'rgba(239,68,68,0.15)' : 'rgba(148,163,184,0.08)', border: alerta ? '1px solid rgba(239,68,68,0.5)' : '1px solid transparent' }}>
+      {alerta && (
+        <div style={{ color: '#fca5a5', fontWeight: 700, marginBottom: 6 }}>
+          ⚠️ {pcs.length === 0
+            ? 'Ninguna PC tiene tildado “Esta PC manda…”: no va a salir nada automático.'
+            : `La PC del automático no se reporta hace más de ${PC_SIN_SENAL_MIN} minutos (apagada, suspendida, pestaña dormida o sesión cerrada). Mientras siga así no sale nada.`}
+        </div>
+      )}
+      {pcs.length > 0 && (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr className="muted" style={{ textAlign: 'left' }}>
+              <th style={{ padding: '2px 6px' }}>PC</th><th style={{ padding: '2px 6px' }}>Usuario</th>
+              <th style={{ padding: '2px 6px' }}>Última señal</th><th style={{ padding: '2px 6px' }}>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pcs.map((p) => {
+              const viva = p.minutos <= PC_SIN_SENAL_MIN;
+              const malEstado = viva && !!p.estado && !['OK', 'ANTES_DE_HORA'].includes(p.estado);
+              return (
+                <tr key={p.pc_id}>
+                  <td style={{ padding: '2px 6px' }}>{p.ip || '—'} · {navegador(p.user_agent)}{p.pc_id === yo ? ' (esta)' : ''}</td>
+                  <td style={{ padding: '2px 6px' }}>{p.usuario || '—'}</td>
+                  <td style={{ padding: '2px 6px', color: viva ? '#86efac' : '#fca5a5', fontWeight: viva ? 400 : 700 }}>
+                    {viva ? '🟢' : '🔴'} {hace(p.minutos)}
+                  </td>
+                  <td style={{ padding: '2px 6px', color: malEstado ? '#fde68a' : undefined }}>
+                    {viva ? (TXT_ESTADO_PC[p.estado || ''] || p.estado || '—') : 'Sin señal'}
+                    {p.ext_version ? ` · ext ${p.ext_version}` : ''}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}

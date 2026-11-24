@@ -8,7 +8,15 @@ export type ApiError = {
   status?: number;
   details?: any;
   aborted?: boolean;
+  /** true = falló por red/servidor (no por sesión vencida): NO se desloguea, se reintenta después. */
+  transitorio?: boolean;
 };
+
+/** El refresh no se pudo hacer por red/servidor: se conserva la sesión y se avisa como error de conexión. */
+function errorRefreshTransitorio(e: any, where: string): ApiError {
+  logEvent({ level: 'warn', what: 'refresh_transitorio', where, status: e?.status, details: e });
+  return { message: 'Sin conexión con el servidor. Se reintenta solo.', status: 0, transitorio: true, details: e };
+}
 
 function baseUrl() {
   // evita doble barra si base viene con / al final
@@ -64,17 +72,31 @@ async function refreshTokensIfPossible(): Promise<void> {
     };
     if (csrf) headers['x-csrf-token'] = csrf;
 
-    const res = await fetch(joinUrl('/auth/refresh'), {
-      method: 'POST',
-      headers,
-      credentials: 'include',
-      body: JSON.stringify(refreshToken ? { refreshToken } : {}),
-    });
+    let res: Response;
+    try {
+      res = await fetch(joinUrl('/auth/refresh'), {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify(refreshToken ? { refreshToken } : {}),
+      });
+    } catch (e) {
+      // Sin red (la PC recién sale de suspensión, se cortó el cable/wifi, el server se está reiniciando):
+      // NO es que la sesión venció → no hay que desloguear; se reintenta en el próximo pedido.
+      logEvent({ level: 'warn', what: 'refresh_sin_red', where: 'apiFetch.refresh', details: String(e) });
+      throw { message: 'Sin conexión con el servidor', status: 0, transitorio: true } as ApiError;
+    }
 
     const body = await parseJsonSafe(res);
     if (!res.ok || !body?.ok) {
+      // Otra pestaña (o PC con el mismo navegador) ya renovó la sesión mientras tanto: el token que
+      // mandamos quedó "viejo", pero en el storage ya está el nuevo → seguimos con ese.
+      const ahora = loadSession();
+      if (refreshToken && ahora?.refreshToken && ahora.refreshToken !== refreshToken && ahora.accessToken) return;
+      // 5xx / 429 / 408: problema del server o de la red, no de la sesión.
+      const transitorio = res.status >= 500 || res.status === 429 || res.status === 408;
       logEvent({ level: 'warn', what: 'refresh_failed', where: 'apiFetch.refresh', status: res.status, details: body });
-      throw { message: errorToString(body?.error ?? body?.message ?? 'Refresh falló'), status: res.status || 401, details: body } as ApiError;
+      throw { message: errorToString(body?.error ?? body?.message ?? 'Refresh falló'), status: res.status || 401, details: body, transitorio } as ApiError;
     }
 
     const accessToken = body?.data?.accessToken;
@@ -195,6 +217,7 @@ export async function apiFetch<T = any>(path: string, init: RequestInit = {}): P
           headers = buildHeaders(init.headers); // ya trae el nuevo accessToken
           res = await doFetch(path, init, headers);
         } catch (e: any) {
+          if (e?.transitorio) throw errorRefreshTransitorio(e, `apiFetch:${path}`);
           clearSession();
           const body = await parseJsonSafe(res);
           const raw = body?.error?.message ?? body?.error ?? body?.message ?? e?.message ?? 'Sesión expirada';
@@ -275,6 +298,7 @@ export async function apiFetchNdjson<T = any>(
         headers.set('Accept', 'application/x-ndjson');
         res = await doFetch(path, init, headers);
       } catch (e: any) {
+        if (e?.transitorio) throw errorRefreshTransitorio(e, `apiFetchNdjson:${path}`);
         clearSession();
         logEvent({ level: 'warn', what: 'auth_401_refresh_failed', where: `apiFetchNdjson:${path}`, status: 401, details: e });
         throw { message: e?.message ?? 'Sesion expirada', status: 401, details: e } as ApiError;
@@ -349,6 +373,7 @@ export async function apiFetchBlob(path: string, init: RequestInit = {}): Promis
           if (s2?.accessToken) headers.set('Authorization', `Bearer ${s2.accessToken}`);
           res = await fetch(joinUrl(path), { ...init, headers, credentials: 'include', signal: init.signal });
         } catch (e: any) {
+          if (e?.transitorio) throw errorRefreshTransitorio(e, `apiFetchBlob:${path}`);
           clearSession();
           logEvent({ level: 'warn', what: 'auth_401_refresh_failed', where: `apiFetchBlob:${path}`, status: 401, details: e });
           throw { message: e?.message ?? 'Sesión expirada', status: 401, details: e } as ApiError;
@@ -403,7 +428,8 @@ export async function apiFetchBlobWithMeta(path: string, init: RequestInit = {})
       const s2 = loadSession();
       if (s2?.accessToken) headers.set('Authorization', `Bearer ${s2.accessToken}`);
       res = await fetch(joinUrl(path), { ...init, headers, credentials: 'include', signal: init.signal });
-    } catch {
+    } catch (e: any) {
+      if (e?.transitorio) throw errorRefreshTransitorio(e, `apiFetchBlobWithMeta:${path}`);
       clearSession();
     }
   }

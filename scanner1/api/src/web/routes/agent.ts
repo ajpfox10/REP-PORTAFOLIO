@@ -153,13 +153,20 @@ r.post("/heartbeat", asyncRoute(async (req, res) => {
 r.post("/progress", asyncRoute(async (req, res) => {
   const tenant_id = (req as any).tenant_id as number
   const device_id = (req as any).device_id as number
-  const { job_id } = req.body || {}
+  const { job_id, message } = req.body || {}
   if (!job_id) throw new ApiError(400, "missing_job_id")
 
-  await pool.query(
-    "UPDATE scan_jobs SET updated_at=now() WHERE tenant_id=? AND id=? AND device_id=? AND status='in_progress'",
-    [tenant_id, job_id, device_id]
-  )
+  if (typeof message === "string" && message.trim()) {
+    await pool.query(
+      "UPDATE scan_jobs SET updated_at=now(), progress_message=? WHERE tenant_id=? AND id=? AND device_id=? AND status='in_progress'",
+      [message.trim().slice(0, 255), tenant_id, job_id, device_id]
+    )
+  } else {
+    await pool.query(
+      "UPDATE scan_jobs SET updated_at=now() WHERE tenant_id=? AND id=? AND device_id=? AND status='in_progress'",
+      [tenant_id, job_id, device_id]
+    )
+  }
   res.json({ ok: true })
 }))
 

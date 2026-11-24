@@ -18283,6 +18283,231 @@
         }
       }
     },
+    "/api/v1/cumpleanos_felicitacion_pcs": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List cumpleanos_felicitacion_pcs",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_cumpleanos_felicitacion_pcs"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create cumpleanos_felicitacion_pcs",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_cumpleanos_felicitacion_pcs_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/cumpleanos_felicitacion_pcs/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get cumpleanos_felicitacion_pcs by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update cumpleanos_felicitacion_pcs by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_cumpleanos_felicitacion_pcs"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch cumpleanos_felicitacion_pcs by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_cumpleanos_felicitacion_pcs_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete cumpleanos_felicitacion_pcs by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/cumpleanos_felicitacion_tomas": {
       "get": {
         "tags": [
@@ -73562,6 +73787,10 @@
             "type": "string",
             "nullable": true
           },
+          "plantilla_atrasado": {
+            "type": "string",
+            "nullable": true
+          },
           "imagen": {
             "type": "string"
           },
@@ -73608,6 +73837,10 @@
             "type": "string",
             "nullable": true
           },
+          "plantilla_atrasado": {
+            "type": "string",
+            "nullable": true
+          },
           "imagen": {
             "type": "string"
           },
@@ -73651,6 +73884,10 @@
             "type": "number"
           },
           "plantilla": {
+            "type": "string",
+            "nullable": true
+          },
+          "plantilla_atrasado": {
             "type": "string",
             "nullable": true
           },
@@ -73936,6 +74173,113 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          }
+        }
+      },
+      "Table_cumpleanos_felicitacion_pcs": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pc_id": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "user_agent": {
+            "type": "string",
+            "nullable": true
+          },
+          "usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "ext_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string",
+            "nullable": true
+          },
+          "ultimo_latido": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "pc_id",
+          "ultimo_latido"
+        ]
+      },
+      "Table_cumpleanos_felicitacion_pcs_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pc_id": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "user_agent": {
+            "type": "string",
+            "nullable": true
+          },
+          "usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "ext_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string",
+            "nullable": true
+          },
+          "ultimo_latido": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "pc_id",
+          "ultimo_latido"
+        ]
+      },
+      "Table_cumpleanos_felicitacion_pcs_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pc_id": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "user_agent": {
+            "type": "string",
+            "nullable": true
+          },
+          "usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "ext_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string",
+            "nullable": true
+          },
+          "ultimo_latido": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },

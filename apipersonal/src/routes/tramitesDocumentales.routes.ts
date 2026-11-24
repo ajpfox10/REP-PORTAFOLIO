@@ -3470,6 +3470,14 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
         });
       }
       // archivos en DOCU sin ningún registro
+      const INICIO_REGISTRO_DOCU = new Date(2026, 10, 22).getTime();
+      const robotPorNombre = (nombre: string): string | null => {
+        if (/^(Curriculum SIAPE|Planilla de datos personales SIAPE|Constancia de aceptacion SIAPE) \d{2}-\d{2}-\d{4}/i.test(nombre)) return 'siape_legajo_digital';
+        if (/^Apto Psicofisico SIAPE /i.test(nombre)) return 'siape_certificados_examen';
+        if (/ RDAM \d{4}-\d{2}-\d{2}( \(\d+\))?\.pdf$/i.test(nombre)) return 'rdam_certificados';
+        if (/^(Antecedentes (Nacionales|Provinciales|Eticos)|Buena Salud)( \d{4}-\d{2}-\d{2})?( \(\d+\))?\.(pdf|png|jpe?g)$/i.test(nombre)) return 'gmail_antecedentes';
+        return null;
+      };
       for (const dni of dnis) {
         const dir = path.join(base, String(dni));
         const pila: string[] = [''];
@@ -3487,9 +3495,18 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
             if (conRegistro.has(norm(ruta))) continue;
             let mtime: Date | null = null;
             try { mtime = fs.statSync(path.join(dir, r)).mtime; } catch { /* ignora */ }
+            // 24/11/2026: lo que bajó un robot se reconoce por el nombre que le pone el robot → "Robot".
+            // El resto: si es de antes del 22/11 (cuando empezó el registro) → "Anterior al registro";
+            // si es posterior → "alerta" (se copió a mano por el Explorador, sin pasar por la app).
+            const rob = robotPorNombre(e.name);
+            const posterior = !!mtime && mtime.getTime() >= INICIO_REGISTRO_DOCU;
             rows.push({
               fuente: 'carpeta', dni, ...separar(ruta), ruta, documento: null, fecha: mtime,
-              origen: 'sin_registro', usuario: null, pc: null, robot: null, detalle: null, existe: true,
+              origen: rob ? 'robot' : posterior ? 'alerta' : 'sin_registro',
+              usuario: null, pc: null, robot: rob,
+              detalle: rob ? 'reconocido por el nombre del archivo'
+                : posterior ? 'copiado a la carpeta sin pasar por la app (Explorador)' : null,
+              existe: true,
             });
           }
         }

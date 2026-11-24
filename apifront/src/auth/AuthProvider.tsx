@@ -119,8 +119,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (e: any) {
         logEvent({ level: 'warn', what: 'boot_auth_exception', where: 'AuthProvider.boot', details: e });
-        clearSession();
-        if (alive) setSession(null);
+        // Sin red / server reiniciándose (no hubo respuesta 401): NO desloguear. La sesión guardada
+        // sigue y el próximo pedido renueva el token solo. Solo un rechazo real (401/400) cierra sesión.
+        const sinRespuesta = e?.transitorio || !e?.status || e.status >= 500 || e.status === 429;
+        if (!sinRespuesta) {
+          clearSession();
+          if (alive) setSession(null);
+        }
       } finally {
         if (alive) setIsReady(true);
       }

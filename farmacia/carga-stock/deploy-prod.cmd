@@ -49,7 +49,13 @@ if defined FRONT_DEPS (
 )
 
 echo [4/4] Levantando prod...
-call pm2 restart farmacia-backend farmacia-frontend >> %LOG% 2>&1
+REM Reinicio limpio (24/11/2026): "pm2 restart" en Windows a veces deja huerfano el node viejo con el
+REM puerto y la app entra en bucle de EADDRINUSE. El script exige que pm2 quede duenio del puerto.
+set REINICIO=powershell -NoProfile -ExecutionPolicy Bypass -File "C:\apps\personaldev\apipersonal\scripts\pm2-reinicio-limpio.ps1"
+%REINICIO% -App farmacia-backend -Puerto 8310 >> %LOG% 2>&1
+if errorlevel 1 ( echo ERROR: farmacia-backend no quedo escuchando :8310. Ver %LOG% & pause & exit /b 1 )
+%REINICIO% -App farmacia-frontend -Puerto 8410 >> %LOG% 2>&1
+if errorlevel 1 ( echo ERROR: farmacia-frontend no quedo escuchando :8410. Ver %LOG% & pause & exit /b 1 )
 call pm2 save >> %LOG% 2>&1
 
 echo OK: deploy farmacia completado. Front http://192.168.0.21:8410

@@ -201,6 +201,20 @@ async function ensureFelicitacionTables(sequelize: Sequelize) {
       PRIMARY KEY (dni, anio, prueba)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+  // Latido de cada navegador que tiene tildado "Esta PC manda las felicitaciones automáticas":
+  // la página avisa si ninguna se reporta hace rato (PC suspendida, pestaña dormida, sesión caída).
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS cumpleanos_felicitacion_pcs (
+      pc_id VARCHAR(40) NOT NULL,
+      ip VARCHAR(64) NULL,
+      user_agent VARCHAR(255) NULL,
+      usuario_id INT NULL,
+      ext_version VARCHAR(20) NULL,
+      estado VARCHAR(40) NULL,
+      ultimo_latido DATETIME NOT NULL,
+      PRIMARY KEY (pc_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
   await sequelize.query(`INSERT IGNORE INTO cumpleanos_felicitacion_config (id) VALUES (1)`);
   // imagen pasó de VARCHAR(40) a 255 para guardar 'carpeta:<nombre de archivo>'
   await sequelize.query(`ALTER TABLE cumpleanos_felicitacion_config MODIFY imagen VARCHAR(255) NOT NULL DEFAULT 'diseno:globos'`);
@@ -465,7 +479,15 @@ export function buildCumpleanosAlertasRouter(sequelize: Sequelize) {
       try { carpeta = listarCarpetaTarjetas(); } catch (e: any) {
         carpeta = { ruta: TARJETAS_DIR, uncRel: '', existe: false, imagenes: [], error: e?.message || 'No se pudo leer la carpeta' };
       }
-      return res.json({ ok: true, data: { config, imagenes, carpeta, plantilla_default: PLANTILLA_FELICITACION_DEFAULT, plantilla_atrasado_default: PLANTILLA_ATRASADO_DEFAULT } });
+      const pcs = await sequelize.query<any>(
+        `SELECT p.pc_id, p.ip, p.user_agent, p.ext_version, p.estado, p.ultimo_latido, u.nombre AS usuario,
+                TIMESTAMPDIFF(MINUTE, p.ultimo_latido, NOW()) AS minutos
+           FROM cumpleanos_felicitacion_pcs p LEFT JOIN usuarios u ON u.id = p.usuario_id
+          WHERE p.ultimo_latido > NOW() - INTERVAL 30 DAY
+          ORDER BY p.ultimo_latido DESC`,
+        { type: QueryTypes.SELECT },
+      );
+      return res.json({ ok: true, data: { config, imagenes, carpeta, pcs, plantilla_default: PLANTILLA_FELICITACION_DEFAULT, plantilla_atrasado_default: PLANTILLA_ATRASADO_DEFAULT } });
     } catch (err: any) {
       logger.error({ msg: 'felicitacion config', err: err?.message });
       return res.status(500).json({ ok: false, error: 'No se pudo leer la configuración' });
@@ -615,6 +637,37 @@ export function buildCumpleanosAlertasRouter(sequelize: Sequelize) {
     } catch (err: any) {
       logger.error({ msg: 'felicitacion tomar', err: err?.message });
       return res.status(500).json({ ok: false, error: 'No se pudo tomar el cumpleaños' });
+    }
+  });
+
+  // Latido de la PC automática (cada 5 min desde FelicitacionAutomatica). `baja: true` = destildó.
+  router.post('/felicitacion/latido', requirePermission('api:access'), async (req, res) => {
+    try {
+      await ensureFelicitacionTables(sequelize);
+      const pcId = String(req.body?.pc_id || '').trim();
+      if (!/^[a-z0-9-]{8,40}$/i.test(pcId)) return res.status(400).json({ ok: false, error: 'pc_id inválido' });
+      if (req.body?.baja) {
+        await sequelize.query(`DELETE FROM cumpleanos_felicitacion_pcs WHERE pc_id = :pcId`, { replacements: { pcId } });
+        return res.json({ ok: true });
+      }
+      await sequelize.query(
+        `INSERT INTO cumpleanos_felicitacion_pcs (pc_id, ip, user_agent, usuario_id, ext_version, estado, ultimo_latido)
+         VALUES (:pcId, :ip, :ua, :uid, :ext, :estado, NOW())
+         ON DUPLICATE KEY UPDATE ip = VALUES(ip), user_agent = VALUES(user_agent), usuario_id = VALUES(usuario_id),
+           ext_version = VALUES(ext_version), estado = VALUES(estado), ultimo_latido = NOW()`,
+        { replacements: {
+          pcId,
+          ip: String(req.ip || '').replace(/^::ffff:/, '').slice(0, 64) || null,
+          ua: String(req.header('user-agent') || '').slice(0, 255) || null,
+          uid: (req as any).auth?.principalId ?? null,
+          ext: String(req.body?.ext || '').slice(0, 20) || null,
+          estado: String(req.body?.estado || '').slice(0, 40) || null,
+        } },
+      );
+      return res.json({ ok: true });
+    } catch (err: any) {
+      logger.error({ msg: 'felicitacion latido', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'No se pudo registrar el latido' });
     }
   });
 

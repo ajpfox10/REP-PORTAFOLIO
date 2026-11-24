@@ -27,7 +27,8 @@ const ORIGENES: Record<string, { label: string; icon: string; color: string }> =
   movido: { label: 'Movido', icon: '↪️', color: '#94a3b8' },
   carga: { label: 'Carga manual', icon: '✍️', color: '#f472b6' },
   importado: { label: 'Importado', icon: '📥', color: '#64748b' },
-  sin_registro: { label: 'Sin registro', icon: '❔', color: '#ef4444' },
+  alerta: { label: 'Alerta: copiado a mano', icon: '⚠️', color: '#ef4444' },
+  sin_registro: { label: 'Anterior al registro', icon: '🗄️', color: '#64748b' },
 };
 const ROBOTS: Record<string, string> = {
   siape_legajo_digital: 'Legajo Digital SIAPE',
@@ -59,6 +60,10 @@ export function AuditoriaTab() {
   const [usuario, setUsuario] = useState('');
   const [texto, setTexto] = useState('');
   const [abiertos, setAbiertos] = useState<Set<number>>(new Set());
+  // Filtro por la fecha del "último" archivo de cada agente (24/11/2026).
+  const [ultDesde, setUltDesde] = useState('');
+  const [ultHasta, setUltHasta] = useState('');
+  const [orden, setOrden] = useState<'apellido' | 'ultimo_desc' | 'ultimo_asc'>('apellido');
 
   useEffect(() => {
     void (async () => {
@@ -109,15 +114,51 @@ export function AuditoriaTab() {
     setAbiertos((cur) => { const s = new Set(cur); if (s.has(d)) s.delete(d); else s.add(d); return s; });
   }
 
-  const agentes = (data?.agentes || []).filter((a) => porDni.has(a.dni) || (!origenes.size && !usuario && !texto.trim()));
+  // Fecha (YYYY-MM-DD local) del archivo más reciente de cada agente, dentro de lo filtrado.
+  const ultimoPorDni = useMemo(() => {
+    const m = new Map<number, Fila>();
+    for (const [d, l] of porDni) {
+      let best: Fila | null = null;
+      for (const r of l) {
+        if (!r.fecha) continue;
+        if (!best || new Date(r.fecha).getTime() > new Date(best.fecha as string).getTime()) best = r;
+      }
+      m.set(d, best || l[0]);
+    }
+    return m;
+  }, [porDni]);
+  function diaLocal(iso: string | null | undefined) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  const filtroFecha = !!(ultDesde || ultHasta);
+  const agentes = (data?.agentes || [])
+    .filter((a) => porDni.has(a.dni) || (!origenes.size && !usuario && !texto.trim() && !filtroFecha))
+    .filter((a) => {
+      if (!filtroFecha) return true;
+      const dia = diaLocal(ultimoPorDni.get(a.dni)?.fecha);
+      if (!dia) return false;
+      return (!ultDesde || dia >= ultDesde) && (!ultHasta || dia <= ultHasta);
+    })
+    .sort((x, y) => {
+      if (orden === 'apellido') return 0;
+      const tx = new Date(ultimoPorDni.get(x.dni)?.fecha || 0).getTime() || 0;
+      const ty = new Date(ultimoPorDni.get(y.dni)?.fecha || 0).getTime() || 0;
+      return orden === 'ultimo_desc' ? ty - tx : tx - ty;
+    });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
         Por agente: qué archivos tiene en <code>DOCU</code>, en qué carpeta, quién los guardó, desde qué PC o equipo
         de escaneo y por qué vía (escáner, mail, robot, subida o movido desde Trámites). Lo que está en la carpeta
-        sin ningún registro figura como <b style={{ color: ORIGENES.sin_registro.color }}>Sin registro</b>.
-        Los robots, las subidas y los movimientos quedan registrados desde el 22/11/2026.
+        sin registro y con el nombre que ponen los robots figura como <b style={{ color: ORIGENES.robot.color }}>Robot</b>;
+        si no es de un robot y es del 22/11/2026 en adelante figura como <b style={{ color: ORIGENES.alerta.color }}>⚠️ Alerta</b>
+        (se copió a la carpeta por el Explorador, sin pasar por la app); lo anterior al 22/11 figura como
+        <b style={{ color: ORIGENES.sin_registro.color }}> Anterior al registro</b>.
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -157,6 +198,19 @@ export function AuditoriaTab() {
               {usuarios.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
             <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar archivo, carpeta, PC…" style={{ ...sel, minWidth: 200 }} />
+            <span style={{ color: '#94a3b8', fontSize: '0.76rem' }}>Último entre</span>
+            <input type="date" value={ultDesde} onChange={(e) => setUltDesde(e.target.value)} style={{ ...sel, colorScheme: 'dark' }} title="Fecha del último archivo: desde" />
+            <span style={{ color: '#94a3b8', fontSize: '0.76rem' }}>y</span>
+            <input type="date" value={ultHasta} onChange={(e) => setUltHasta(e.target.value)} style={{ ...sel, colorScheme: 'dark' }} title="Fecha del último archivo: hasta" />
+            {filtroFecha ? (
+              <button type="button" onClick={() => { setUltDesde(''); setUltHasta(''); }} style={{ ...sel, cursor: 'pointer' }} title="Quitar filtro de fecha">✕</button>
+            ) : null}
+            <select value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)} style={sel}>
+              <option value="apellido">Orden: apellido</option>
+              <option value="ultimo_desc">Último más reciente primero</option>
+              <option value="ultimo_asc">Último más viejo primero</option>
+            </select>
+            {filtroFecha ? <span style={{ color: '#cbd5e1', fontSize: '0.76rem' }}>{agentes.length} agente(s)</span> : null}
             <button type="button" onClick={() => setAbiertos(new Set(agentes.map((a) => a.dni)))} style={{ ...sel, cursor: 'pointer' }}>Abrir todos</button>
             <button type="button" onClick={() => setAbiertos(new Set())} style={{ ...sel, cursor: 'pointer' }}>Cerrar todos</button>
           </div>
@@ -166,8 +220,8 @@ export function AuditoriaTab() {
           ) : agentes.map((a) => {
             const lista = porDni.get(a.dni) || [];
             const abierto = abiertos.has(a.dni);
-            const ult = lista[0];
-            const sinReg = lista.filter((r) => r.origen === 'sin_registro').length;
+            const ult = ultimoPorDni.get(a.dni) || lista[0];
+            const alertas = lista.filter((r) => r.origen === 'alerta').length;
             return (
               <div key={a.dni} style={{ border: BORDER, borderRadius: 8, overflow: 'hidden' }}>
                 <button type="button" onClick={() => toggleAgente(a.dni)}
@@ -180,10 +234,10 @@ export function AuditoriaTab() {
                     {a.apellido}{a.nombre ? `, ${a.nombre}` : ''} <span style={{ color: '#64748b', fontWeight: 400 }}>· DNI {a.dni}</span>
                   </span>
                   <span style={{ color: '#94a3b8', fontSize: '0.76rem' }}>{lista.length} archivo(s)</span>
-                  {sinReg ? <span style={{ color: ORIGENES.sin_registro.color, fontSize: '0.76rem' }}>{sinReg} sin registro</span> : null}
+                  {alertas ? <span style={{ color: ORIGENES.alerta.color, fontSize: '0.76rem', fontWeight: 600 }}>⚠️ {alertas} alerta(s)</span> : null}
                   {ult ? (
                     <span style={{ color: '#64748b', fontSize: '0.74rem', marginLeft: 'auto' }}>
-                      último: {fecha(ult.fecha)} {ORIGENES[ult.origen]?.icon} {ult.usuario || ROBOTS[ult.robot || ''] || ult.robot || ''}
+                      último: {fecha(ult.fecha)} {ORIGENES[ult.origen]?.icon} {ult.usuario || ROBOTS[ult.robot || ''] || ult.robot || (ult.origen === 'alerta' ? 'Copiado a mano' : '')}
                     </span>
                   ) : null}
                 </button>

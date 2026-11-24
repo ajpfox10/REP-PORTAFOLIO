@@ -18,6 +18,7 @@ import { promisify } from "util"
 import FormData from "form-data"
 import axios, { type AxiosInstance } from "axios"
 import { Jimp } from "jimp"
+import sharp from "sharp"
 
 const execAsync = promisify(exec)
 const _execAsync = execAsync
@@ -34,6 +35,8 @@ const SCAN_CONCURRENCY = Math.max(1, Number(process.env.SCAN_CONCURRENCY || 2))
 const SCAN_JOB_TIMEOUT_MS = Math.max(60_000, Number(process.env.SCAN_JOB_TIMEOUT_MS || 300_000))
 // Tope absoluto del trabajo completo, aunque sigan llegando hojas.
 const SCAN_JOB_MAX_MS = Math.max(SCAN_JOB_TIMEOUT_MS, Number(process.env.SCAN_JOB_MAX_MS || 900_000))
+// Cuánto se espera una página mientras el Kyocera responde "todavía generando".
+const KYOCERA_WORKING_WAIT_MS = Math.max(60_000, SCAN_JOB_TIMEOUT_MS - 15_000)
 const AUTO_DISCOVERY_ENABLED = process.env.AUTO_DISCOVERY_ENABLED !== "false"
 const HOSTNAME = os.hostname()
 
@@ -193,14 +196,35 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
   let kyoceraTried = false
   if (isAdfSource && normalizePaperSize(paperSize) !== "A4") {
     kyoceraTried = true
-    try {
-      const pages = await scanKyoceraPrivate(ip, { dpi, color, source, duplex, paper_size: paperSize })
-      console.log(`[kyocera] ✅ ${ip} → ${pages.length} pág. (ADF ${paperSize})`)
-      warnIfPagesShorter(ip, pages, paperSize, "kyocera")
-      return pages
-    } catch (e: any) {
-      errors.push(`Kyocera: ${e.message}`)
-      console.warn(`[kyocera] ${ip} falló: ${e.message} — probando eSCL…`)
+    // Si el equipo está ocupado con un trabajo anterior, se espera y se reintenta
+    // POR LA MISMA VÍA: eSCL en el ADF recorta el Oficio a A4 y además choca con el
+    // trabajo en curso, dejando trabajos huérfanos que traban más el equipo.
+    const esperas = [10_000, 20_000, 30_000, 45_000, 60_000]
+    for (let intento = 0; ; intento++) {
+      try {
+        const pages = await scanKyoceraPrivate(ip, { dpi, color, source, duplex, paper_size: paperSize })
+        console.log(`[kyocera] ✅ ${ip} → ${pages.length} pág. (ADF ${paperSize})`)
+        warnIfPagesShorter(ip, pages, paperSize, "kyocera")
+        return pages
+      } catch (e: any) {
+        const msg = e?.message || String(e)
+        // El equipo ya tomó el trabajo: no probar otro protocolo encima.
+        if (e?.kyoceraStarted) throw e
+        // Equipo sin API Kyocera o parámetro inválido → seguir con eSCL como antes.
+        if (isKyoceraUnsupported(msg)) {
+          errors.push(`Kyocera: ${msg}`)
+          console.warn(`[kyocera] ${ip} falló: ${msg} — probando eSCL…`)
+          break
+        }
+        if (intento >= esperas.length || scanCancelled(ip)) {
+          throw new Error(`SCANNER_BUSY: el equipo siguió ocupado con un trabajo anterior durante ~3 minutos (${msg})`)
+        }
+        const seg = esperas[intento] / 1000
+        console.warn(`[kyocera] ${ip} ocupado (${msg}) — espero ${seg}s y reintento (${intento + 1}/${esperas.length})`)
+        notifyScanStatus(ip, `El escáner está terminando un trabajo anterior. Esperando que se libere ` +
+          `(reintento ${intento + 1} de ${esperas.length})… No toque el equipo.`, true)
+        await sleep(esperas[intento])
+      }
     }
   }
 
@@ -820,6 +844,7 @@ async function scanKyoceraPrivate(ip: string, opts: {
   }
 
   let operationId = ""
+  let started = false
   try {
     const open = await kyoceraSoap(base, "open_session", "<k:open_sessionRequest/>", 15_000)
     const openResult = xmlValue(open.text, "result")
@@ -851,20 +876,40 @@ async function scanKyoceraPrivate(ip: string, opts: {
     if (startResult !== "SUCCESS" || !jobId || jobId === "0") {
       throw new Error(`start_scan ${startResult || "sin job_id"}`)
     }
+    // Desde acá el equipo YA tomó el trabajo: si algo falla no hay que probar otro
+    // protocolo (chocaría con este mismo trabajo y lo dejaría más trabado).
+    started = true
+    const pesado = dpi >= 600 || opts.color
+    notifyScanStatus(ip, `El escáner está tomando las hojas (${dpi} dpi${opts.color ? " color" : ""}${opts.duplex ? ", doble faz" : ""}). ` +
+      (pesado ? "En esta calidad cada hoja puede tardar más de un minuto. " : "") +
+      "Espere y no retire las hojas ni use el equipo hasta que termine.", true)
 
     // Pedir imágenes hasta ALL_GET_COMPLETE (una por cara; ADF/duplex trae varias).
-    // Sin páginas nuevas por 60s → se corta con lo que haya.
+    // Mientras el equipo responda "todavía generando" (IMAGE_CREATING_NOW, etc.) se
+    // espera hasta KYOCERA_WORKING_WAIT_MS por página; sin respuesta útil, 60 s.
     const pages: Buffer[] = []
     let lastPageAt = Date.now()
-    for (let attempt = 0; attempt < 500; attempt++) {
+    let lastWorkingAt = 0
+    for (let attempt = 0; attempt < 2000; attempt++) {
       if (scanCancelled(ip)) {
         console.warn(`[kyocera] ${ip} escaneo cancelado por timeout`)
         break
       }
       await sleep(attempt === 0 ? 3_000 : pages.length ? 500 : 2_000)
-      const retrieve = await kyoceraSoap(base, "retrieve_image",
-        `<k:retrieve_imageRequest><k:operation_id>${operationId}</k:operation_id><k:job_id>${jobId}</k:job_id></k:retrieve_imageRequest>`,
-        60_000)
+      let retrieve: { text: string; buffer: Buffer }
+      try {
+        retrieve = await kyoceraSoap(base, "retrieve_image",
+          `<k:retrieve_imageRequest><k:operation_id>${operationId}</k:operation_id><k:job_id>${jobId}</k:job_id></k:retrieve_imageRequest>`,
+          60_000)
+      } catch (e: any) {
+        // Con la máquina a pleno (600 dpi color) puede cortar o tardar la respuesta:
+        // se reintenta mientras no se pase el plazo de espera de la página.
+        if (isTransientHttpError(e) && Date.now() - lastPageAt < KYOCERA_WORKING_WAIT_MS) {
+          console.warn(`[kyocera] ${ip} retrieve_image transitorio (${e.message}); reintento`)
+          continue
+        }
+        throw e
+      }
       const page = extractKyoceraImage(retrieve)
       if (page && page.length > 100) {
         pages.push(page)
@@ -875,7 +920,23 @@ async function scanKyoceraPrivate(ip: string, opts: {
       }
       const result = xmlValue(retrieve.text, "result")
       if (result === "ALL_GET_COMPLETE") break
-      if (result && !["SUCCESS", "PROCESSING", "SCAN_CONTINUE", "WAITING"].includes(result)) {
+      if (isKyoceraWorkingResult(result)) {
+        // El equipo sigue escaneando / armando la imagen: esperar, no abandonar.
+        if (Date.now() - lastWorkingAt > 15_000) {
+          const seg = Math.round((Date.now() - lastPageAt) / 1000)
+          notifyScanStatus(ip, `${pages.length ? `${pages.length} pág. recibidas. ` : ""}` +
+            `El escáner está generando la imagen de la página ${pages.length + 1} (${seg} s)… ` +
+            `Espere, no retire las hojas.`, true)
+          console.log(`[kyocera] ${ip} ${result} — esperando página ${pages.length + 1} (${seg}s)`)
+          lastWorkingAt = Date.now()
+        }
+        if (Date.now() - lastPageAt > KYOCERA_WORKING_WAIT_MS) {
+          if (pages.length) break
+          throw new Error(`retrieve_image ${result}: el equipo no entregó la imagen en ${Math.round(KYOCERA_WORKING_WAIT_MS / 60_000)} min`)
+        }
+        continue
+      }
+      if (result && result !== "SUCCESS") {
         if (pages.length) {
           console.warn(`[kyocera] ${ip} retrieve_image ${result} tras ${pages.length} pág. — fin`)
           break
@@ -890,6 +951,13 @@ async function scanKyoceraPrivate(ip: string, opts: {
 
     if (!pages.length) throw new Error("retrieve_image sin imagen")
     return pages
+  } catch (e: any) {
+    if (started) {
+      const err = new Error(`KYOCERA_STARTED: ${e?.message || e}`)
+      ;(err as any).kyoceraStarted = true
+      throw err
+    }
+    throw e
   } finally {
     if (operationId) {
       await kyoceraSoap(base, "close_session",
@@ -897,6 +965,21 @@ async function scanKyoceraPrivate(ip: string, opts: {
         10_000).catch(() => {})
     }
   }
+}
+
+// Respuestas de retrieve_image que significan "todavía estoy trabajando".
+// IMAGE_CREATING_NOW: el equipo sigue armando la imagen (600 dpi color + doble faz
+// en Oficio tarda bastante); antes se tomaba como error y se abandonaba el trabajo.
+function isKyoceraWorkingResult(result: string): boolean {
+  if (!result || result === "SUCCESS") return false
+  if (["PROCESSING", "SCAN_CONTINUE", "WAITING", "IMAGE_CREATING_NOW"].includes(result)) return true
+  return /_NOW$|CREATING|SCANNING|PROCESSING|WAIT|CONTINUE|BUSY|PREPAR/i.test(result)
+}
+
+// Fallos antes de start_scan: "este equipo no tiene la API Kyocera" o parámetro
+// inválido (no tiene sentido esperar) vs. cualquier otro = probablemente ocupado.
+function isKyoceraUnsupported(msg: string): boolean {
+  return /servicio privado no disponible|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|SOAP HTTP 404|sin equivalente Kyocera|MISMATCH|INVALID|ILLEGAL|PARAMETER/i.test(msg)
 }
 
 function nearestKyoceraDpi(dpi: number): 200 | 300 | 400 | 600 {
@@ -1397,7 +1480,7 @@ function isScannerBusyMessage(value: string): boolean {
 
 // Control de un escaneo en curso, por IP: el motor avisa cada hoja (onPage) y
 // mira `cancelled` para cortar de verdad y cerrar el trabajo en el equipo.
-type ScanControl = { cancelled: boolean; onPage: () => void }
+type ScanControl = { cancelled: boolean; onPage: () => void; onStatus?: (msg: string) => void }
 const scanControls = new Map<string, ScanControl>()
 
 function scanCancelled(ip: string): boolean {
@@ -1406,6 +1489,19 @@ function scanCancelled(ip: string): boolean {
 
 function notifyScanPage(ip: string): void {
   try { scanControls.get(ip)?.onPage() } catch {}
+}
+
+// Mensaje para la pantalla del operador ("espere, el equipo está generando la
+// imagen…"). Con activity=true además cuenta como actividad del equipo (reinicia
+// el plazo de inactividad): sirve cuando el escáner responde "todavía trabajando".
+// El tope total (SCAN_JOB_MAX_MS) sigue valiendo.
+function notifyScanStatus(ip: string, msg: string, activity = false): void {
+  try {
+    const c = scanControls.get(ip)
+    if (!c) return
+    if (activity) c.onPage()
+    c.onStatus?.(msg)
+  } catch {}
 }
 
 // Como withTimeout, pero el plazo de inactividad se reinicia con cada hoja.
@@ -1669,8 +1765,12 @@ function getCompressionQuality(level: string | undefined): number {
   return 72
 }
 
-function shouldAutoRotate(image: any): boolean {
-  return image.bitmap.width > (image.bitmap.height * 1.08)
+// Las imágenes se procesan con sharp (libvips, nativo y en un hilo aparte).
+// Antes se usaba Jimp (JavaScript puro): una página A4 a 600 dpi (4960x7014)
+// tardaba ~8,6 s en abrirse y ~3,3 s en comprimirse, se abría dos veces y
+// trababa el agente entero (~20 s por página). Con sharp: < 1 s.
+function shouldAutoRotate(width: number, height: number): boolean {
+  return width > (height * 1.08)
 }
 
 type BlankPageAnalysis = {
@@ -1679,33 +1779,27 @@ type BlankPageAnalysis = {
   strongInkRatio: number
 }
 
-function analyzeBlankPage(image: any): BlankPageAnalysis {
-  const { width, height, data } = image.bitmap
-  if (!width || !height || !data.length) {
-    return { isBlank: false, nonWhiteRatio: 1, strongInkRatio: 1 }
-  }
+// Se analiza una miniatura de 160x220 (la misma grilla de muestreo que antes).
+async function analyzeBlankPage(buf: Buffer): Promise<BlankPageAnalysis> {
+  const { data, info } = await sharp(buf, { failOn: "none" })
+    .resize({ width: 160, height: 220, fit: "fill" })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  const ch = info.channels
+  const samples = Math.floor(data.length / ch)
+  if (!samples) return { isBlank: false, nonWhiteRatio: 1, strongInkRatio: 1 }
 
-  const stepX = Math.max(1, Math.floor(width / 160))
-  const stepY = Math.max(1, Math.floor(height / 220))
-  let samples = 0
   let nonWhite = 0
   let strongInk = 0
-
-  for (let y = 0; y < height; y += stepY) {
-    for (let x = 0; x < width; x += stepX) {
-      const idx = ((width * y) + x) * 4
-      const avg = (data[idx] + data[idx + 1] + data[idx + 2]) / 3
-      samples++
-      if (avg < 245) nonWhite++
-      if (avg < 220) strongInk++
-    }
+  for (let i = 0; i + ch - 1 < data.length; i += ch) {
+    const avg = ch >= 3 ? (data[i] + data[i + 1] + data[i + 2]) / 3 : data[i]
+    if (avg < 245) nonWhite++
+    if (avg < 220) strongInk++
   }
-
-  const nonWhiteRatio = nonWhite / Math.max(1, samples)
-  const strongInkRatio = strongInk / Math.max(1, samples)
+  const nonWhiteRatio = nonWhite / samples
+  const strongInkRatio = strongInk / samples
   // Ser conservadores: una firma, sello o texto tenue no debe descartarse.
-  // Los umbrales anteriores (1.5% / 0.3%) marcaban como blancas páginas
-  // con poco contenido real.
   return {
     isBlank: nonWhiteRatio < 0.0035 && strongInkRatio < 0.0008,
     nonWhiteRatio,
@@ -1713,33 +1807,39 @@ function analyzeBlankPage(image: any): BlankPageAnalysis {
   }
 }
 
+// Si no hay que rotar ni pasar a grises, el JPEG del escáner se sube TAL CUAL:
+// volver a comprimirlo lo hacía más pesado (1,5 MB -> 2,5 MB) y perdía calidad.
 async function normalizePageForUpload(page: Buffer, profile: JobResponse["profile"]): Promise<Buffer> {
   const detected = detectUploadFile(page, 0)
   if (detected.contentType === "application/pdf") return page
 
-  let image: any
+  let meta: Awaited<ReturnType<ReturnType<typeof sharp>["metadata"]>>
   try {
-    image = await Jimp.read(page)
+    meta = await sharp(page, { failOn: "none" }).metadata()
   } catch {
     return page
   }
 
-  if (profile?.auto_rotate && shouldAutoRotate(image)) {
-    image.rotate(90)
-  }
+  const rotar = !!profile?.auto_rotate && !!meta.width && !!meta.height && shouldAutoRotate(meta.width, meta.height)
+  const grises = !!profile && profile.color === false
+  const esJpeg = meta.format === "jpeg"
+  const recomprimir = profile?.compression === "high"
+  if (esJpeg && !rotar && !grises && !recomprimir) return page
 
-  if (profile && profile.color === false) {
-    image.greyscale()
+  try {
+    let img = sharp(page, { failOn: "none" })
+    if (rotar) img = img.rotate(270) // = rotate(90) de Jimp (antihorario)
+    if (grises) img = img.greyscale()
+    return await img.jpeg({ quality: getCompressionQuality(profile?.compression) }).toBuffer()
+  } catch {
+    return page
   }
-
-  return image.getBuffer("image/jpeg", {
-    quality: getCompressionQuality(profile?.compression),
-  })
 }
 
 async function processScannedPages(pages: Buffer[], profile: JobResponse["profile"]): Promise<Buffer[]> {
   if (!profile) return pages
 
+  const t0 = Date.now()
   const processed: Buffer[] = []
   const fallback: Buffer[] = []
   let blankPages = 0
@@ -1761,8 +1861,7 @@ async function processScannedPages(pages: Buffer[], profile: JobResponse["profil
     }
 
     try {
-      const image = await Jimp.read(normalized)
-      const analysis = analyzeBlankPage(image)
+      const analysis = await analyzeBlankPage(normalized)
       console.log(
         `[blank-detection] página ${pageIndex + 1}/${pages.length}: ` +
         `no-blanco=${(analysis.nonWhiteRatio * 100).toFixed(3)}% ` +
@@ -1778,6 +1877,7 @@ async function processScannedPages(pages: Buffer[], profile: JobResponse["profil
       processed.push(normalized)
     }
   }
+  console.log(`[process] ${pages.length} pág. procesadas en ${Date.now() - t0} ms`)
 
   if (processed.length) return processed
   if (fallback.length && blankPages === fallback.length) {
@@ -2174,8 +2274,14 @@ function friendlyErrorMessage(technical: string): string {
   if (/SCAN_EMPTY|solamente páginas en blanco/i.test(technical)) {
     return 'El escáner devolvió solamente páginas en blanco. Verifique si seleccionó ADF o cristal y vuelva a intentar.'
   }
+  if (/KYOCERA_STARTED/.test(technical)) {
+    if (/no entregó la imagen|sin imagen/i.test(technical)) {
+      return '⚠️ El escáner tomó las hojas pero no entregó la imagen a tiempo. Mire el panel del equipo (puede haber una hoja trabada o un aviso), retire las hojas del alimentador y vuelva a intentar.'
+    }
+    return `⚠️ El escáner tomó las hojas pero el trabajo se cortó (${technical.replace(/^.*KYOCERA_STARTED:\s*/, '').slice(0, 120)}). Revise el panel del equipo y vuelva a intentar.`
+  }
   if (isScannerBusyMessage(technical)) {
-    return '⚠️ El escáner quedó bloqueado con un trabajo anterior. Se esperaron 12 segundos pero sigue ocupado. Espere 1-2 minutos y vuelva a intentarlo.'
+    return '⚠️ El escáner sigue ocupado con un trabajo anterior (se esperaron unos 3 minutos). Mire el panel del equipo: si hay una hoja trabada o un aviso, resuélvalo; si alguien está usando la fotocopiadora, espere a que termine y vuelva a intentar.'
   }
   if (/no devolvió páginas|no se recibió páginas|sin páginas/i.test(technical)) {
     return '⚠️ El escáner no devolvió ninguna página. Verifique que haya papel en el alimentador o en el cristal.'
@@ -2246,12 +2352,19 @@ async function pollAll(devices: DeviceRow[]): Promise<void> {
         // Cada hoja recibida avisa a la API (el vigilante de la API corta por
         // falta de progreso, no por duración total).
         let lastProgressAt = 0
+        let lastStatus = ""
         const control: ScanControl = {
           cancelled: false,
           onPage: () => {
             if (Date.now() - lastProgressAt < 5_000) return
             lastProgressAt = Date.now()
             client.post("/agent/progress", { job_id }).catch(() => {})
+          },
+          // Texto que ve el operador mientras espera ("generando la imagen…").
+          onStatus: (msg: string) => {
+            if (!msg || msg === lastStatus) return
+            lastStatus = msg
+            client.post("/agent/progress", { job_id, message: msg.slice(0, 250) }).catch(() => {})
           },
         }
         scanControls.set(ip, control)

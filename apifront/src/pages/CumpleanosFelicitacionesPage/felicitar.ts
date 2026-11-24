@@ -75,6 +75,10 @@ export function esPcAutomatica() {
 }
 export function setPcAutomatica(v: boolean) {
   try { if (v) localStorage.setItem(LS_PC_AUTOMATICA, '1'); else localStorage.removeItem(LS_PC_AUTOMATICA); } catch { /* sin storage */ }
+  // Al destildar se borra del servidor (si no, quedaría como "PC sin señal")
+  if (!v) void bajaPcAutomatica();
+  // Al tildar: que el componente del Layout arranque ya, sin esperar a recargar la página
+  try { window.dispatchEvent(new CustomEvent('p5:cumple_pc_automatica', { detail: v })); } catch { /* noop */ }
 }
 
 const palabras = (s: string) => String(s || '').trim().split(/\s+/).filter(Boolean);
@@ -168,9 +172,56 @@ export async function enviarFelicitacion(row: CumpleFelicitable, cfg: ConfigFeli
   return r!;
 }
 
+/** Navegador que tiene tildado "Esta PC manda…", tal como lo ve el servidor por su último latido. */
+export interface PcAutomatica {
+  pc_id: string; ip: string | null; user_agent: string | null; ext_version: string | null; estado: string | null;
+  ultimo_latido: string; usuario: string | null; minutos: number;
+}
+/** Sin latido hace más de esto = la PC automática "no se reporta" (el latido es cada 5 min). */
+export const PC_SIN_SENAL_MIN = 15;
+
+export const TXT_ESTADO_PC: Record<string, string> = {
+  OK: 'Funcionando',
+  ANTES_DE_HORA: 'Esperando la hora',
+  APAGADO: 'Automático desactivado',
+  SIN_DESTINO_PRUEBA: 'Modo prueba sin número de prueba',
+  SIN_EXTENSION: 'No detecta la extensión de WhatsApp',
+  EXTENSION_VIEJA: 'Extensión de WhatsApp vieja',
+  ERROR: 'Error al consultar',
+};
+
 export async function leerConfigFelicitacion() {
   const r = await apiFetch<any>('/alertas-cumpleanos/felicitacion/config');
-  return r.data as { config: ConfigFelicitacion; imagenes: { id: number; nombre: string; mime: string; bytes: number; created_at: string }[]; carpeta: CarpetaTarjetas; plantilla_default: string; plantilla_atrasado_default: string };
+  return r.data as { config: ConfigFelicitacion; imagenes: { id: number; nombre: string; mime: string; bytes: number; created_at: string }[]; carpeta: CarpetaTarjetas; pcs?: PcAutomatica[]; plantilla_default: string; plantilla_atrasado_default: string };
+}
+
+/** Id fijo de este navegador (para el latido de la PC automática). */
+const LS_PC_ID = 'cumple_felicitacion_pc_id';
+export function pcIdNavegador(): string {
+  try {
+    let id = localStorage.getItem(LS_PC_ID);
+    if (!id) {
+      id = `pc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem(LS_PC_ID, id);
+    }
+    return id;
+  } catch { return 'pc-sin-storage'; }
+}
+
+/** Avisa al servidor que esta PC automática sigue viva (y en qué estado). Nunca tira error. */
+export async function latidoPcAutomatica(estado: string, ext: string | null) {
+  try {
+    await apiFetch('/alertas-cumpleanos/felicitacion/latido', {
+      method: 'POST', body: JSON.stringify({ pc_id: pcIdNavegador(), estado, ext }),
+    });
+  } catch { /* sin red: el próximo latido lo actualiza */ }
+}
+export async function bajaPcAutomatica() {
+  try {
+    await apiFetch('/alertas-cumpleanos/felicitacion/latido', {
+      method: 'POST', body: JSON.stringify({ pc_id: pcIdNavegador(), baja: true }),
+    });
+  } catch { /* si falla, la fila vieja simplemente queda "sin señal" */ }
 }
 
 /** Pide la versión de la extensión instalada (null si no hay). */

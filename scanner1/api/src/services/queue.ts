@@ -6,7 +6,7 @@ import { pool } from "../db/mysql.js"
 import { deliverWebhookToSubscribers } from "./webhook.js"
 import { notifyPersonalApi } from "./personalIntegration.js"
 import { storage } from "./storage.js"
-import { Jimp } from "jimp"
+import sharp from "sharp"
 import UTIF from "utif2"
 
 // ── Interfaz mínima compatible con BullMQ Queue ───────────────────────────────
@@ -192,8 +192,8 @@ function setObject(objects: Buffer[], ref: number, content: Buffer): void {
 
 async function rasterToJpeg(buf: Buffer): Promise<Buffer> {
   if (isJpegBuffer(buf)) return buf
-  const image = await Jimp.read(buf)
-  return image.getBuffer("image/jpeg", { quality: 72 })
+  // sharp (nativo): Jimp tardaba ~10 s por página a 600 dpi.
+  return sharp(buf, { failOn: "none" }).jpeg({ quality: 72 }).toBuffer()
 }
 
 async function rasterToRgba(buf: Buffer): Promise<{ rgba: Uint8Array; width: number; height: number }> {
@@ -206,11 +206,15 @@ async function rasterToRgba(buf: Buffer): Promise<{ rgba: Uint8Array; width: num
     return { rgba, width: first.width, height: first.height }
   }
 
-  const image = await Jimp.read(buf)
+  const { data, info } = await sharp(buf, { failOn: "none" })
+    .toColourspace("srgb")
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
   return {
-    rgba: new Uint8Array(image.bitmap.data),
-    width: image.bitmap.width,
-    height: image.bitmap.height,
+    rgba: new Uint8Array(data.buffer, data.byteOffset, data.length),
+    width: info.width,
+    height: info.height,
   }
 }
 

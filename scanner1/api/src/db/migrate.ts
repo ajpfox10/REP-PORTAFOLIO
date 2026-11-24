@@ -21,6 +21,8 @@ async function ensureScanJobSettingColumns() {
   await ensureColumn("scan_jobs", "blank_page_detection", "blank_page_detection TINYINT NULL AFTER auto_rotate")
   await ensureColumn("scan_jobs", "compression", "compression ENUM('low','medium','high') NULL AFTER blank_page_detection")
   await ensureColumn("scan_jobs", "output_format", "output_format ENUM('pdf','pdf_a','tiff','jpg') NULL AFTER compression")
+  // Texto de estado que manda el agente mientras escanea ("generando la imagen…").
+  await ensureColumn("scan_jobs", "progress_message", "progress_message VARCHAR(255) NULL AFTER error_message")
   await pool.query("ALTER TABLE scan_jobs MODIFY COLUMN output_format ENUM('pdf','pdf_a','tiff','jpg') NULL").catch(() => {})
   await pool.query("ALTER TABLE scan_profiles MODIFY COLUMN output_format ENUM('pdf','pdf_a','tiff','jpg') NOT NULL DEFAULT 'pdf'").catch(() => {})
 }

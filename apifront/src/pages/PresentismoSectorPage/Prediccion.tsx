@@ -46,7 +46,8 @@ const pct = (x: number) => `${Math.round(x * 100)}%`;
 const thSt: React.CSSProperties = { padding: '5px 6px', fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.12)', textAlign: 'center' };
 const tdSt: React.CSSProperties = { padding: '4px 6px', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' };
 
-export function Prediccion({ sectorOk, ordenSectores }: { sectorOk: (s: string) => boolean; ordenSectores: string[] }) {
+export function Prediccion({ sectorOk, ordenSectores, servicioId }: { sectorOk: (s: string) => boolean; ordenSectores: string[]; servicioId?: number | null }) {
+  const qsServ = servicioId != null ? `&servicio_id=${servicioId}` : '';
   const [horizonte, setHorizonte] = useState(14);
   const [data, setData] = useState<Resp | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,7 +61,7 @@ export function Prediccion({ sectorOk, ordenSectores }: { sectorOk: (s: string) 
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch<Resp>(`/presentismo-sector/prediccion?dias=${horizonte}${refresh ? '&refresh=1' : ''}`);
+      const res = await apiFetch<Resp>(`/presentismo-sector/prediccion?dias=${horizonte}${refresh ? '&refresh=1' : ''}${qsServ}`);
       if (!res?.ok) throw new Error(res?.error || 'Error armando la predicción');
       setData(res);
     } catch (e: any) {
@@ -68,7 +69,7 @@ export function Prediccion({ sectorOk, ordenSectores }: { sectorOk: (s: string) 
     } finally {
       setLoading(false);
     }
-  }, [horizonte]);
+  }, [horizonte, qsServ]);
 
   useEffect(() => { void cargar(false); }, [cargar]);
 
@@ -131,7 +132,7 @@ export function Prediccion({ sectorOk, ordenSectores }: { sectorOk: (s: string) 
     if (txt === (actual != null ? String(actual) : '')) return;
     setGuardando(k);
     try {
-      const res = await apiFetch<any>('/presentismo-sector/minimos', {
+      const res = await apiFetch<any>(`/presentismo-sector/minimos${qsServ ? '?' + qsServ.slice(1) : ''}`, {
         method: 'PUT',
         body: JSON.stringify({ sector, turno, tipo_dia: tipo, minimo: txt === '' ? null : Number(txt) }),
       });

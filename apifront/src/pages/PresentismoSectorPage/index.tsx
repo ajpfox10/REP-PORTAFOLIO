@@ -8,6 +8,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
+import { useAuth } from '../../auth/AuthProvider';
 import { Prediccion } from './Prediccion';
 import { exportarPresentismo, exportarTotales } from './exportarExcel';
 
@@ -76,9 +77,19 @@ const chipSt = (activo: boolean): React.CSSProperties => ({ padding: '3px 10px',
 // % sobre los teóricos del turno, al lado de cada número
 const Pct = ({ n, teo }: { n: number; teo: number }) =>
   n && teo ? <span style={{ fontSize: '0.68rem', fontWeight: 400, opacity: 0.6, marginLeft: 4 }}>{Math.round((n / teo) * 100)}%</span> : null;
+// Dependencias de enfermería que el admin puede elegir (servicio_id que se manda al backend).
+// 24 = Sala (el backend le suma el Dpto. Enfermería 34), 38 = UPA 18, 51 = UPA 4.
+const DEPENDENCIAS = [
+  { id: 24, nombre: 'Hospital (Sala + Dpto.)' },
+  { id: 38, nombre: 'UPA 18' },
+  { id: 51, nombre: 'UPA 4' },
+];
 const anchoVentana: React.CSSProperties ={ width: 'min(calc(100vw - 32px), 1500px)', position: 'relative', left: '50%', transform: 'translateX(-50%)' };
 
 export function PresentismoSectorPage() {
+  const { hasPerm } = useAuth();
+  const esAdmin = hasPerm('crud:*:*');
+  const [servicioSel, setServicioSel] = useState<number | null>(null);      // null = el del usuario
   const [hasta, setHasta] = useState(sumarDias(isoHoy(), -1));
   const [desde, setDesde] = useState(sumarDias(isoHoy(), -15));
   const [data, setData] = useState<Resp | null>(null);
@@ -98,6 +109,7 @@ export function PresentismoSectorPage() {
     setError(null);
     try {
       const qs = new URLSearchParams({ desde, hasta });
+      if (esAdmin && servicioSel != null) qs.set('servicio_id', String(servicioSel));
       if (refresh) qs.set('refresh', '1');
       const res = await apiFetch<Resp>(`/presentismo-sector?${qs.toString()}`);
       if (!res?.ok) throw new Error(res?.error || 'Error cargando el presentismo');
@@ -109,9 +121,18 @@ export function PresentismoSectorPage() {
     } finally {
       setLoading(false);
     }
-  }, [desde, hasta]);
+  }, [desde, hasta, esAdmin, servicioSel]);
 
-  useEffect(() => { void cargar(false); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void cargar(false); }, [servicioSel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const elegirDependencia = (id: number) => {
+    if (id === (servicioSel ?? data?.servicio?.id)) return;
+    setSectoresSel(new Set());   // los sectores de cada dependencia son otros
+    setAbierta(null);
+    setServicioSel(id);
+  };
+  // Para marcar el botón activo: Sala (24) y Dpto. (34) son el mismo "Hospital"
+  const servicioActual = servicioSel ?? (data?.servicio?.ids?.includes(24) ? 24 : data?.servicio?.id ?? null);
 
   const agentesPorDni = useMemo(() => {
     const m = new Map<string, Agente>();
@@ -244,6 +265,19 @@ export function PresentismoSectorPage() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            {esAdmin && (
+              <div style={{ fontSize: '0.75rem' }} className="muted">Dependencia<br />
+                <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                  {DEPENDENCIAS.map(d => (
+                    <button key={d.id} type="button" className="btn" disabled={loading}
+                      style={servicioActual === d.id ? { outline: '2px solid #4ade80', fontWeight: 600 } : undefined}
+                      onClick={() => elegirDependencia(d.id)}>
+                      {d.nombre}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <label style={{ fontSize: '0.75rem' }} className="muted">Desde<br />
               <input className="input" type="date" value={desde} max={hasta} onChange={e => setDesde(e.target.value)} />
             </label>
@@ -296,7 +330,7 @@ export function PresentismoSectorPage() {
         ))}
       </div>
 
-      {vista === 'futuro' && <Prediccion sectorOk={sectorOk} ordenSectores={ordenSectores} />}
+      {vista === 'futuro' && <Prediccion sectorOk={sectorOk} ordenSectores={ordenSectores} servicioId={esAdmin ? servicioSel : null} />}
 
       {vista === 'pasado' && error && (
         <div className="card" style={{ marginTop: 12, padding: 14, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)' }}>{error}</div>

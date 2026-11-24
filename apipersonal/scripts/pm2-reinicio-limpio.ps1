@@ -1,9 +1,11 @@
 # pm2-reinicio-limpio.ps1 - reinicia una app de pm2 sin dejar huerfanos.
 # En Windows pm2 a veces deja vivo el proceso viejo: sigue con el puerto y codigo viejo, y la
 # instancia nueva entra en bucle de EADDRINUSE (paso el 16/10 y el 20/10/2026).
-# Pasos: pm2 stop -> matar a quien siga escuchando el puerto -> pm2 restart --update-env ->
+# Pasos: pm2 stop -> matar a quien siga escuchando el puerto -> pm2 restart (SIN --update-env) ->
 # comprobar que el dueno del puerto sea el pid que reporta pm2.
 # Uso: powershell -ExecutionPolicy Bypass -File pm2-reinicio-limpio.ps1 -App apipersonal-prod -Puerto 3001
+# SIN --update-env a proposito (24/11/2026): la maquina tiene NODE_ENV=production a nivel sistema y
+# --update-env lo inyectaba en las apps dev (farmacia-backend-dev arranco como prod y fue al :8310).
 # Sale con 1 si no queda bien (el .cmd que lo llama no debe decir OK).
 param(
   [Parameter(Mandatory = $true)][string]$App,
@@ -16,12 +18,21 @@ function DuenoPuerto {
   if ($c) { return [int]$c.OwningProcess } else { return 0 }
 }
 
+# NODE_ENV con el que pm2 corre la app (pm2 env <id> lista las variables del proceso)
+function EnvPm2 {
+  $id = ((& pm2 id $App 2>$null | Out-String) -replace '[^\d]', '')
+  if (-not $id) { return '' }
+  $linea = (& pm2 env $id 2>$null | Select-String -Pattern '^\s*NODE_ENV\s*:' | Select-Object -First 1)
+  if ($linea) { return ("$linea" -replace '^\s*NODE_ENV\s*:\s*', '').Trim() } else { return '' }
+}
+
 function PidPm2 {
   $p = (& pm2 pid $App 2>$null | Select-Object -Last 1)
   if ("$p".Trim() -match '^\d+$') { return [int]"$p".Trim() } else { return 0 }
 }
 
-Write-Host "   [$App] pm2 stop..."
+$envAntes = EnvPm2
+Write-Host "   [$App] pm2 stop... (NODE_ENV=$envAntes)"
 & pm2 stop $App *> $null
 Start-Sleep -Seconds 2
 
@@ -39,8 +50,14 @@ if (DuenoPuerto) {
   exit 1
 }
 
-Write-Host "   [$App] pm2 restart --update-env..."
-& pm2 restart $App --update-env *> $null
+Write-Host "   [$App] pm2 restart..."
+& pm2 restart $App *> $null
+$envDespues = EnvPm2
+if ($envAntes -and $envDespues -ne $envAntes) {
+  Write-Host "   [$App] ERROR: NODE_ENV cambio de '$envAntes' a '$envDespues'. Se para la app; levantarla desde su ecosystem."
+  & pm2 stop $App *> $null
+  exit 1
+}
 
 # Tiene que quedar el pid de pm2 escuchando el puerto, y estable
 $t0 = Get-Date

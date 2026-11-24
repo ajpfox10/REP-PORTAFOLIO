@@ -15,7 +15,7 @@ import { deliverWebhookToSubscribers } from "../../services/webhook.js"
 import { fetchPersonalPendingTramites, notifyPersonalApi } from "../../services/personalIntegration.js"
 import { scanBufferWithClamAV } from "../../services/clamav.js"
 import { asyncRoute } from "../asyncRoute.js"
-import { Jimp } from "jimp"
+import sharp from "sharp"
 
 const r = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 150 * 1024 * 1024 } })
@@ -186,9 +186,11 @@ r.post("/:id/pages/:pageNumber/rotate", asyncRoute(async (req, res) => {
 
   let rotated: Buffer
   try {
-    const image = await Jimp.read(await storage().get(page.page_storage_key))
-    image.rotate(degrees)
-    rotated = await image.getBuffer("image/jpeg", { quality: 88 })
+    // sharp (nativo): con Jimp rotar una página de 600 dpi tardaba ~12 s.
+    rotated = await sharp(await storage().get(page.page_storage_key), { failOn: "none" })
+      .rotate(((-degrees % 360) + 360) % 360) // Jimp giraba antihorario; sharp horario
+      .jpeg({ quality: 88 })
+      .toBuffer()
   } catch {
     throw new ApiError(422, "page_rotation_not_supported", "La pagina no es una imagen compatible")
   }

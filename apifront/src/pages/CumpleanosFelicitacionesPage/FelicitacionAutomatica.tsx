@@ -8,7 +8,7 @@ import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { cmpVersion } from '../LicenciasMedicasControlPage/ExtensionDescarga';
 import { cargarCumpleanosAlertas } from '../AlertasPage/CumpleanosBanner';
-import { VERSION_EXT_IMAGEN, enviarFelicitacion, esPcAutomatica, leerConfigFelicitacion, versionExtension } from './felicitar';
+import { VERSION_EXT_IMAGEN, enviarFelicitacion, esPcAutomatica, latidoPcAutomatica, leerConfigFelicitacion, versionExtension } from './felicitar';
 
 const CADA_MS = 5 * 60 * 1000;
 let corriendo = false; // a nivel módulo: el Layout se vuelve a montar en cada página
@@ -22,12 +22,16 @@ const horaActual = () => {
 async function ronda(avisar: (ok: number, total: number, prueba: boolean) => void) {
   if (corriendo || !esPcAutomatica()) return;
   corriendo = true;
+  let estado = 'ERROR', ext: string | null = null;
   try {
     const { config } = await leerConfigFelicitacion();
-    if (!config.automatico || horaActual() < config.hora) return;
-    if (config.prueba && !config.destino_prueba.trim()) return;
-    const ext = await versionExtension();
-    if (!ext || ext === '?' || cmpVersion(ext, VERSION_EXT_IMAGEN) < 0) return;
+    ext = await versionExtension();
+    if (!config.automatico) { estado = 'APAGADO'; return; }
+    if (config.prueba && !config.destino_prueba.trim()) { estado = 'SIN_DESTINO_PRUEBA'; return; }
+    if (!ext || ext === '?') { estado = 'SIN_EXTENSION'; return; }
+    if (cmpVersion(ext, VERSION_EXT_IMAGEN) < 0) { estado = 'EXTENSION_VIEJA'; return; }
+    if (horaActual() < config.hora) { estado = 'ANTES_DE_HORA'; return; }
+    estado = 'OK';
 
     const hoy = (await cargarCumpleanosAlertas('pendientes', 0)).filter((r) => r.dias === 0) as any[];
     let ok = 0, total = 0;
@@ -47,18 +51,42 @@ async function ronda(avisar: (ok: number, total: number, prueba: boolean) => voi
     /* sin red / sin permiso: se reintenta en la próxima vuelta */
   } finally {
     corriendo = false;
+    // Latido: la página de Felicitaciones avisa si esta PC deja de reportarse
+    if (esPcAutomatica()) void latidoPcAutomatica(estado, ext);
   }
 }
 
 export function FelicitacionAutomatica() {
   const toast = useToast();
   useEffect(() => {
-    if (!esPcAutomatica()) return;
+    // Se monta siempre (aunque hoy no esté tildada): así, si alguien tilda "Esta PC manda…",
+    // arranca al toque sin recargar. ronda() no hace nada si esta PC no está tildada.
     const avisar = (ok: number, total: number, prueba: boolean) =>
       toast.ok(`🎂 Felicitaciones automáticas${prueba ? ' (PRUEBA)' : ''}`, `${ok} de ${total} enviadas`);
-    const primera = setTimeout(() => void ronda(avisar), 20000);
-    const cada = setInterval(() => void ronda(avisar), CADA_MS);
-    return () => { clearTimeout(primera); clearInterval(cada); };
+    const correr = () => void ronda(avisar);
+    // Al volver (pestaña visible otra vez, PC que sale de suspensión, vuelve la red) no se
+    // espera a la próxima vuelta de 5 minutos: se revisa enseguida.
+    let ultimo = Date.now();
+    const alVolver = () => {
+      if (document.visibilityState !== 'visible' && !navigator.onLine) return;
+      if (Date.now() - ultimo < 60_000) return;
+      ultimo = Date.now();
+      setTimeout(correr, 3000);
+    };
+    const alTildar = (ev: any) => { if (ev?.detail) setTimeout(correr, 1000); };
+    const primera = setTimeout(correr, 20000);
+    const cada = setInterval(() => { ultimo = Date.now(); correr(); }, CADA_MS);
+    document.addEventListener('visibilitychange', alVolver);
+    window.addEventListener('online', alVolver);
+    window.addEventListener('focus', alVolver);
+    window.addEventListener('p5:cumple_pc_automatica', alTildar);
+    return () => {
+      clearTimeout(primera); clearInterval(cada);
+      document.removeEventListener('visibilitychange', alVolver);
+      window.removeEventListener('online', alVolver);
+      window.removeEventListener('focus', alVolver);
+      window.removeEventListener('p5:cumple_pc_automatica', alTildar);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return null;
