@@ -98,6 +98,7 @@ import { buildScriptRunsRouter } from '../routes/scriptRuns.routes';
 import { buildBackupEstadoRouter } from '../routes/backupEstado.routes';
 import { buildResolucionesSinArchivoRouter } from '../routes/resolucionesSinArchivo.routes';
 import { buildFeriadosRouter } from '../routes/feriados.routes';
+import { buildBloqueoDocumentacionRouter } from '../routes/bloqueoDocumentacion.routes';
 import { buildBecariosArtRouter }   from '../routes/becariosArt.routes';
 import { buildDashboardAlertsRouter } from '../routes/dashboardAlerts.routes';
 import { buildUserScanMusicRouter } from '../routes/userScanMusic.routes';
@@ -289,6 +290,8 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/backup-estado`,      ...protect, requireAny([ADMIN]), buildBackupEstadoRouter(sequelize));
   app.use(`${apiPrefix}/resoluciones-sin-archivo`, ...protect, requireAny(['crud:resoluciones:read', ADMIN]), buildResolucionesSinArchivoRouter(sequelize));
   app.use(`${apiPrefix}/feriados`,           ...protect, buildFeriadosRouter(sequelize));
+  // Cartel que bloquea la app tras el login por documentación faltante (TANDA 1); se sigue con código
+  app.use(`${apiPrefix}/bloqueo-documentacion`, ...protect, buildBloqueoDocumentacionRouter(sequelize));
 
   // ── Scanner API integration (recibe webhooks del scanner independiente) ───
   // Auth: acepta JWT del usuario (operador desde UI) o X-Api-Key (scanner microservicio)

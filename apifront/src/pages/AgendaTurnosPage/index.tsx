@@ -29,6 +29,7 @@ interface Habilitacion {
   created_at: string; turno_fecha: string | null; turno_hora: string | null; turno_estado: string | null; motivo: string | null;
   reenviar?: boolean; envios?: number; enviado_at?: string | null;
   turno_vigente?: string | null;   // 'dd/mm hh:mm' si ya tiene un turno reservado (cualquier enlace)
+  enlace_nuevo_vence?: string | null;   // 'aaaa-mm-dd' si tiene OTRO enlace habilitado sin usar
 }
 interface EstadoTunel {
   estado: 'OK' | 'CAIDO' | 'SERVIDOR_CAIDO' | 'SIN_URL'; url: string; temporal: boolean; url_desde: string | null;
@@ -532,6 +533,11 @@ function HabilitarTab({ agenda, cfg, tunel, filtroInicial, verRetenidos, onCambi
               <td style={td}>{h.apellido} {h.nombre}<span className="badge" style={{ marginLeft: 6, color: h.motivo ? '#c4b5fd' : '#94a3b8' }}>{h.motivo || 'motivo: lo elige el agente'}</span><div className="muted" style={{ fontSize: '0.75rem' }}>DNI {h.dni} · {h.celular ? `cel. ${h.celular}${h.dudoso ? ' (dudoso)' : ''}` : 'sin celular'}</div></td>
               <td style={td}><Badge e={h.estado} />{h.reenviar && <span className="badge" style={{ marginLeft: 4, color: '#fbbf24' }} title="Se mandó con una dirección que ya no anda">🔁 reenviar</span>}
                 {h.estado === 'HABILITADO' && h.turno_vigente && <div style={{ fontSize: '0.72rem', color: '#f87171' }} title="No se puede tildar: ya tiene un turno reservado">⚠ ya tiene turno el {h.turno_vigente}</div>}
+                {(h.estado === 'VENCIDO' || h.estado === 'ANULADO') && (h.turno_vigente
+                  ? <div style={{ fontSize: '0.72rem', color: '#4ade80' }} title="Sacó turno con otro enlace o se lo cargó la oficina">✔ ya tiene turno el {h.turno_vigente}</div>
+                  : h.enlace_nuevo_vence
+                    ? <div style={{ fontSize: '0.72rem', color: '#60a5fa' }} title="Tiene otro enlace habilitado que todavía no usó">🔗 tiene enlace nuevo sin usar (vence {fmt(h.enlace_nuevo_vence)})</div>
+                    : <div style={{ fontSize: '0.72rem', color: '#fbbf24' }}>sin turno ni enlace vigente</div>)}
                 {!!h.envios && <div className="muted" style={{ fontSize: '0.72rem' }}>enviado {fmtHora(h.enviado_at)}{h.envios > 1 ? ` (${h.envios} veces)` : ''}</div>}</td>
               <td style={td}>
                 {h.estado === 'USADO' && h.turno_fecha ? <>{fmt(h.turno_fecha)} {h.turno_hora} {h.turno_estado && <Badge e={h.turno_estado} />}</> : <>vence {fmt(h.vence_el)}</>}

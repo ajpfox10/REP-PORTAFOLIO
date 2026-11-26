@@ -51,6 +51,13 @@
     return filas().filter((x) => x.dni === String(dni));
   }
 
+  // Desafío de Cloudflare Turnstile que pide un clic de la persona (modo interaction-only: solo se ve si hace falta).
+  const verificacionVisible = () => {
+    const caja = document.getElementById('turnstile-solicitud');
+    const ifr = caja?.querySelector('iframe');
+    return !!ifr && ifr.offsetHeight > 20 && ifr.offsetWidth > 20;
+  };
+
   // Código que deja el gancho de Livewire del background (ver rdamGancho).
   const codigoGancho = () => document.documentElement.dataset.hpwRdamCodigo || null;
 
@@ -63,15 +70,26 @@
     poner(campo('sexoId'), String(p.sexo), 'Sexo');
     await sleep(2500);
 
-    const boton = document.querySelector('main [wire\\:click="buscar()"]');
+    // Desde 26/11/2026 el botón ya no es wire:click="buscar()": es #btn-buscar-solicitud y pasa por el
+    // captcha Cloudflare Turnstile de la propia página (solicitarCertificadoConCaptcha). Se toca el botón
+    // real y se deja que la página resuelva su verificación; NO se arma ningún token a mano.
+    const boton = document.querySelector('#btn-buscar-solicitud, main [wire\\:click="buscar()"]')
+      || [...document.querySelectorAll('main button')].find((b) => /imprimir certificado/i.test(texto(b)));
     if (!boton) throw new Error('No está el botón "Imprimir certificado"');
     boton.click();
 
     // Si RENAPER no trae los datos, la página pide apellido y nombre a mano y hay que volver a tocar el botón.
+    // Si Cloudflare pide verificación a mano, se trae la pestaña al frente y se espera a la persona (hasta ~3 min).
     let completoNombre = false;
-    for (let i = 0; i < 40; i++) {
+    let pidioVerificar = false;
+    for (let i = 0; i < 360; i++) {
       await sleep(500);
       if (codigoGancho()) return { ok: true, estado: 'ENVIADO', detalle: null, completoNombre, codigo: codigoGancho() };
+      if (verificacionVisible()) {
+        if (!pidioVerificar) { pidioVerificar = true; try { chrome.runtime.sendMessage({ type: 'HPW_RDAM_VERIFICAR' }); } catch { /* sin fondo */ } }
+        continue;
+      }
+      if (!pidioVerificar && i >= 40) break;
       const ape = campo('apellido');
       const nom = campo('nombres');
       if (!completoNombre && visible(ape) && visible(nom) && !ape.value) {
@@ -91,6 +109,7 @@
       // El formulario vuelve a quedar vacío cuando la solicitud se generó.
       if (i >= 4 && !campo('nroId')?.value) return { ok: true, estado: 'ENVIADO', detalle: null, completoNombre };
     }
+    if (verificacionVisible()) return { ok: false, estado: 'ERROR', detalle: 'El RDAM pidió verificación de Cloudflare y nadie la resolvió en la pestaña' };
     return { ok: true, estado: 'ENVIADO', detalle: 'El RDAM no confirmó en pantalla', completoNombre };
   }
 

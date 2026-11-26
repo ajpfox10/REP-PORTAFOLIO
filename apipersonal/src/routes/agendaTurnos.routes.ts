@@ -437,7 +437,9 @@ export function buildAgendaTurnosRouter(sequelize: Sequelize): Router {
                 h.enviado_at, h.envios, ${reenviarSql('h')} AS reenviar,
                 DATE_FORMAT(t.fecha, '%Y-%m-%d') AS turno_fecha, TIME_FORMAT(t.hora, '%H:%i') AS turno_hora, t.estado AS turno_estado,
                 (SELECT CONCAT(DATE_FORMAT(tv.fecha, '%d/%m'), ' ', TIME_FORMAT(tv.hora, '%H:%i')) FROM agenda_turnos tv
-                  WHERE tv.dni = h.dni AND tv.estado = 'RESERVADO' AND tv.fecha >= :hoy ORDER BY tv.fecha, tv.hora LIMIT 1) AS turno_vigente
+                  WHERE tv.dni = h.dni AND tv.estado = 'RESERVADO' AND tv.fecha >= :hoy ORDER BY tv.fecha, tv.hora LIMIT 1) AS turno_vigente,
+                (SELECT DATE_FORMAT(MAX(hn.vence_el), '%Y-%m-%d') FROM agenda_habilitaciones hn
+                  WHERE hn.dni = h.dni AND hn.id <> h.id AND hn.estado = 'HABILITADO' AND hn.vence_el >= :hoy) AS enlace_nuevo_vence
            FROM agenda_habilitaciones h
            JOIN personal p ON p.dni = h.dni
            LEFT JOIN agenda_turnos t ON t.id = h.turno_id

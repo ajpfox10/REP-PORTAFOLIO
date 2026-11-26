@@ -15,7 +15,7 @@ type Agenda = { id: number; nombre: string; activa: number; mensaje_whatsapp: st
 type Hab = {
   id: number; dni: number; apellido: string; nombre: string; celular: string | null; dudoso: boolean; token: string | null;
   estado: 'HABILITADO' | 'USADO' | 'VENCIDO' | 'ANULADO'; motivo: string | null; vence_el: string; reenviar?: boolean;
-  envios?: number; enviado_at?: string | null; turno_fecha: string | null; turno_hora: string | null; turno_estado: string | null;
+  envios?: number; enviado_at?: string | null; created_at?: string | null; turno_fecha: string | null; turno_hora: string | null; turno_estado: string | null;
 };
 type Cfg = { url_publica: string; plantilla: string; motivos: string[] };
 type Resultado = { estado: 'ENVIANDO' | 'ENVIADO' | 'ERROR' | 'SIN_CELULAR' | 'NO_HABILITADO' | 'PENDIENTE'; detalle?: string };
@@ -74,6 +74,7 @@ export function TurnosTandaTab() {
   const [cfg, setCfg] = useState<Cfg>({ url_publica: '', plantilla: '', motivos: [] });
   const [mot, setMot] = useState<MotivoValor>({ motivo: 'Entrega de papeles', otro: '' });
   const [habs, setHabs] = useState<Map<number, Hab>>(new Map());
+  const [hist, setHist] = useState<Map<number, Hab[]>>(new Map());   // todos los enlaces/turnos de cada DNI (más nuevo primero)
   const [tildados, setTildados] = useState<Set<number>>(new Set());
   const [resultados, setResultados] = useState<Map<number, Resultado>>(new Map());
   const [tunelOk, setTunelOk] = useState<boolean | null>(null);
@@ -118,8 +119,13 @@ export function TurnosTandaTab() {
     try {
       const r = await apiFetch<any>(`/agenda-turnos/habilitaciones?agenda_id=${agendaId}&estado=`);
       const m = new Map<number, Hab>();
-      for (const h of (r.data || []) as Hab[]) if (!m.has(h.dni)) m.set(h.dni, h);   // viene ordenado por created_at DESC
+      const hm = new Map<number, Hab[]>();
+      for (const h of (r.data || []) as Hab[]) {   // viene ordenado por created_at DESC
+        if (!m.has(h.dni)) m.set(h.dni, h);
+        hm.set(h.dni, [...(hm.get(h.dni) || []), h]);
+      }
       setHabs(m);
+      setHist(hm);
       return m;
     } catch (e: any) { toast.error('Enlaces', e?.message); return habs; }
   };
@@ -282,7 +288,7 @@ export function TurnosTandaTab() {
           </div>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }}>
-            <thead><tr><th style={{ ...th, width: 30 }} /><th style={th}>Agente</th><th style={th}>Enlace en la agenda</th><th style={th}>Este envío</th><th style={th} /></tr></thead>
+            <thead><tr><th style={{ ...th, width: 30 }} /><th style={th}>Agente</th><th style={th}>Enlace en la agenda</th><th style={th}>Historial de turnos</th><th style={th}>Este envío</th><th style={th} /></tr></thead>
             <tbody>
               {agentes.map(a => {
                 const h = habs.get(a.dni);
@@ -299,6 +305,17 @@ export function TurnosTandaTab() {
                         : <span className="muted">{h.estado.toLowerCase()}</span>}
                       {h?.motivo && <span className="badge" style={{ marginLeft: 6, color: '#c4b5fd' }}>{h.motivo}</span>}
                     </td>
+                    <td style={{ ...td, fontSize: '0.76rem' }}>
+                      {(hist.get(a.dni) || []).length <= 1 ? <span className="muted">—</span>
+                        : (hist.get(a.dni) || []).slice(1).map(x => (
+                          <div key={x.id} style={{ whiteSpace: 'nowrap' }}>
+                            <span className="muted">{fmt(x.created_at)}</span>{' '}
+                            {x.estado === 'USADO'
+                              ? <span style={{ color: x.turno_estado === 'RESERVADO' ? '#4ade80' : '#94a3b8' }}>turno {fmt(x.turno_fecha)} {x.turno_hora}{x.turno_estado && x.turno_estado !== 'RESERVADO' ? ` (${x.turno_estado.toLowerCase()})` : ''}</span>
+                              : <span className="muted">enlace {x.estado.toLowerCase()}{x.envios ? ` · enviado ${x.envios}×` : ''}</span>}
+                            {x.motivo && <span className="muted"> · {x.motivo}</span>}
+                          </div>))}
+                    </td>
                     <td style={td}>{res && <span style={{ color: COLOR_RES[res.estado] }}>{TXT_RES[res.estado]}{res.detalle ? <span className="muted"> · {res.detalle}</span> : ''}</span>}</td>
                     <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <button type="button" className="btn" onClick={() => setAbierto(abierto === a.dni ? null : a.dni)}
@@ -310,14 +327,14 @@ export function TurnosTandaTab() {
                     </td>
                   </tr>
                   {abierto === a.dni && (
-                    <tr><td colSpan={5} style={{ padding: '0 8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    <tr><td colSpan={6} style={{ padding: '0 8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                       <DocuBrowser dni={a.dni} />
                     </td></tr>
                   )}
                   </React.Fragment>
                 );
               })}
-              {!agentes.length && <tr><td style={td} colSpan={5}><span className="muted">{ocupacion ? 'No hay agentes con esa ocupación en la tanda.' : vista !== 'TODOS' ? 'Nadie de la tanda entra en ese filtro.' : 'La tanda no tiene agentes.'}</span></td></tr>}
+              {!agentes.length && <tr><td style={td} colSpan={6}><span className="muted">{ocupacion ? 'No hay agentes con esa ocupación en la tanda.' : vista !== 'TODOS' ? 'Nadie de la tanda entra en ese filtro.' : 'La tanda no tiene agentes.'}</span></td></tr>}
             </tbody>
           </table>
         </>

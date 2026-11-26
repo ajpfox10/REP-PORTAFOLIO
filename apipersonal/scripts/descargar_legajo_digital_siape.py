@@ -136,6 +136,10 @@ def traer_agentes(cn, tanda=None, solo_dni=None, dnis=None):
     if dnis:
         where.append("t.dni IN (" + ",".join(["%s"] * len(dnis)) + ")")
         params.extend(int(d) for d in dnis)
+    # becas de radicacion (extranjeros, ley_id 12 vigente): nunca (pedido 25/11)
+    where.append("NOT EXISTS (SELECT 1 FROM agentes a WHERE a.dni = t.dni AND a.ley_id = 12 "
+                 "AND a.deleted_at IS NULL AND a.estado_empleo IN ('ACTIVO','TRAMITE','COMISION'))")
+    where.append("t.tanda NOT LIKE '%%EXTRANJEROS%%'")
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += " GROUP BY t.dni ORDER BY MIN(t.tanda), apellido, nombre"
@@ -152,9 +156,35 @@ def nombre_ag(r):
 
 
 
-def ya_tiene_siape(dni):
-    """True si todas las subcarpetas de DOCS ya tienen un archivo bajado por este robot."""
+# documentos que el robot ya busco y NO estan en SIAPE: no se vuelve a entrar al agente por eso
+# (pedido 25/11: "no debe pasar dos veces por algo que ya esta"). --forzar los vuelve a buscar.
+NO_ESTA_PATH = Path(__file__).resolve().parent / "logs" / "legajo_digital_no_esta.json"
+
+
+def leer_no_esta():
+    try:
+        return json.loads(NO_ESTA_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def marcar_no_esta(dni, subs):
+    datos = leer_no_esta()
+    if subs:
+        datos[str(dni)] = {"subs": sorted(subs), "fecha": datetime.now().strftime("%Y-%m-%d")}
+    else:
+        datos.pop(str(dni), None)
+    NO_ESTA_PATH.parent.mkdir(exist_ok=True)
+    NO_ESTA_PATH.write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def ya_tiene_siape(dni, no_esta=None):
+    """True si cada subcarpeta de DOCS ya tiene el archivo bajado por este robot, o ya se
+    busco y ese documento no esta en SIAPE."""
+    sin = set(((no_esta or {}).get(str(dni)) or {}).get("subs") or [])
     for _doc, sub, base in DOCS:
+        if sub in sin:
+            continue
         d = DOCU / str(dni) / sub
         if not (d.is_dir() and any(p.name.startswith(base) for p in d.iterdir())):
             return False
@@ -534,7 +564,7 @@ def leer_lista(p):
         raise RuntimeError(f"SIAPE recorriendo la lista: {aviso[:200]}")
     time.sleep(1)
     _descartar_blanco(p)
-    log(f"   lista: {len(lista)} documento(s): {' / '.join(lista)[:600]}")
+    log(f"   lista: {len(lista)} documento(s): {' / '.join(lista)}")   # entera (antes cortaba a 600)
     return lista
 
 
@@ -684,15 +714,19 @@ def procesar(p, r, dry_run=False):
     p.releer()
     tramite = elegir_tramite(p)
     if not tramite:
+        if not dry_run:
+            marcar_no_esta(dni, {sub for _d, sub, _b in DOCS})
         return "sin_tramite", f"{ape}: no tiene {TRAMITE_PREF} en Legajo Digital (no esta en la tanda 2026 de SIAPE)"
     lista = leer_lista(p)
     faltan = _faltan_antecedentes(lista)
     docs = [d for d in DOCS if d[0] in SIEMPRE] if faltan else DOCS
     partes, errores, bajados = [], 0, 0
+    no_esta = set()
     for doc, sub, base in docs:
         e = elegir(lista, doc)
         if not e:
             partes.append(f"{sub}: no esta en SIAPE")
+            no_esta.add(sub)
             continue
         k, fecha = e
         destino = DOCU / str(dni) / sub / f"{base} {fecha:%d-%m-%Y}.pdf"
@@ -709,6 +743,9 @@ def procesar(p, r, dry_run=False):
                 data, job = abrir_y_bajar(p, dni)
                 destino.parent.mkdir(parents=True, exist_ok=True)
                 destino.write_bytes(data)
+                viejos = MN.mover_a_viejos(destino)
+                if viejos:
+                    log(f"   {sub}: a DOCU_viejos: {', '.join(viejos)}")
                 MN.auditar_docu(SCRIPT_ID, dni, destino, sub, f"{lista[k]} | job {job} | {tramite}")
                 partes.append(f"{sub}: {destino.name} (job {job})" + (" [2do intento]" if intento else ""))
                 bajados += 1
@@ -722,6 +759,8 @@ def procesar(p, r, dry_run=False):
             errores += 1
             partes.append(f"{sub}: ERROR {str(ultimo_error)[:200]}")
     det = f"[{tramite}] " + " | ".join(partes)
+    if not dry_run:
+        marcar_no_esta(dni, no_esta)
     if faltan:
         det = (f"[{tramite}] {ape}: no hizo " + " ni ".join(faltan)
                + " (en rojo en SIAPE); no se baja CV ni Planilla | " + " | ".join(partes))
@@ -758,7 +797,8 @@ def main():
     cn = F.conn()
     todos = traer_agentes(cn, tanda=args.tanda, solo_dni=args.dni, dnis=dnis)
     cn.close()
-    pend = [r for r in todos if args.forzar or args.dni or dnis or not ya_tiene_siape(r["dni"])]
+    no_esta = leer_no_esta()
+    pend = [r for r in todos if args.forzar or args.dni or dnis or not ya_tiene_siape(r["dni"], no_esta)]
     completos = len(todos) - len(pend)
     if args.limit:
         pend = pend[:args.limit]

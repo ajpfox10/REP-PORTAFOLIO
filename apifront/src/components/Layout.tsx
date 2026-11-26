@@ -6,6 +6,8 @@ import { useKiosk } from '../hooks/useKiosk';
 import { RobotsFallidosBanner } from './RobotsFallidosBanner';
 import { ResolucionesSinArchivoBanner } from './ResolucionesSinArchivoBanner';
 import { AlertasJubilacionBloqueo } from './AlertasJubilacionBloqueo';
+import { BloqueoDocumentacion } from './BloqueoDocumentacion';
+import { BloqueoDocumentacionInterruptor } from './BloqueoDocumentacionInterruptor';
 import { FelicitacionAutomatica } from '../pages/CumpleanosFelicitacionesPage/FelicitacionAutomatica';
 import { GpProgramadosRunner } from '../pages/GpAvisosPage/GpProgramadosRunner';
 import { EnvioAgendaAutomatico } from '../pages/AgendaTurnosPage/envioCola';
@@ -349,6 +351,12 @@ export function Layout({ title, children, showBack, fluid }: {
       {/* Solo en el dashboard (/app), no en cada página */}
       {hasPerm('crud:*:*') && loc.pathname.replace(/\/$/, '') === '/app' && <RobotsFallidosBanner />}
       {(hasPerm('crud:resoluciones:read') || hasPerm('crud:*:*')) && loc.pathname.replace(/\/$/, '') === '/app' && <ResolucionesSinArchivoBanner modo="resumen" />}
+
+      {/* Interruptor del bloqueo: solo en el inicio y solo se ve en la PC SERVIDOR-RRHH (lo decide el back) */}
+      {loc.pathname.replace(/\/$/, '') === '/app' && <BloqueoDocumentacionInterruptor />}
+
+      {/* Documentación incompleta de la TANDA 1: bloquea a todos tras el login hasta poner el código */}
+      <BloqueoDocumentacion />
 
       {/* Alertas de jubilación: bloquean toda la app hasta desactivarlas (mismo permiso que la página de alertas) */}
       {(hasPerm('crud:alertas_agente:read') || hasPerm('crud:*:*')) && <AlertasJubilacionBloqueo />}

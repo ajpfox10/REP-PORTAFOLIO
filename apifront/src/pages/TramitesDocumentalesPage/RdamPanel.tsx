@@ -179,7 +179,7 @@ export function RdamPanel({ tanda, onCerrar, onGuardado }: {
         }
         const r: any = await aExtension('RDAM', {
           dni: p.dni, sexo: p.sexo === 'F' ? '2' : '1', apellido: p.apellido.toUpperCase(), nombre: p.nombre.toUpperCase(), forzar: false,
-        }, 240000);
+        }, 330000); // el RDAM puede pedir verificación de Cloudflare a mano (la extensión espera hasta 4 min)
         if (r.ok && r.pdf) {
           try {
             const borrados = await guardar(p, r.pdf);

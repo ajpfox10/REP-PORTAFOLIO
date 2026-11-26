@@ -431,6 +431,12 @@ function hoyLocal() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// 1.9.4: si Cloudflare (Turnstile) pide verificación a mano en el RDAM, rdam.js avisa y la pestaña
+// pasa al frente para que la persona la resuelva (la extensión no la saltea).
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg?.type === 'HPW_RDAM_VERIFICAR' && sender.tab) void alFrente(sender.tab).catch(() => {});
+});
+
 async function rdam(p) {
   let a = await rdamAbrir(p.dni);
   if (a.error) return { ok: false, estado: 'ERROR', detalle: a.error };
@@ -444,9 +450,9 @@ async function rdam(p) {
 
   if (!codigo) {
     try { await rdamGancho(a.tab.id); } catch { /* sin gancho queda el respaldo del redirect */ }
-    const redirect = rdamEsperarCodigo(a.tab.id, 90000);
+    const redirect = rdamEsperarCodigo(a.tab.id, 240000);
     // Si la página navega al PDF, el script de la pestaña muere y el mensaje se corta: es lo esperado.
-    const env = await rdamA(a.tab.id, { type: 'SOLICITAR', dni: p.dni, sexo: p.sexo, apellido: p.apellido, nombre: p.nombre }, 90000)
+    const env = await rdamA(a.tab.id, { type: 'SOLICITAR', dni: p.dni, sexo: p.sexo, apellido: p.apellido, nombre: p.nombre }, 240000)
       .catch(() => ({ ok: true, estado: 'ENVIADO', detalle: null }));
     aviso = env.detalle || null;
     codigo = env.codigo || await Promise.race([redirect, sleep(env.ok ? 15000 : 1000).then(() => null)]);

@@ -86,14 +86,23 @@ def login(page):
         page.click("form button[type=submit]")
     else:
         # Chrome autocompleta la clave guardada en el perfil: si quedó cargada, solo apretar Iniciar sesión
-        page.wait_for_timeout(2500)
-        try:
-            if page.input_value("#password") and page.input_value("#username"):
-                page.click("form button[type=submit]")
-                print("Login con la clave guardada en el perfil.")
-        except Exception:
-            pass
-        print("Sin clave configurada: iniciá sesión a mano en la ventana. Espero hasta 5 minutos.")
+        # OJO: Chrome no le muestra al script la clave autocompletada hasta que hay un clic en la página
+        # (input_value da "" aunque se vean los puntitos) → clic en el usuario primero y recién ahí leer.
+        autocompleto = False
+        for _ in range(3):
+            page.wait_for_timeout(2500)
+            try:
+                page.click("#username")
+                page.wait_for_timeout(500)
+                if page.input_value("#username") and page.input_value("#password"):
+                    page.click("form button[type=submit]")
+                    print("Login con la clave guardada en el perfil.", flush=True)
+                    autocompleto = True
+                    break
+            except Exception:
+                pass
+        if not autocompleto:
+            print("Chrome no autocompletó la clave: iniciá sesión a mano en la ventana. Espero hasta 5 minutos.", flush=True)
     # 'commit': no esperar el load (si la persona sigue navegando a mano, no se pierde el evento)
     deadline = time.time() + 300
     ultimo = 0

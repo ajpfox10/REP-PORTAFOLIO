@@ -158,6 +158,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissions: Array.isArray(res?.data?.permissions) ? res.data.permissions : [],
     };
 
+    // cada inicio de sesión vuelve a pedir el código del bloqueo por documentación
+    try { window.localStorage.removeItem('personalv5.bloqueoDocOk'); } catch { /* */ }
     saveSession(next);
     setSession(next);
   }
@@ -173,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
     } finally {
+      try { window.localStorage.removeItem('personalv5.bloqueoDocOk'); } catch { /* */ }
       clearSession();
       setSession(null);
     }

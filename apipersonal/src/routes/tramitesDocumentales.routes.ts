@@ -1890,6 +1890,10 @@ const DOC_MATRICULA = /^\s*matr[ií]cula\b/i;
 const DOC_LEY_14783 = /14783|acompa[nñ]a\s+anexo\s*1/i;
 // Certificado de discapacidad: solo con el tilde Ley 10592 de la tanda.
 const DOC_LEY_10592 = /discapacidad|10592/i;
+// Certificación ANSES, Carátula SIAPE y Certificado de aportantes (IPS): solo a los de 49 años o más
+// (sin fecha de nacimiento se piden).
+const DOC_DESDE_49 = /\bans[eé]s\b|car[aá]tula\s+siape|aportantes|\(\s*ips\s*\)/i;
+const EDAD_DOCS_49 = 49;
 
 type AgenteDocs = {
   dni: number | string;
@@ -1902,31 +1906,37 @@ type AgenteDocs = {
 
 // Por cada agente (filas de listTandaAgentes): su ley y los documentos activos del orden que le
 // corresponden, en orden. null = sin ley 10430/10471 (no se le puede armar la lista).
+// opts.proceso: tipo de trámite (default designación = 'PASE A TRANSITORIA').
+// opts.unionSinLey: sin ley 10430/10471 (o sin lista para su ley) usa la unión de las listas del proceso
+// en vez de devolver null (lo usa el combo de Mails recibidos: becarios sin ocupación cargada).
 async function documentosPorAgente(
   sequelize: Sequelize,
   agentes: AgenteDocs[],
+  opts: { proceso?: string; unionSinLey?: boolean } = {},
 ): Promise<Map<number, { ley: string; docs: string[] } | null>> {
   const docsRows = await sequelize.query<{ ley: string; documento: string }>(
     `SELECT ley, documento FROM orden_documentos_expediente
       WHERE proceso = :proceso AND activo = 1 ORDER BY ley, orden`,
-    { replacements: { proceso: 'PASE A TRANSITORIA' }, type: QueryTypes.SELECT }
+    { replacements: { proceso: opts.proceso || PROCESO_DESIGNACION }, type: QueryTypes.SELECT }
   );
   const docsPorLey = new Map<string, string[]>();
   for (const d of docsRows) { const a = docsPorLey.get(d.ley) || []; a.push(d.documento); docsPorLey.set(d.ley, a); }
+  const union = [...new Set(docsRows.map((d) => d.documento))];
 
   const dnis = Array.from(new Set(agentes.map((a) => Number(a.dni)).filter(Boolean)));
   const choferPorForm = new Set<number>();
   // Extranjero = DNI de 90 millones o más, o nacionalidad (personal) / país de nacimiento (legajo)
   // cargado y distinto de Argentina. Sin dato y DNI < 90M → argentino.
   const extranjeros = new Set<number>(dnis.filter((d) => d >= 90_000_000));
+  const menores49 = new Set<number>();   // edad conocida y < 49
   if (dnis.length) {
     const fr = await sequelize.query<{ dni: number }>(
       `SELECT dni FROM designacion_form_datos WHERE es_chofer = 1 AND dni IN (:dnis)`,
       { replacements: { dnis }, type: QueryTypes.SELECT }
     );
     for (const r of fr) choferPorForm.add(Number(r.dni));
-    const nr = await sequelize.query<{ dni: number; nacionalidad: string | null; nac_pais: string | null }>(
-      `SELECT p.dni, p.nacionalidad, l.nac_pais
+    const nr = await sequelize.query<{ dni: number; nacionalidad: string | null; nac_pais: string | null; edad: number | null }>(
+      `SELECT p.dni, p.nacionalidad, l.nac_pais, TIMESTAMPDIFF(YEAR, p.fecha_nacimiento, CURDATE()) AS edad
          FROM personal p
          LEFT JOIN legajo_datos_personales l ON l.dni = p.dni
         WHERE p.dni IN (:dnis) AND p.deleted_at IS NULL`,
@@ -1937,28 +1947,111 @@ async function documentosPorAgente(
       const s = String(v || '').trim();
       return /^[a-záéíóúñ ]{3,}$/i.test(s) && !/^argentin/i.test(s) && !/^(si|sí|no)$/i.test(s);
     };
-    for (const r of nr) if (esOtroPais(r.nacionalidad) || esOtroPais(r.nac_pais)) extranjeros.add(Number(r.dni));
+    for (const r of nr) {
+      if (esOtroPais(r.nacionalidad) || esOtroPais(r.nac_pais)) extranjeros.add(Number(r.dni));
+      if (r.edad != null && Number(r.edad) < EDAD_DOCS_49) menores49.add(Number(r.dni));
+    }
   }
 
   const out = new Map<number, { ley: string; docs: string[] } | null>();
   for (const a of agentes) {
     const dni = Number(a.dni);
     const ley = a.ocupacionLey === '10471' ? '10471' : a.ocupacionLey === '10430' ? '10430' : null;
-    if (!ley || !docsPorLey.has(ley)) { out.set(dni, null); continue; }
+    const base = ley && docsPorLey.has(ley) ? docsPorLey.get(ley)! : opts.unionSinLey && union.length ? union : null;
+    if (!base) { out.set(dni, null); continue; }
     const esChofer = /chofer/i.test(String(a.ocupacionNombre || '')) || choferPorForm.has(dni);
     const esExtranjero = extranjeros.has(dni);
     // Sin agrupamiento conocido se sigue pidiendo el Ético/Matrícula.
     const agrup = String(a.ocupacionAgrupamiento || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
     const pideEtico = ley !== '10430' || !agrup || /TECNIC|PROFESION/.test(agrup);
-    const docs = docsPorLey.get(ley)!.filter((d) =>
+    const docs = base.filter((d) =>
       (esChofer || !DOC_SOLO_CHOFER.test(d))
       && (esExtranjero || !DOC_SOLO_EXTRANJERO.test(d))
       && (pideEtico || (!DOC_ETICO.test(d) && !DOC_MATRICULA.test(d)))
       && (Number(a.ley14783) === 1 || !DOC_LEY_14783.test(d))
-      && (Number(a.ley10592) === 1 || !DOC_LEY_10592.test(d)));
-    out.set(dni, { ley, docs });
+      && (Number(a.ley10592) === 1 || !DOC_LEY_10592.test(d))
+      && (!menores49.has(dni) || !DOC_DESDE_49.test(d)));
+    out.set(dni, { ley: ley && docsPorLey.has(ley) ? ley : '', docs });
   }
   return out;
+}
+
+// ---- Tipo de trámite de cada tanda (pestaña "Documentos por trámite", mig 147) ----
+// El tipo de trámite es el `proceso` de orden_documentos_expediente: qué documentos lleva.
+const PROCESO_DESIGNACION = 'PASE A TRANSITORIA';
+const PROCESO_RENOVACION = 'RENOVACION EXTRANJEROS';
+const PROCESOS_BASE = [
+  { proceso: PROCESO_DESIGNACION, nombre: 'Designación de agente (pase a transitoria)' },
+  { proceso: PROCESO_RENOVACION, nombre: 'Renovación de extranjeros' },
+  { proceso: 'RENOVACION TEMPORARIOS 10430', nombre: 'Renovación de temporarios 10430' }, // mig 148
+];
+const ensureTandaTipoHecho = new WeakSet<Sequelize>();
+async function ensureTandaTipo(sequelize: Sequelize) {
+  if (ensureTandaTipoHecho.has(sequelize)) return;
+  await sequelize.query(`CREATE TABLE IF NOT EXISTS tramites_tanda_tipo (
+    tanda VARCHAR(80) NOT NULL PRIMARY KEY, proceso VARCHAR(80) NOT NULL, usuario VARCHAR(120) NULL,
+    actualizado_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  ensureTandaTipoHecho.add(sequelize);
+}
+// Sin elegir: "RENOVACIÓN … TEMPORARIOS" → renovación de temporarios; "RENOVACIÓN …" → de extranjeros; resto → designación.
+const procesoPorNombreTanda = (tanda: string) => (/^\s*RENOVACI.*TEMPORARI/i.test(tanda) ? 'RENOVACION TEMPORARIOS 10430'
+  : /^\s*RENOVACI/i.test(tanda) ? PROCESO_RENOVACION : PROCESO_DESIGNACION);
+async function procesosDeTandas(sequelize: Sequelize, tandas: string[]): Promise<Map<string, { proceso: string; elegido: boolean }>> {
+  await ensureTandaTipo(sequelize);
+  const out = new Map<string, { proceso: string; elegido: boolean }>();
+  for (const t of tandas) out.set(t, { proceso: procesoPorNombreTanda(t), elegido: false });
+  if (tandas.length) {
+    const rows = await sequelize.query<{ tanda: string; proceso: string }>(
+      `SELECT tanda, proceso FROM tramites_tanda_tipo WHERE tanda IN (:tandas)`, { replacements: { tandas }, type: QueryTypes.SELECT });
+    for (const r of rows) out.set(r.tanda, { proceso: r.proceso, elegido: true });
+  }
+  return out;
+}
+
+// Carpetas DOCU que le corresponden a UN agente según su nombramiento y el trámite de su tanda (la más
+// reciente). Mismas reglas que Faltantes (documentosPorAgente). Lo usa el combo "¿Qué documento es?".
+async function carpetasDelAgente(sequelize: Sequelize, dni: number) {
+  const [ag] = await sequelize.query<any>(
+    `SELECT p.dni, oc.nombre AS ocupacionNombre, COALESCE(nagr.nombre, oc.agrupamiento) AS ocupacionAgrupamiento,
+            CASE WHEN ocl.nombre LIKE '%10471%' THEN '10471' WHEN ocl.nombre LIKE '%10430%' THEN '10430' ELSE NULL END AS ocupacionLey
+       FROM personal p
+       LEFT JOIN agentes a ON a.id = (SELECT a2.id FROM agentes a2 WHERE a2.dni = p.dni AND a2.deleted_at IS NULL
+                                       ORDER BY (a2.estado_empleo = 'ACTIVO') DESC, a2.fecha_ingreso DESC, a2.id DESC LIMIT 1)
+       LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
+       LEFT JOIN ley ocl ON ocl.id = oc.ley_id AND ocl.deleted_at IS NULL
+       LEFT JOIN nomenclador_agrupamientos nagr ON nagr.id = oc.agrupamiento_id
+      WHERE p.dni = :dni AND p.deleted_at IS NULL`,
+    { replacements: { dni }, type: QueryTypes.SELECT });
+  if (!ag) return null;
+  const [td] = await sequelize.query<any>(
+    `SELECT tanda, ley_14783 AS ley14783, ley_10592 AS ley10592 FROM tramites_tanda_interinos
+      WHERE dni = :dni ORDER BY creado_at DESC, id DESC LIMIT 1`, { replacements: { dni }, type: QueryTypes.SELECT });
+  const proceso = td ? (await procesosDeTandas(sequelize, [td.tanda])).get(td.tanda)!.proceso : PROCESO_DESIGNACION;
+  const [cnt] = await sequelize.query<any>(
+    `SELECT COUNT(*) AS n FROM orden_documentos_expediente WHERE proceso = :proceso AND activo = 1`,
+    { replacements: { proceso }, type: QueryTypes.SELECT });
+  // Trámite sin documentos cargados todavía: se usa la lista de designación y se avisa.
+  const sinConfigurar = !Number(cnt?.n);
+  const fila: AgenteDocs = { ...ag, ley14783: td?.ley14783 ?? 0, ley10592: td?.ley10592 ?? 0 };
+  const r = (await documentosPorAgente(sequelize, [fila], { proceso: sinConfigurar ? PROCESO_DESIGNACION : proceso, unionSinLey: true })).get(dni);
+  let enDisco = new Set<string>();
+  try {
+    const dir = resolveDocuAgentDir(dni);
+    if (fs.existsSync(dir)) enDisco = new Set(fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name.toLowerCase()));
+  } catch { /* sin DOCU: igual se arma la lista */ }
+  const vistos = new Set<string>();
+  const carpetas: { carpeta: string; documento: string; existe: boolean }[] = [];
+  for (const documento of r?.docs || []) {
+    let carpeta = '';
+    try { carpeta = carpetaDocumento(documento); } catch { continue; }
+    if (vistos.has(carpeta.toLowerCase())) continue;
+    vistos.add(carpeta.toLowerCase());
+    carpetas.push({ carpeta, documento, existe: enDisco.has(carpeta.toLowerCase()) });
+  }
+  const nombre = PROCESOS_BASE.find((p) => p.proceso === proceso)?.nombre || proceso;
+  return { carpetas, tramite: { proceso, nombre, tanda: td?.tanda || null, ley: r?.ley || ag.ocupacionLey || null, sinConfigurar,
+    agrupamiento: ag.ocupacionAgrupamiento || null } };
 }
 
 type ResultadoSubcarpetas = {
@@ -2974,6 +3067,327 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // ── 📧 Mails recibidos (25/11/2026) ────────────────────────────────────────
+  // Lo que recibió la casilla de antecedentes y procesó el robot gmail_antecedentes, agrupado por mail
+  // (fuente: script_run_items, una fila por adjunto guardado). Desde el 25/11 el robot agrega
+  // "· adjunto: X · asunto: Y · mail <id>" al detalle; los anteriores se agrupan por corrida + remitente
+  // + día y no tienen asunto. Lo que quedó en ANTECEDENTES SIN IDENTIFICAR se ata a mano a un agente:
+  // el adjunto pasa a DOCU (con el tipo elegido) + tblarchivos, y el mail del remitente queda en
+  // personal.email, que el robot usa para atar solos los mails siguientes.
+  const SIN_IDENT_DIR = path.resolve(String(process.env.ANTECEDENTES_SIN_IDENTIFICAR_DIR || 'D:\\G\\VARIOS\\ANTECEDENTES SIN IDENTIFICAR'));
+  const MAIL_TIPOS: Record<string, { carpeta: string; archivo: string; tbl: string; etiqueta: string }> = {
+    nacional: { carpeta: 'Certificado ant. Nacionales', archivo: 'Antecedentes Nacionales', tbl: 'antecedentes_nacionales', etiqueta: 'nacional' },
+    provincial: { carpeta: 'Certificado ant. Provinciales', archivo: 'Antecedentes Provinciales', tbl: 'antecedentes_provinciales', etiqueta: 'provincial' },
+    etico: { carpeta: 'Etico (si lo tuviere)', archivo: 'Antecedentes Eticos', tbl: 'pronunciamiento_etico', etiqueta: 'ético' },
+    matricula: { carpeta: 'Matricula (si la tuviere)', archivo: 'Matricula', tbl: 'matricula', etiqueta: 'matrícula' },
+    buena_salud: { carpeta: 'Buena Salud', archivo: 'Buena Salud', tbl: 'certificado_buena_salud', etiqueta: 'buena salud' },
+  };
+  // Carpeta DOCU que corresponde a cada tipo de antecedente (10430 "Etico (si lo tuviere)", 10471 "Etico", …).
+  const MAIL_TIPO_CARPETA_RE: Record<string, RegExp> = {
+    nacional: /^certificado ant\. nacionales$/i, provincial: /^certificado ant\. provinciales$/i,
+    etico: /^[eé]tico\b/i, matricula: /^matr[ií]cula\b/i, buena_salud: /^buena salud$/i,
+  };
+  const dentroDe = (base: string, full: string) => {
+    const rel = path.relative(base, full);
+    return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+  };
+  const parseMailItem = (r: any) => {
+    const det = String(r.detalle || '');
+    const m = det.match(/^(\S+) -> (.+?\.(?:pdf|jpe?g|png|gif|tiff?|bmp|webp))( \(ya estaba\))?(?: · vino en (\w+))?(?= · |$)/i);
+    const ruta = m ? m[2] : null;
+    const de = (det.match(/ · de (.+?)(?= · (?:a viejos|adjunto:|tblarchivos|sin fila|NO se registró|asignado a mano)|$)/) || [])[1] || '';
+    const email = ((de.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/) || [])[0] || '').toLowerCase();
+    const remitente = de.replace(/<[^>]*>/, '').replace(/"/g, '').trim() || email;
+    const asunto = (det.match(/ · asunto: (.*?) · mail (\S+)/) || [])[1] ?? null;
+    const msgId = (det.match(/ · mail ([0-9a-f]{8,})/i) || [])[1] || null;
+    const adjunto = (det.match(/ · adjunto: (.+?) · asunto: /) || [])[1] || (ruta ? path.basename(ruta) : '');
+    const tipoCod = m && m[1] !== '?' ? m[1] : null;
+    const full = ruta ? path.resolve(ruta) : null;
+    const descartado = !!m && m[1] === 'descartado';
+    const pendiente = !descartado && !!full && dentroDe(SIN_IDENT_DIR, full) && !dentroDe(path.join(SIN_IDENT_DIR, 'resueltos'), full)
+      && !dentroDe(path.join(SIN_IDENT_DIR, 'descartados'), full);
+    return {
+      id: Number(r.id), runUid: r.run_uid, dni: Number(String(r.dni || '').replace(/\D/g, '')) || null, nombre: r.nombre || null,
+      estado: r.estado, tipo: tipoCod, formato: m ? m[4] : (String(r.novedad || '').split(' · ')[1] || null),
+      ruta, adjunto, remitente, email, asunto, msgId, fechaMail: r.desde || null, procesado: r.creado_at,
+      yaEstaba: !!(m && m[3]), pendiente, existe: !!full && fs.existsSync(full),
+      motivo: pendiente ? (det.match(/^\S+ -> .+? · (?:vino en \w+ · )?(.+?) · de /) || [])[1] || null : null,
+      manual: / · asignado a mano/.test(det), descartado,
+      carpeta: ruta && !pendiente && !descartado ? path.basename(path.dirname(ruta)) : null,
+    };
+  };
+
+  router.get('/mails-recibidos', async (_req: Request, res: Response) => {
+    try {
+      const items = await sequelize.query<any>(
+        `SELECT id, run_uid, dni, nombre, novedad, desde, estado, detalle, creado_at
+           FROM script_run_items WHERE script = 'gmail_antecedentes' AND estado IN ('ok','aviso')
+          ORDER BY id DESC LIMIT 20000`,
+        { type: QueryTypes.SELECT },
+      );
+      const adj = items.map(parseMailItem).filter((a) => a.ruta);
+      const mails = new Map<string, any>();
+      for (const a of adj) {
+        const k = a.msgId || `${a.runUid}|${a.email}|${a.fechaMail}`;
+        let ml = mails.get(k);
+        if (!ml) {
+          ml = { key: k, msgId: a.msgId, fechaMail: a.fechaMail, procesado: a.procesado, remitente: a.remitente,
+            email: a.email, asunto: a.asunto, adjuntos: [] as any[] };
+          mails.set(k, ml);
+        }
+        ml.adjuntos.push(a);
+        if (new Date(a.procesado).getTime() < new Date(ml.procesado).getTime()) ml.procesado = a.procesado;
+      }
+      const lista = [...mails.values()];
+      for (const ml of lista) {
+        ml.adjuntos.sort((x: any, y: any) => x.id - y.id);
+        const conDni = ml.adjuntos.find((a: any) => a.dni);
+        ml.dni = conDni?.dni || null;
+        ml.nombre = conDni?.nombre || null;
+        ml.pendientes = ml.adjuntos.filter((a: any) => a.pendiente).length;
+      }
+      const dnis = [...new Set(lista.map((m) => m.dni).filter(Boolean))] as number[];
+      const tandas = new Map<number, string[]>();
+      const emailDe = new Map<number, string | null>();
+      if (dnis.length) {
+        const tr = await sequelize.query<any>(
+          `SELECT dni, tanda FROM tramites_tanda_interinos WHERE dni IN (:dnis) ORDER BY tanda`,
+          { replacements: { dnis }, type: QueryTypes.SELECT });
+        for (const r of tr) { const l = tandas.get(Number(r.dni)) || []; l.push(r.tanda); tandas.set(Number(r.dni), l); }
+        const pe = await sequelize.query<any>(
+          `SELECT dni, email FROM personal WHERE dni IN (:dnis) AND deleted_at IS NULL`,
+          { replacements: { dnis }, type: QueryTypes.SELECT });
+        for (const r of pe) emailDe.set(Number(r.dni), r.email || null);
+      }
+      // Sugerencia para los sin atar: el agente al que ya se ató otro mail del mismo remitente (si es uno solo).
+      const dniPorEmail = new Map<string, Set<number>>();
+      for (const a of adj) {
+        if (!a.email || !a.dni || a.pendiente) continue;
+        const st = dniPorEmail.get(a.email) || new Set<number>();
+        st.add(a.dni); dniPorEmail.set(a.email, st);
+      }
+      for (const ml of lista) {
+        const st = ml.email ? dniPorEmail.get(ml.email) : null;
+        ml.sugerido = ml.pendientes && !ml.dni && st && st.size === 1 ? [...st][0] : null;
+      }
+      for (const ml of lista) {
+        ml.tandas = ml.dni ? tandas.get(ml.dni) || [] : [];
+        ml.emailAgente = ml.dni ? emailDe.get(ml.dni) ?? null : null;
+      }
+      lista.sort((x, y) => new Date(y.procesado).getTime() - new Date(x.procesado).getTime());
+      const [tt] = await sequelize.query<any>(`SELECT GROUP_CONCAT(DISTINCT tanda ORDER BY tanda SEPARATOR '\\n') AS t FROM tramites_tanda_interinos`, { type: QueryTypes.SELECT });
+      return res.json({ ok: true, data: { mails: lista, tandas: String(tt?.t || '').split('\n').filter(Boolean), tipos: MAIL_TIPOS } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] mails-recibidos error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  // Datos del agente para atar un mail: nombre, email cargado y tandas.
+  router.get('/mails-recibidos/persona', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.query.dni as any);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const [p] = await sequelize.query<any>(
+        `SELECT dni, TRIM(CONCAT(COALESCE(apellido,''), ', ', COALESCE(nombre,''))) AS nombre, email
+           FROM personal WHERE dni = :dni AND deleted_at IS NULL`,
+        { replacements: { dni }, type: QueryTypes.SELECT });
+      if (!p) return res.status(404).json({ ok: false, error: 'El DNI no está en personal' });
+      const tr = await sequelize.query<any>(`SELECT tanda FROM tramites_tanda_interinos WHERE dni = :dni ORDER BY tanda`,
+        { replacements: { dni }, type: QueryTypes.SELECT });
+      // Carpetas DOCU que le corresponden según su nombramiento y el trámite de su tanda (combo "¿Qué documento es?").
+      const cd = await carpetasDelAgente(sequelize, dni);
+      return res.json({ ok: true, data: { dni: Number(p.dni), nombre: p.nombre, email: p.email || null, tandas: tr.map((t: any) => t.tanda),
+        carpetas: cd?.carpetas || [], tramite: cd?.tramite || null } });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  // Ver un adjunto (de DOCU o de ANTECEDENTES SIN IDENTIFICAR).
+  router.get('/mails-recibidos/archivo', async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.query.id);
+      const [r] = await sequelize.query<any>(
+        `SELECT id, run_uid, dni, nombre, novedad, desde, estado, detalle, creado_at FROM script_run_items
+          WHERE id = :id AND script = 'gmail_antecedentes'`, { replacements: { id }, type: QueryTypes.SELECT });
+      const a = r ? parseMailItem(r) : null;
+      const full = a?.ruta ? path.resolve(a.ruta) : '';
+      if (!full || !(dentroDe(SIN_IDENT_DIR, full) || dentroDe(path.resolve(getDocuBaseDir()), full))) {
+        return res.status(404).json({ ok: false, error: 'Adjunto no encontrado' });
+      }
+      if (!fs.existsSync(full)) return res.status(404).json({ ok: false, error: 'El archivo ya no está en esa carpeta' });
+      const ext = path.extname(full).toLowerCase();
+      const types: Record<string, string> = { '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif' };
+      res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${path.basename(full).replace(/"/g, '_')}"`);
+      return fs.createReadStream(full).pipe(res);
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  const EMAIL_RE = /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/;
+  async function guardarEmailAgente(dni: number, email: string) {
+    await sequelize.query(`UPDATE personal SET email = :email WHERE dni = :dni AND deleted_at IS NULL`,
+      { replacements: { dni, email: email || null } });
+    if (!email) return [];
+    return sequelize.query<any>(
+      `SELECT dni, TRIM(CONCAT(COALESCE(apellido,''), ', ', COALESCE(nombre,''))) AS nombre FROM personal
+        WHERE LOWER(TRIM(email)) = :email AND dni <> :dni AND deleted_at IS NULL`,
+      { replacements: { dni, email }, type: QueryTypes.SELECT });
+  }
+
+  // Cargar / modificar el email de un agente. Body: { dni, email } ('' = borrar).
+  router.put('/mails-recibidos/email', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const email = String(req.body?.email || '').trim().toLowerCase();
+      if (email && !EMAIL_RE.test(email)) return res.status(400).json({ ok: false, error: 'El mail no es válido' });
+      const otros = await guardarEmailAgente(dni, email);
+      return res.json({ ok: true, data: { dni, email: email || null, otros } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] mails-recibidos email error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  // Atar a mano adjuntos sin identificar a un agente.
+  // Body: { dni, email?, adjuntos: [{ id, tipo }] } (tipo = clave de MAIL_TIPOS).
+  // Cada adjunto se copia a DOCU\<dni>\<carpeta del tipo>\<Nombre> <fecha del mail>.<ext> (sin pisar), se da de
+  // alta en tblarchivos, el original pasa a SIN IDENTIFICAR\resueltos y el ítem del robot queda atado al agente.
+  router.post('/mails-recibidos/asignar', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const [p] = await sequelize.query<any>(
+        `SELECT dni, TRIM(CONCAT(COALESCE(apellido,''), ', ', COALESCE(nombre,''))) AS nombre FROM personal
+          WHERE dni = :dni AND deleted_at IS NULL`, { replacements: { dni }, type: QueryTypes.SELECT });
+      if (!p) return res.status(404).json({ ok: false, error: 'El DNI no está en personal' });
+      const email = String(req.body?.email || '').trim().toLowerCase();
+      if (email && !EMAIL_RE.test(email)) return res.status(400).json({ ok: false, error: 'El mail no es válido' });
+      const pedidos = (Array.isArray(req.body?.adjuntos) ? req.body.adjuntos : [])
+        .map((x: any) => ({ id: Number(x?.id), tipo: String(x?.tipo || ''), carpeta: String(x?.carpeta || '').trim() })).filter((x: any) => x.id > 0);
+      if (!pedidos.length) return res.status(400).json({ ok: false, error: 'No hay adjuntos para atar' });
+      // Destino = una de las carpetas DOCU que le corresponden al agente (carpetasDelAgente), o (compat) un tipo de MAIL_TIPOS.
+      const permitidas = new Map(((await carpetasDelAgente(sequelize, dni))?.carpetas || []).map((c) => [c.carpeta.toLowerCase(), c]));
+      const destinoDe = new Map<number, { codigo: string; carpeta: string; archivo: string; tbl: string; etiqueta: string }>();
+      for (const x of pedidos) {
+        if (x.carpeta) {
+          const c = permitidas.get(x.carpeta.toLowerCase());
+          if (!c) return res.status(400).json({ ok: false, error: `La carpeta "${x.carpeta}" no le corresponde a este agente` });
+          const k = Object.keys(MAIL_TIPOS).find((key) => MAIL_TIPO_CARPETA_RE[key]?.test(c.carpeta));
+          const archivo = k ? MAIL_TIPOS[k].archivo : c.carpeta.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim() || c.carpeta;
+          const tbl = k ? MAIL_TIPOS[k].tbl : (c.carpeta.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+            .replace(/\([^)]*\)/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 50) || 'documento');
+          destinoDe.set(x.id, { codigo: k || 'docu', carpeta: c.carpeta, archivo, tbl, etiqueta: k ? MAIL_TIPOS[k].etiqueta : archivo });
+        } else if (MAIL_TIPOS[x.tipo]) {
+          destinoDe.set(x.id, { codigo: x.tipo, ...MAIL_TIPOS[x.tipo] });
+        } else {
+          return res.status(400).json({ ok: false, error: 'Falta elegir qué documento es cada adjunto' });
+        }
+      }
+
+      const usuario = (req as any).auth?.principalType === 'user' ? Number((req as any).auth.principalId) || null : null;
+      let quien = usuario ? `usuario #${usuario}` : 'la app';
+      if (usuario) {
+        const [u] = await sequelize.query<any>(`SELECT nombre, email FROM usuarios WHERE id = :id`, { replacements: { id: usuario }, type: QueryTypes.SELECT });
+        if (u) quien = u.nombre || u.email || quien;
+      }
+      const base = resolveDocuAgentDir(dni);
+      const hechos: any[] = [];
+      const auditoria: any[] = [];
+      for (const x of pedidos) {
+        const [r] = await sequelize.query<any>(
+          `SELECT id, run_uid, dni, nombre, novedad, desde, estado, detalle, creado_at FROM script_run_items
+            WHERE id = :id AND script = 'gmail_antecedentes'`, { replacements: { id: x.id }, type: QueryTypes.SELECT });
+        const a = r ? parseMailItem(r) : null;
+        if (!a || !a.pendiente || !a.ruta) { hechos.push({ id: x.id, ok: false, error: 'Ese adjunto ya no está pendiente' }); continue; }
+        const origen = path.resolve(a.ruta);
+        if (!fs.existsSync(origen)) { hechos.push({ id: x.id, ok: false, error: 'El archivo ya no está en SIN IDENTIFICAR' }); continue; }
+        const t = destinoDe.get(x.id)!;
+        const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(a.fechaMail || '')) ? String(a.fechaMail) : new Date().toISOString().slice(0, 10);
+        const carpeta = path.join(base, t.carpeta);
+        fs.mkdirSync(carpeta, { recursive: true });
+        const ext = path.extname(origen).toLowerCase() || '.pdf';
+        const dest = uniqueDest(path.join(carpeta, `${t.archivo} ${fecha}${ext}`));
+        fs.copyFileSync(origen, dest);
+        const resueltos = path.join(SIN_IDENT_DIR, 'resueltos');
+        fs.mkdirSync(resueltos, { recursive: true });
+        const movido = uniqueDest(path.join(resueltos, path.basename(origen)));
+        try { fs.renameSync(origen, movido); } catch { /* si no se puede mover, queda el original: ya está copiado */ }
+        const rel = path.join(String(dni), path.relative(base, dest));
+        const kb = Math.max(1, Math.floor(fs.statSync(dest).size / 1024));
+        const [tblId] = await sequelize.query(
+          `INSERT INTO tblarchivos (dni, ruta, nombre, tipo, tamanio, anio, fecha, descripcion_archivo, nombre_archivo_original)
+           VALUES (:dni, :ruta, :nombre, :tipo, :tam, :anio, :fecha, :desc, :orig)`,
+          { replacements: {
+            dni, ruta: rel, nombre: t.archivo, tipo: t.tbl, tam: `${kb} KB`, anio: Number(fecha.slice(0, 4)), fecha,
+            desc: `Tipo: ${t.tbl} | Carpeta: ${t.carpeta} | Origen: mail de ${a.remitente || a.email} | atado a mano por ${quien}`.slice(0, 255),
+            orig: String(a.adjunto || path.basename(origen)).slice(0, 255),
+          } });
+        const detalle = `${t.codigo} -> ${dest} · vino en ${a.formato || '?'} · asignado a mano por ${quien} el ${new Date().toLocaleString('es-AR')}`
+          + ` · antes: ${a.motivo || 'sin identificar'} · de ${a.remitente}${a.email && !a.remitente.includes(a.email) ? ` <${a.email}>` : ''}`
+          + ` · adjunto: ${a.adjunto} · asunto: ${a.asunto ?? '(sin asunto)'} · mail ${a.msgId || '-'} · tblarchivos #${tblId}`;
+        await sequelize.query(
+          `UPDATE script_run_items SET dni = :dni, nombre = :nombre, novedad = :nov, estado = 'ok', detalle = :det WHERE id = :id`,
+          { replacements: { id: x.id, dni: String(dni), nombre: p.nombre, nov: `Antecedentes ${t.etiqueta} · ${a.formato || '?'}`, det: detalle.slice(0, 1000) } });
+        auditoria.push({ dni, ruta: rel, documento: t.carpeta, origen: 'mail' as const, detalle: `atado a mano desde el mail de ${a.email || a.remitente}` });
+        hechos.push({ id: x.id, ok: true, ruta: rel });
+      }
+      auditarDocu(sequelize, req, auditoria);
+      let otros: any[] = [];
+      if (email) otros = await guardarEmailAgente(dni, email);
+      return res.json({ ok: true, data: { hechos, email: email || null, otros } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] mails-recibidos asignar error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  // Descartar adjuntos sin identificar que no son documentación pedida (26/11/2026). Body: { ids: number[] }.
+  // El archivo pasa a SIN IDENTIFICAR\descartados (no se borra) y el ítem del robot queda marcado
+  // "descartado", así sale de "Sin atar". No toca DOCU ni tblarchivos.
+  router.post('/mails-recibidos/descartar', async (req: Request, res: Response) => {
+    try {
+      const ids = [...new Set((Array.isArray(req.body?.ids) ? req.body.ids : []).map(Number).filter((n: number) => n > 0))] as number[];
+      if (!ids.length) return res.status(400).json({ ok: false, error: 'No hay adjuntos para descartar' });
+      const usuario = (req as any).auth?.principalType === 'user' ? Number((req as any).auth.principalId) || null : null;
+      let quien = usuario ? `usuario #${usuario}` : 'la app';
+      if (usuario) {
+        const [u] = await sequelize.query<any>(`SELECT nombre, email FROM usuarios WHERE id = :id`, { replacements: { id: usuario }, type: QueryTypes.SELECT });
+        if (u) quien = u.nombre || u.email || quien;
+      }
+      const dirDesc = path.join(SIN_IDENT_DIR, 'descartados');
+      const hechos: any[] = [];
+      for (const id of ids) {
+        const [r] = await sequelize.query<any>(
+          `SELECT id, run_uid, dni, nombre, novedad, desde, estado, detalle, creado_at FROM script_run_items
+            WHERE id = :id AND script = 'gmail_antecedentes'`, { replacements: { id }, type: QueryTypes.SELECT });
+        const a = r ? parseMailItem(r) : null;
+        if (!a || !a.pendiente || !a.ruta) { hechos.push({ id, ok: false, error: 'Ese adjunto ya no está pendiente' }); continue; }
+        const origen = path.resolve(a.ruta);
+        let destino = origen;
+        if (fs.existsSync(origen)) {
+          fs.mkdirSync(dirDesc, { recursive: true });
+          destino = uniqueDest(path.join(dirDesc, path.basename(origen)));
+          try { fs.renameSync(origen, destino); } catch { destino = origen; }
+        }
+        const detalle = `descartado -> ${destino} · vino en ${a.formato || '?'} · descartado (no es documentación pedida) por ${quien} el ${new Date().toLocaleString('es-AR')}`
+          + ` · antes: ${a.motivo || 'sin identificar'} · de ${a.remitente}${a.email && !a.remitente.includes(a.email) ? ` <${a.email}>` : ''}`
+          + ` · adjunto: ${a.adjunto} · asunto: ${a.asunto ?? '(sin asunto)'} · mail ${a.msgId || '-'}`;
+        await sequelize.query(`UPDATE script_run_items SET detalle = :det WHERE id = :id`,
+          { replacements: { id, det: detalle.slice(0, 1000) } });
+        hechos.push({ id, ok: true });
+      }
+      return res.json({ ok: true, data: { hechos } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] mails-recibidos descartar error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
   // Agregar agentes a una tanda (INSERT IGNORE → no duplica por UNIQUE(tanda,dni)).
   // Body: { tanda, origen: 'anio'|'manual', items: [{ dni, anio }] } (o `dnis` como antes).
   router.post('/tandas', async (req: Request, res: Response) => {
@@ -3748,6 +4162,103 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       return res.json({ ok: true, data: { tanda, dni, ley10592: valor } });
     } catch (err: any) {
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al guardar Ley 10592' });
+    }
+  });
+
+  // ---- 🧩 Documentos por trámite (25/11/2026) ----
+  // Qué documentos lleva cada tipo de trámite (designación, renovación de extranjeros, …) por ley, y qué
+  // tipo de trámite es cada tanda. Los documentos son filas de orden_documentos_expediente con
+  // proceso = tipo de trámite ("no lleva" = activo 0, no se borra). La tanda → tramites_tanda_tipo (mig 147).
+  router.get('/tipos-tramite', async (_req: Request, res: Response) => {
+    try {
+      await ensureTandaTipo(sequelize);
+      const rows = await sequelize.query<any>(
+        `SELECT proceso, ley, documento, activo, orden FROM orden_documentos_expediente ORDER BY proceso, ley, orden`,
+        { type: QueryTypes.SELECT });
+      const nombres = new Map(PROCESOS_BASE.map((p) => [p.proceso, p.nombre]));
+      const elegidos = await sequelize.query<any>(`SELECT DISTINCT proceso FROM tramites_tanda_tipo`, { type: QueryTypes.SELECT });
+      const procs = [...new Set([...PROCESOS_BASE.map((p) => p.proceso), ...rows.map((r) => r.proceso), ...elegidos.map((r: any) => r.proceso)])];
+      const procesos = procs.map((p) => ({
+        proceso: p, nombre: nombres.get(p) || p,
+        docs: rows.filter((r) => r.proceso === p).map((r) => ({ ley: r.ley, documento: r.documento, activo: Number(r.activo) === 1, orden: Number(r.orden) })),
+      }));
+      // Catálogo: todo documento que figura en algún trámite (en el orden de designación primero) + Buena Salud.
+      const catalogo: string[] = [];
+      const vistos = new Set<string>();
+      const ordenados = [...rows].sort((a, b) => (a.proceso === PROCESO_DESIGNACION ? 0 : 1) - (b.proceso === PROCESO_DESIGNACION ? 0 : 1) || a.orden - b.orden);
+      for (const d of [...ordenados.map((r) => r.documento), 'Buena Salud']) {
+        const k = String(d).trim().toLowerCase();
+        if (k && !vistos.has(k)) { vistos.add(k); catalogo.push(String(d).trim()); }
+      }
+      const tt = await sequelize.query<any>(
+        `SELECT tanda, COUNT(*) AS agentes FROM tramites_tanda_interinos GROUP BY tanda ORDER BY tanda`, { type: QueryTypes.SELECT });
+      const pt = await procesosDeTandas(sequelize, tt.map((t: any) => t.tanda));
+      const tandas = tt.map((t: any) => ({ tanda: t.tanda, agentes: Number(t.agentes), ...pt.get(t.tanda)! }));
+      return res.json({ ok: true, data: { procesos, catalogo, tandas, leyes: ['10430', '10471'] } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] tipos-tramite error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  // Guarda qué documentos lleva un trámite en una ley. Body: { proceso, ley, documentos: string[] } (los que lleva).
+  // Los que ya estaban y no vienen quedan activo 0; los nuevos se agregan al final. Trámite nuevo = proceso nuevo.
+  router.put('/tipos-tramite/docs', async (req: Request, res: Response) => {
+    try {
+      const proceso = String(req.body?.proceso || '').trim().toUpperCase().replace(/\s+/g, ' ').slice(0, 80);
+      const ley = String(req.body?.ley || '').trim();
+      if (!proceso) return res.status(400).json({ ok: false, error: 'Falta el tipo de trámite' });
+      if (!['10430', '10471'].includes(ley)) return res.status(400).json({ ok: false, error: 'Ley inválida' });
+      const lleva = [...new Set((Array.isArray(req.body?.documentos) ? req.body.documentos : [])
+        .map((d: any) => String(d || '').trim().slice(0, 200)).filter(Boolean))] as string[];
+      await sequelize.transaction(async (t) => {
+        const actuales = await sequelize.query<any>(
+          `SELECT id, documento, activo, orden FROM orden_documentos_expediente WHERE proceso = :proceso AND ley = :ley`,
+          { replacements: { proceso, ley }, type: QueryTypes.SELECT, transaction: t });
+        const porNombre = new Map(actuales.map((r: any) => [String(r.documento).trim().toLowerCase(), r]));
+        const set = new Set(lleva.map((d) => d.toLowerCase()));
+        for (const r of actuales) {
+          const debe = set.has(String(r.documento).trim().toLowerCase()) ? 1 : 0;
+          if (Number(r.activo) !== debe) {
+            await sequelize.query(`UPDATE orden_documentos_expediente SET activo = :a WHERE id = :id`,
+              { replacements: { a: debe, id: r.id }, transaction: t });
+          }
+        }
+        let max = actuales.reduce((m: number, r: any) => Math.max(m, Number(r.orden) || 0), 0);
+        for (const d of lleva) {
+          if (porNombre.has(d.toLowerCase())) continue;
+          max += 1;
+          await sequelize.query(
+            `INSERT INTO orden_documentos_expediente (proceso, ley, orden, documento, observacion, activo) VALUES (:proceso, :ley, :orden, :d, NULL, 1)`,
+            { replacements: { proceso, ley, orden: max, d }, transaction: t });
+        }
+      });
+      logger.info({ msg: '[tramites] documentos por trámite guardados', proceso, ley, lleva: lleva.length });
+      return res.json({ ok: true, data: { proceso, ley, lleva: lleva.length } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] tipos-tramite docs error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  // Tipo de trámite de una tanda. Body: { tanda, proceso }.
+  router.put('/tipos-tramite/tanda', async (req: Request, res: Response) => {
+    try {
+      await ensureTandaTipo(sequelize);
+      const tanda = String(req.body?.tanda || '').trim();
+      const proceso = String(req.body?.proceso || '').trim().slice(0, 80);
+      if (!tanda || !proceso) return res.status(400).json({ ok: false, error: 'Faltan la tanda o el tipo de trámite' });
+      const [ex] = await sequelize.query<any>(`SELECT 1 AS x FROM tramites_tanda_interinos WHERE tanda = :tanda LIMIT 1`,
+        { replacements: { tanda }, type: QueryTypes.SELECT });
+      if (!ex) return res.status(404).json({ ok: false, error: 'Esa tanda no existe' });
+      const usuario = (req as any).auth?.principalType === 'user' ? `usuario #${(req as any).auth.principalId}` : null;
+      await sequelize.query(
+        `INSERT INTO tramites_tanda_tipo (tanda, proceso, usuario) VALUES (:tanda, :proceso, :usuario)
+         ON DUPLICATE KEY UPDATE proceso = VALUES(proceso), usuario = VALUES(usuario)`,
+        { replacements: { tanda, proceso, usuario } });
+      return res.json({ ok: true, data: { tanda, proceso } });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
     }
   });
 

@@ -77,6 +77,35 @@ def registrar_item(script, dni=None, nombre=None, novedad=None, desde=None, hast
         print(f"AVISO: no pude registrar el detalle en script_run_items: {ex}")
 
 
+DOCU_VIEJOS = Path(os.environ.get("DOCU_VIEJOS_DIR", r"D:\G\DOCU_viejos"))
+
+
+def mover_a_viejos(nuevo):
+    """Robots que bajan de SIAPE a DOCU/<dni>/<carpeta>: al guardar `nuevo`, todo lo demas
+    que haya en esa carpeta (escaneado, manual o una copia anterior) pasa a
+    DOCU_viejos/<dni>/<carpeta>/ (pedido 25/11). Nunca borra; si el nombre existe, numera.
+    Devuelve los nombres movidos."""
+    import shutil
+    nuevo = Path(nuevo)
+    carpeta = nuevo.parent
+    dest_dir = DOCU_VIEJOS / carpeta.parent.name / carpeta.name
+    movidos = []
+    for f in carpeta.iterdir():
+        if not f.is_file() or f.name == nuevo.name:
+            continue
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dst, n = dest_dir / f.name, 2
+        while dst.exists():
+            dst = dest_dir / f"{f.stem} ({n}){f.suffix}"
+            n += 1
+        try:
+            shutil.move(str(f), str(dst))
+            movidos.append(f.name)
+        except Exception as e:
+            print(f"AVISO: no pude mover {f} a viejos: {e}", flush=True)
+    return movidos
+
+
 def auditar_docu(script, dni, archivo, documento=None, detalle=None):
     """Deja un archivo que el robot guardo en DOCU en docu_auditoria (mig 146; pestaña Auditoria de
     Tramites Documentales): dni, ruta relativa a DOCU, robot y PC. Nunca corta al robot."""

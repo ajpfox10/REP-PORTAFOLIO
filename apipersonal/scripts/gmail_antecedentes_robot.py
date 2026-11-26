@@ -192,6 +192,27 @@ def por_nombre(cn, texto):
     return [k for k, v in puntaje.items() if v == mejor]
 
 
+def email_de(remitente):
+    """'Nombre <a@b.com>' -> 'a@b.com' (minúsculas). '' si no hay."""
+    m = re.search(r"[\w.+-]+@[\w-]+(\.[\w-]+)+", remitente or "")
+    return m.group(0).lower() if m else ""
+
+
+def por_email(cn, remitente):
+    """(dni, nombre) del ÚNICO agente de personal con ese email (personal.email, que se carga desde la
+    pestaña 📧 Mails recibidos al atar un mail a mano, 25/11/2026). (None, None) si no hay o hay varios."""
+    em = email_de(remitente)
+    if not em:
+        return None, None
+    with cn.cursor() as cur:
+        cur.execute("SELECT dni, CONCAT(COALESCE(apellido,''), ', ', COALESCE(nombre,'')) AS n FROM personal "
+                    "WHERE LOWER(TRIM(email)) = %s AND deleted_at IS NULL", (em,))
+        filas = cur.fetchall()
+    if len(filas) != 1:
+        return None, None
+    return int(filas[0]["dni"]), filas[0]["n"]
+
+
 def elegir_dni(cn, texto, pistas, ocr=False):
     """(dni, nombre, detalle) o (None, None, motivo). Con ocr=True los dígitos del
     certificado no son confiables: solo cuentan si el DNI existe en personal."""
@@ -404,6 +425,11 @@ def procesar_mail(svc, cn, msg_id, dry_run):
         pistas = f"{asunto}\n{cuerpo}\n{nombre}\n{remitente}"
         tipos = tipos_de(MN.norm(texto), MN.norm(pistas), MN.norm(nombre))
         dni, agente, detalle = elegir_dni(cn, texto, pistas, ocr=ocr)
+        if not dni:
+            # 25/11/2026: si el certificado no dice de quién es, el mail del remitente cargado en el agente
+            d_em, n_em = por_email(cn, remitente)
+            if d_em:
+                dni, agente, detalle = d_em, n_em, f"por el mail del remitente ({email_de(remitente)}) · antes: {detalle}"
         if ocr:
             detalle += " · leído por OCR"
 
@@ -422,6 +448,8 @@ def procesar_mail(svc, cn, msg_id, dry_run):
             else:
                 ruta, nuevo = guardar(carpeta, nombre_base, guardar_datos, guardar_ext)
             txt = f"{tipo or '?'} -> {ruta}{'' if nuevo else ' (ya estaba)'} · vino en {formato} · {detalle} · de {remitente}"
+            # 25/11/2026: para la pestaña 📧 Mails recibidos (agrupa por mail y muestra el asunto)
+            txt += f" · adjunto: {nombre} · asunto: {(asunto or '(sin asunto)').replace(' · ', ' - ')[:150]} · mail {msg_id}"
             if tipo and nuevo:
                 movidos = pasar_viejos(cn, carpeta, nombre_base, fecha, dry_run)
                 if movidos:

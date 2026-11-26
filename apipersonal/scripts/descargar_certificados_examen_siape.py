@@ -76,6 +76,13 @@ def traer_agentes(cn, tanda=None, solo_dni=None, limit=None):
     if solo_dni:
         where.append("t.dni = %s")
         params.append(int(solo_dni))
+    else:
+        # Becas de radicacion (extranjeros, ley_id 12): no llevan apto psicofisico de SIAPE.
+        # Se excluyen la tanda de renovacion y cualquier DNI con un tramo vigente de esa beca.
+        if not tanda:
+            where.append("t.tanda NOT LIKE '%%EXTRANJEROS%%'")
+        where.append("NOT EXISTS (SELECT 1 FROM agentes a WHERE a.dni = t.dni AND a.ley_id = 12 "
+                     "AND a.deleted_at IS NULL AND a.estado_empleo IN ('ACTIVO','TRAMITE','COMISION'))")
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += " GROUP BY t.dni ORDER BY MIN(t.tanda), apellido, nombre"
@@ -94,7 +101,8 @@ def carpeta_destino(dni):
 
 def ya_tiene(dni):
     d = carpeta_destino(dni)
-    return d.is_dir() and any(p.is_file() for p in d.iterdir())
+    # solo cuenta el PDF bajado de SIAPE: lo escaneado/manual no vale (pedido 25/11)
+    return d.is_dir() and any(p.is_file() and p.name.startswith("Apto Psicofisico SIAPE") for p in d.iterdir())
 
 
 def aptos_con_fecha(cn):
@@ -348,6 +356,9 @@ def guardar_en_docu(pdf, fila, dni):
     destino_dir.mkdir(parents=True, exist_ok=True)
     destino = destino_dir / f"Apto Psicofisico SIAPE {fila.get('CODIGO') or dni}.pdf"
     shutil.move(str(pdf), str(destino))
+    viejos = MN.mover_a_viejos(destino)
+    if viejos:
+        log(f"   a DOCU_viejos: {', '.join(viejos)}")
     MN.auditar_docu(SCRIPT_ID, dni, destino, detalle=f"fila {fila.get('CODIGO')} {fila.get('TIPO DE EXAMEN') or ''}".strip())
     return destino
 
